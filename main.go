@@ -8,12 +8,16 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/BurntSushi/toml"
 	md "github.com/JohannesKaufmann/html-to-markdown"
 	"github.com/mmcdole/gofeed"
 	bolt "go.etcd.io/bbolt"
+	"golang.org/x/net/context"
 )
 
 const (
@@ -51,11 +55,41 @@ type embed struct {
 
 var converter = md.NewConverter("", true, nil)
 
+type app struct {
+	db       *bolt.DB
+	config   configMain
+	webhooks map[string]string
+}
+
 func main() {
 	var config configMain
 	if _, err := toml.DecodeFile("config.toml", &config); err != nil {
 		log.Fatal(err)
 	}
+
+	db, err := bolt.Open("rssfeed.db", 0600, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+	if err := db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists([]byte(bucketFeeds))
+		return err
+	}); err != nil {
+		log.Fatal(err)
+	}
+	app := NewApp(db, config)
+	ctx, cancel := context.WithCancel(context.Background())
+	go app.run(ctx)
+
+	// Ensure graceful shutdown
+	sc := make(chan os.Signal, 1)
+	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+	<-sc
+	cancel()
+}
+
+func NewApp(db *bolt.DB, config configMain) *app {
 	webhooksUsed := make(map[string]bool)
 	webhooks := make(map[string]string)
 	for _, x := range config.Webhooks {
@@ -73,58 +107,71 @@ func main() {
 			slog.Warn("Webhook defined, but not used", "name", k)
 		}
 	}
-	db, err := bolt.Open("rssfeed.db", 0600, nil)
-	if err != nil {
-		log.Fatal(err)
+	app := &app{
+		db:       db,
+		config:   config,
+		webhooks: webhooks,
 	}
-	defer db.Close()
-	if err := db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte(bucketFeeds))
-		return err
-	}); err != nil {
-		log.Fatal(err)
-	}
+	return app
+}
+
+func (a *app) run(ctx context.Context) {
 	fp := gofeed.NewParser()
-	for _, cf := range config.Feeds {
-		var lastPublished time.Time
-		db.View(func(tx *bolt.Tx) error {
-			b := tx.Bucket([]byte(bucketFeeds))
-			v := b.Get([]byte(cf.URL))
-			if v != nil {
-				t, err := time.Parse(time.RFC3339, string(v))
-				if err != nil {
-					slog.Error("failed to parse last published", "value", v, "error", err)
-				} else {
-					lastPublished = t
+	ticker := time.NewTicker(5 * time.Second)
+	for {
+		slog.Info("Checking feeds")
+		for _, cf := range a.config.Feeds {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			var lastPublished time.Time
+			a.db.View(func(tx *bolt.Tx) error {
+				b := tx.Bucket([]byte(bucketFeeds))
+				v := b.Get([]byte(cf.URL))
+				if v != nil {
+					t, err := time.Parse(time.RFC3339, string(v))
+					if err != nil {
+						slog.Error("failed to parse last published", "value", v, "error", err)
+					} else {
+						lastPublished = t
+					}
+				}
+				return nil
+			})
+			feed, _ := fp.ParseURL(cf.URL)
+			var newest time.Time
+			for _, item := range feed.Items {
+				if !item.PublishedParsed.After(lastPublished) {
+					continue
+				}
+				if item.PublishedParsed.Before(time.Now().Add(-oldest)) {
+					continue
+				}
+				if err := sendItemToWebhook(feed.Title, item, a.webhooks[cf.Webhook]); err != nil {
+					slog.Error("Failed to send item", "error", "err")
+				}
+				if item.PublishedParsed.After(newest) {
+					newest = *item.PublishedParsed
 				}
 			}
-			return nil
-		})
-		slog.Info("last published", "feed", cf.Name, "time", lastPublished)
-		feed, _ := fp.ParseURL(cf.URL)
-		var newest time.Time
-		for _, item := range feed.Items {
-			if !item.PublishedParsed.After(lastPublished) {
-				continue
-			}
-			if item.PublishedParsed.Before(time.Now().Add(-oldest)) {
-				continue
-			}
-			if err := sendItemToWebhook(feed.Title, item, webhooks[cf.Webhook]); err != nil {
-				slog.Error("Failed to send item", "error", "err")
-			}
-			if item.PublishedParsed.After(newest) {
-				newest = *item.PublishedParsed
+			if !newest.IsZero() {
+				if err := a.db.Update(func(tx *bolt.Tx) error {
+					b := tx.Bucket([]byte(bucketFeeds))
+					err := b.Put([]byte(cf.URL), []byte(newest.Format(time.RFC3339)))
+					return err
+				}); err != nil {
+					log.Fatal(err)
+				}
 			}
 		}
-		if !newest.IsZero() {
-			if db.Update(func(tx *bolt.Tx) error {
-				b := tx.Bucket([]byte(bucketFeeds))
-				err := b.Put([]byte(cf.URL), []byte(newest.Format(time.RFC3339)))
-				return err
-			}); err != nil {
-				log.Fatal(err)
-			}
+		slog.Info("Completed checking feeds")
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			<-ticker.C
 		}
 	}
 }
