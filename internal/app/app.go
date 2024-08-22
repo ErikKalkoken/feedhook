@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"log"
@@ -10,20 +10,25 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
+const (
+	BucketFeeds = "feeds"
+	oldest      = 24 * time.Hour
+)
+
 type message struct {
 	payload *webhookPayload
 	errC    chan error
 }
 
-type app struct {
+type App struct {
 	db       *bolt.DB
 	config   configMain
 	messageC map[string]chan message
 	fp       *gofeed.Parser
 }
 
-func NewApp(db *bolt.DB, config configMain) *app {
-	app := &app{
+func New(db *bolt.DB, config configMain) *App {
+	app := &App{
 		db:       db,
 		config:   config,
 		messageC: make(map[string]chan message),
@@ -42,7 +47,7 @@ func NewApp(db *bolt.DB, config configMain) *app {
 	return app
 }
 
-func (a *app) run() {
+func (a *App) Run() {
 	var wg sync.WaitGroup
 	ticker := time.NewTicker(5 * time.Second)
 	for {
@@ -60,7 +65,7 @@ func (a *app) run() {
 	}
 }
 
-func (a *app) processFeed(cf configFeed) {
+func (a *App) processFeed(cf configFeed) {
 	feed, err := a.fp.ParseURL(cf.URL)
 	if err != nil {
 		slog.Error("failed to parse feed URL", "feed", cf.Name, "url", cf.URL)
@@ -91,7 +96,7 @@ func (a *app) processFeed(cf configFeed) {
 		}
 		newest = *item.PublishedParsed
 		if err := a.db.Update(func(tx *bolt.Tx) error {
-			b := tx.Bucket([]byte(bucketFeeds))
+			b := tx.Bucket([]byte(BucketFeeds))
 			err := b.Put([]byte(cf.URL), []byte(newest.Format(time.RFC3339)))
 			return err
 		}); err != nil {
@@ -100,10 +105,10 @@ func (a *app) processFeed(cf configFeed) {
 	}
 }
 
-func (a *app) fetchLastPublished(url string) time.Time {
+func (a *App) fetchLastPublished(url string) time.Time {
 	var lp time.Time
 	a.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(bucketFeeds))
+		b := tx.Bucket([]byte(BucketFeeds))
 		v := b.Get([]byte(url))
 		if v != nil {
 			t, err := time.Parse(time.RFC3339, string(v))
@@ -116,4 +121,12 @@ func (a *app) fetchLastPublished(url string) time.Time {
 		return nil
 	})
 	return lp
+}
+
+func SetupDB(db *bolt.DB) error {
+	err := db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists([]byte(BucketFeeds))
+		return err
+	})
+	return err
 }

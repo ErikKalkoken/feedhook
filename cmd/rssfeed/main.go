@@ -5,31 +5,29 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	bolt "go.etcd.io/bbolt"
+
+	"example/rssfeed/internal/app"
 )
 
 const (
-	bucketFeeds = "feeds"
-	oldest      = 24 * time.Hour
+	configFilename = "config.toml"
+	dbFileName     = "rssfeed.db"
 )
 
 func main() {
-	config := readConfig()
-	db, err := bolt.Open("rssfeed.db", 0600, nil)
+	config := app.ReadConfig(configFilename)
+	db, err := bolt.Open(dbFileName, 0600, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer db.Close()
-	if err := db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte(bucketFeeds))
-		return err
-	}); err != nil {
+	if err := app.SetupDB(db); err != nil {
 		log.Fatal(err)
 	}
-	app := NewApp(db, config)
-	go app.run()
+	app := app.New(db, config)
+	go app.Run()
 
 	// Ensure graceful shutdown
 	sc := make(chan os.Signal, 1)

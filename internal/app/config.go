@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"log"
@@ -24,9 +24,9 @@ type configWebhook struct {
 	URL  string `toml:"url"`
 }
 
-func readConfig() configMain {
+func ReadConfig(fn string) configMain {
 	var config configMain
-	if _, err := toml.DecodeFile("config.toml", &config); err != nil {
+	if _, err := toml.DecodeFile(fn, &config); err != nil {
 		log.Fatal(err)
 	}
 	webhooksUsed := make(map[string]bool)
