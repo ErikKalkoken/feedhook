@@ -8,12 +8,12 @@ import (
 
 	bolt "go.etcd.io/bbolt"
 
-	"example/rssfeed/internal/app"
+	"example/feedexpress/internal/app"
 )
 
 const (
 	configFilename = "config.toml"
-	dbFileName     = "rssfeed.db"
+	dbFileName     = "feedexpress.db"
 )
 
 func main() {

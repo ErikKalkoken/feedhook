@@ -1,4 +1,4 @@
-module example/rssfeed
+module example/feedexpress
 
 go 1.23.0
 
