@@ -23,30 +23,13 @@ type app struct {
 }
 
 func NewApp(db *bolt.DB, config configMain) *app {
-	webhooksUsed := make(map[string]bool)
-	webhooks := make(map[string]string)
-	for _, x := range config.Webhooks {
-		webhooks[x.Name] = x.URL
-	}
-	for _, x := range config.Feeds {
-		_, ok := webhooks[x.Webhook]
-		if !ok {
-			log.Fatalf("Config error: Invalid webhook name \"%s\" for feed \"%s\"", x.Webhook, x.Name)
-		}
-		webhooksUsed[x.Webhook] = true
-	}
-	for k, v := range webhooksUsed {
-		if !v {
-			slog.Warn("Webhook defined, but not used", "name", k)
-		}
-	}
 	app := &app{
 		db:       db,
 		config:   config,
 		messageC: make(map[string]chan message),
 		fp:       gofeed.NewParser(),
 	}
-	for name, url := range webhooks {
+	for name, url := range config.WebhookMap {
 		c := make(chan message)
 		app.messageC[name] = c
 		go func(url string, message <-chan message) {

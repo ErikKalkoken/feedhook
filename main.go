@@ -7,7 +7,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/BurntSushi/toml"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -17,11 +16,7 @@ const (
 )
 
 func main() {
-	var config configMain
-	if _, err := toml.DecodeFile("config.toml", &config); err != nil {
-		log.Fatal(err)
-	}
-
+	config := readConfig()
 	db, err := bolt.Open("rssfeed.db", 0600, nil)
 	if err != nil {
 		log.Fatal(err)
