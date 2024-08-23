@@ -1,6 +1,7 @@
 package app_test
 
 import (
+	"context"
 	"log"
 	"path/filepath"
 	"testing"
@@ -44,15 +45,18 @@ func TestApp(t *testing.T) {
 		log.Fatalf("Failed to setup DB: %s", err)
 	}
 	cfg := app.MyConfig{
+		App:      app.ConfigApp{Oldest: 3600 * 24},
 		Webhooks: []app.ConfigWebhook{{Name: "hook1", URL: "https://www.example.com/hook"}},
 		Feeds:    []app.ConfigFeed{{Name: "feed1", URL: "https://www.example.com/feed", Webhook: "hook1"}},
 	}
 	a := app.New(db, cfg, faketime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
-	a.ProcessFeed(cfg.Feeds[0])
-	a.ProcessFeed(cfg.Feeds[0])
+	ctx, cancel := context.WithCancel(context.TODO())
+	go a.Run(ctx)
+	time.Sleep(2 * time.Second)
+	cancel()
 	expected := map[string]int{
 		"POST https://www.example.com/hook": 1,
-		"GET https://www.example.com/feed":  2,
+		"GET https://www.example.com/feed":  1,
 	}
 	assert.Equal(t, expected, httpmock.GetCallCountInfo())
 }

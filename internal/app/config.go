@@ -11,6 +11,7 @@ import (
 const (
 	discordTimeoutDefault = 30
 	feedTimeoutDefault    = 30
+	oldestDefault         = 48 * 3600
 )
 
 type MyConfig struct {
@@ -22,6 +23,7 @@ type MyConfig struct {
 type ConfigApp struct {
 	DiscordTimeout int `toml:"discordTimeout"`
 	FeedTimeout    int `toml:"feedTimeout"`
+	Oldest         int `toml:"oldest"`
 }
 
 type ConfigFeed struct {
@@ -102,6 +104,9 @@ func parseConfig(config *MyConfig) error {
 	}
 	if config.App.FeedTimeout <= 0 {
 		config.App.FeedTimeout = discordTimeoutDefault
+	}
+	if config.App.Oldest <= 0 {
+		config.App.Oldest = oldestDefault
 	}
 	return nil
 }

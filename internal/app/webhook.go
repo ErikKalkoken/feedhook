@@ -45,15 +45,15 @@ func makePayload(title string, item *gofeed.Item) (webhookPayload, error) {
 	return payload, nil
 }
 
-func sendToWebhook(payload *webhookPayload, url string, timeout time.Duration) error {
+func sendToWebhook(ctx context.Context, payload *webhookPayload, url string, timeout time.Duration) error {
 	time.Sleep(1 * time.Second)
 	dat, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx2, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(dat))
+	req, err := http.NewRequestWithContext(ctx2, "POST", url, bytes.NewBuffer(dat))
 	if err != nil {
 		return err
 	}
@@ -64,7 +64,6 @@ func sendToWebhook(payload *webhookPayload, url string, timeout time.Duration) e
 		return err
 	}
 	defer resp.Body.Close()
-
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err

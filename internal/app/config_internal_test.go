@@ -67,7 +67,7 @@ func TestParseConfig(t *testing.T) {
 		}
 		assert.Error(t, parseConfig(&cf))
 	})
-	t.Run("should return default for timeouts when missing", func(t *testing.T) {
+	t.Run("should set app defaults when missing", func(t *testing.T) {
 		cf := MyConfig{
 			Webhooks: []ConfigWebhook{{Name: "hook1", URL: "https://www.example.com/url1"}},
 			Feeds:    []ConfigFeed{{Name: "feed1", URL: "https://www.example.com/url2", Webhook: "hook1"}},
@@ -76,6 +76,7 @@ func TestParseConfig(t *testing.T) {
 		if assert.NoError(t, err) {
 			assert.Equal(t, cf.App.DiscordTimeout, discordTimeoutDefault)
 			assert.Equal(t, cf.App.FeedTimeout, feedTimeoutDefault)
+			assert.Equal(t, cf.App.Oldest, oldestDefault)
 		}
 	})
 	t.Run("should return error when webhook names not unique", func(t *testing.T) {
