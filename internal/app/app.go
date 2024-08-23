@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -14,6 +15,8 @@ import (
 const (
 	bucketFeeds = "feeds"
 )
+
+var errUserAborted = errors.New("aborted by user")
 
 type Clock interface {
 	Now() time.Time
@@ -32,6 +35,8 @@ type App struct {
 	cfg   MyConfig
 	fp    *gofeed.Parser
 	clock Clock
+	done  chan bool
+	quit  chan bool
 }
 
 // New creates a new App instance and returns it.
@@ -41,12 +46,15 @@ func New(db *bolt.DB, cfg MyConfig, clock Clock) *App {
 		cfg:   cfg,
 		clock: clock,
 		fp:    gofeed.NewParser(),
+		done:  make(chan bool),
+		quit:  make(chan bool),
 	}
 	return app
 }
 
-// Run runs the main loop of the application. This call is blocking.
-func (a *App) Run(ctx context.Context) {
+// Start starts the main loop of the application.
+// User should call Close() subsequently to shut down the loop gracefully.
+func (a *App) Start() {
 	// start goroutines for webhooks
 	messageC := make(map[string]chan message)
 	for _, h := range a.cfg.Webhooks {
@@ -55,7 +63,7 @@ func (a *App) Run(ctx context.Context) {
 		go func(url string, message <-chan message) {
 			for m := range message {
 				timeout := time.Second * time.Duration(a.cfg.App.DiscordTimeout)
-				err := sendToWebhook(ctx, m.payload, url, timeout)
+				err := sendToWebhook(m.payload, url, timeout)
 				m.errC <- err
 			}
 		}(h.URL, c)
@@ -63,35 +71,40 @@ func (a *App) Run(ctx context.Context) {
 	// process feeds until aborted
 	var wg sync.WaitGroup
 	ticker := time.NewTicker(5 * time.Second)
-	for {
-		slog.Info("Started processing feeds", "count", len(a.cfg.Feeds))
-		for _, cf := range a.cfg.Feeds {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				if err := a.processFeed(ctx, cf, messageC[cf.Webhook]); err != nil {
-					slog.Error("Failed to process feed", "name", cf.Name, "error", err)
-				}
-			}()
+	go func() {
+		for {
+			slog.Info("Started processing feeds", "count", len(a.cfg.Feeds))
+			for _, cf := range a.cfg.Feeds {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					if err := a.processFeed(cf, messageC[cf.Webhook]); err == errUserAborted {
+						slog.Warn("user aborted")
+						return
+					} else if err != nil {
+						slog.Error("Failed to process feed", "name", cf.Name, "error", err)
+					}
+				}()
+			}
+			wg.Wait()
+			slog.Info("Completed processing feeds", "count", len(a.cfg.Feeds))
+			select {
+			case <-a.quit:
+				a.done <- true
+				return
+			default:
+				<-ticker.C
+			}
 		}
-		wg.Wait()
-		slog.Info("Completed processing feeds", "count", len(a.cfg.Feeds))
-		select {
-		case <-ctx.Done():
-			slog.Warn("aborted by user")
-			return
-		default:
-			<-ticker.C
-		}
-	}
+	}()
 }
 
 // processFeed processes a configured feed.
-func (a *App) processFeed(ctx context.Context, cf ConfigFeed, messageC chan<- message) error {
+func (a *App) processFeed(cf ConfigFeed, messageC chan<- message) error {
 	timeout := time.Second * time.Duration(a.cfg.App.DiscordTimeout)
-	ctx2, cancel := context.WithTimeout(ctx, timeout)
+	ctx, cancel := context.WithTimeout(context.TODO(), timeout)
 	defer cancel()
-	feed, err := a.fp.ParseURLWithContext(cf.URL, ctx2)
+	feed, err := a.fp.ParseURLWithContext(cf.URL, ctx)
 	if err != nil {
 		return fmt.Errorf("failed to parse URL for feed %s: %w ", cf.Name, err)
 	}
@@ -100,8 +113,8 @@ func (a *App) processFeed(ctx context.Context, cf ConfigFeed, messageC chan<- me
 	var newest time.Time
 	for _, item := range feed.Items {
 		select {
-		case <-ctx.Done():
-			return fmt.Errorf("aborted by user")
+		case <-a.quit:
+			return errUserAborted
 		default:
 		}
 		if !item.PublishedParsed.After(lastPublished) {
@@ -152,6 +165,13 @@ func (a *App) fetchLastPublished(cf ConfigFeed) time.Time {
 		return nil
 	})
 	return lp
+}
+
+// Close conducts a graceful shutdown of the app.
+func (a *App) Close() {
+	close(a.quit)
+	<-a.done
+	slog.Info("application shutdown completed")
 }
 
 // SetupDB initialized the database, e.g. by creating all buckets if needed.

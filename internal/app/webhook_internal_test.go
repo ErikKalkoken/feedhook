@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -17,11 +16,10 @@ func TestSendToWebhook(t *testing.T) {
 		"https://www.example.com",
 		httpmock.NewStringResponder(204, ""),
 	)
-	ctx := context.Background()
 	p := webhookPayload{
 		Content: "contents",
 	}
-	err := sendToWebhook(ctx, &p, "https://www.example.com", 30*time.Second)
+	err := sendToWebhook(&p, "https://www.example.com", 30*time.Second)
 	if assert.NoError(t, err) {
 		assert.Equal(t, 1, httpmock.GetTotalCallCount())
 	}

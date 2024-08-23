@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"log"
 	"os"
 	"os/signal"
@@ -38,13 +37,11 @@ func main() {
 		log.Fatalf("Failed to setup DB: %s", err)
 	}
 	app := app.New(db, cfg, realtime{})
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go app.Run(ctx)
+	app.Start()
+	defer app.Close()
 
 	// Ensure graceful shutdown
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sc
-	cancel()
 }

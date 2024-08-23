@@ -45,15 +45,15 @@ func makePayload(title string, item *gofeed.Item) (webhookPayload, error) {
 	return payload, nil
 }
 
-func sendToWebhook(ctx context.Context, payload *webhookPayload, url string, timeout time.Duration) error {
+func sendToWebhook(payload *webhookPayload, url string, timeout time.Duration) error {
 	time.Sleep(1 * time.Second)
 	dat, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-	ctx2, cancel := context.WithTimeout(ctx, timeout)
+	ctx, cancel := context.WithTimeout(context.TODO(), timeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx2, "POST", url, bytes.NewBuffer(dat))
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(dat))
 	if err != nil {
 		return err
 	}
