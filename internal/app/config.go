@@ -12,6 +12,7 @@ const (
 	discordTimeoutDefault = 30
 	feedTimeoutDefault    = 30
 	oldestDefault         = 48 * 3600
+	tickerDefault         = 30
 )
 
 type MyConfig struct {
@@ -24,6 +25,7 @@ type ConfigApp struct {
 	DiscordTimeout int `toml:"discordTimeout"`
 	FeedTimeout    int `toml:"feedTimeout"`
 	Oldest         int `toml:"oldest"`
+	Ticker         int `toml:"ticker"`
 }
 
 type ConfigFeed struct {

@@ -44,7 +44,7 @@ func TestApp(t *testing.T) {
 		log.Fatalf("Failed to setup DB: %s", err)
 	}
 	cfg := app.MyConfig{
-		App:      app.ConfigApp{Oldest: 3600 * 24},
+		App:      app.ConfigApp{Oldest: 3600 * 24, Ticker: 30},
 		Webhooks: []app.ConfigWebhook{{Name: "hook1", URL: "https://www.example.com/hook"}},
 		Feeds:    []app.ConfigFeed{{Name: "feed1", URL: "https://www.example.com/feed", Webhook: "hook1"}},
 	}

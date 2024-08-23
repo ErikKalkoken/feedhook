@@ -35,8 +35,8 @@ type App struct {
 	cfg   MyConfig
 	fp    *gofeed.Parser
 	clock Clock
-	done  chan bool
-	quit  chan bool
+	done  chan bool // signals that the shutdown is complete
+	quit  chan bool // closed to signal a shutdown
 }
 
 // New creates a new App instance and returns it.
@@ -70,10 +70,10 @@ func (a *App) Start() {
 	}
 	// process feeds until aborted
 	var wg sync.WaitGroup
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(time.Duration(a.cfg.App.Ticker) * time.Second)
 	slog.Info("Started processing feeds", "count", len(a.cfg.Feeds))
 	go func() {
-	loop:
+	main:
 		for {
 			for _, cf := range a.cfg.Feeds {
 				wg.Add(1)
@@ -88,14 +88,18 @@ func (a *App) Start() {
 				}()
 			}
 			wg.Wait()
-			select {
-			case <-a.quit:
-				break loop
-			default:
-				<-ticker.C
+		wait:
+			for {
+				select {
+				case <-a.quit:
+					break main
+				case <-ticker.C:
+					break wait
+				}
 			}
 		}
 		slog.Info("Stopped processing feeds")
+		ticker.Stop()
 		a.done <- true
 	}()
 }

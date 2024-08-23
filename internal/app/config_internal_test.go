@@ -77,6 +77,7 @@ func TestParseConfig(t *testing.T) {
 			assert.Equal(t, cf.App.DiscordTimeout, discordTimeoutDefault)
 			assert.Equal(t, cf.App.FeedTimeout, feedTimeoutDefault)
 			assert.Equal(t, cf.App.Oldest, oldestDefault)
+			assert.Equal(t, cf.App.Ticker, tickerDefault)
 		}
 	})
 	t.Run("should return error when webhook names not unique", func(t *testing.T) {
@@ -109,5 +110,4 @@ func TestParseConfig(t *testing.T) {
 		}
 		assert.Error(t, parseConfig(&cf))
 	})
-
 }
