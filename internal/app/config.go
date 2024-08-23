@@ -7,10 +7,21 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
+const (
+	discordTimeoutDefault = 30
+	feedTimeoutDefault    = 30
+)
+
 type configMain struct {
+	App        configApp
 	Feeds      []configFeed
 	Webhooks   []configWebhook
 	WebhookMap map[string]string
+}
+
+type configApp struct {
+	DiscordTimeout int `toml:"discordTimeout"`
+	FeedTimeout    int `toml:"feedTimeout"`
 }
 
 type configFeed struct {
@@ -47,5 +58,11 @@ func ReadConfig(fn string) configMain {
 		}
 	}
 	config.WebhookMap = webhooks
+	if config.App.DiscordTimeout <= 0 {
+		config.App.DiscordTimeout = discordTimeoutDefault
+	}
+	if config.App.FeedTimeout <= 0 {
+		config.App.FeedTimeout = discordTimeoutDefault
+	}
 	return config
 }

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"log"
 	"log/slog"
 	"sync"
@@ -39,7 +40,8 @@ func New(db *bolt.DB, config configMain) *App {
 		app.messageC[name] = c
 		go func(url string, message <-chan message) {
 			for m := range message {
-				err := sendToWebhook(m.payload, url)
+				timeout := time.Second * time.Duration(config.App.DiscordTimeout)
+				err := sendToWebhook(m.payload, url, timeout)
 				m.errC <- err
 			}
 		}(url, c)
@@ -66,7 +68,10 @@ func (a *App) Run() {
 }
 
 func (a *App) processFeed(cf configFeed) {
-	feed, err := a.fp.ParseURL(cf.URL)
+	timeout := time.Second * time.Duration(a.config.App.DiscordTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	feed, err := a.fp.ParseURLWithContext(cf.URL, ctx)
 	if err != nil {
 		slog.Error("failed to parse feed URL", "feed", cf.Name, "url", cf.URL)
 		return
