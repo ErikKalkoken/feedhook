@@ -11,10 +11,21 @@ import (
 	"time"
 
 	md "github.com/JohannesKaufmann/html-to-markdown"
+	"github.com/PuerkitoBio/goquery"
 	"github.com/mmcdole/gofeed"
 )
 
 var converter = md.NewConverter("", true, nil)
+
+func init() {
+	x := md.Rule{
+		Filter: []string{"img"},
+		Replacement: func(content string, selec *goquery.Selection, opt *md.Options) *string {
+			return md.String("")
+		},
+	}
+	converter.AddRules(x)
+}
 
 type webhookPayload struct {
 	Content string  `json:"content,omitempty"`

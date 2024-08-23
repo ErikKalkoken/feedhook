@@ -44,7 +44,7 @@ func TestApp(t *testing.T) {
 		log.Fatalf("Failed to setup DB: %s", err)
 	}
 	cfg := app.MyConfig{
-		App:      app.ConfigApp{Oldest: 3600 * 24, Ticker: 30},
+		App:      app.ConfigApp{Oldest: 3600 * 24, Ticker: 1},
 		Webhooks: []app.ConfigWebhook{{Name: "hook1", URL: "https://www.example.com/hook"}},
 		Feeds:    []app.ConfigFeed{{Name: "feed1", URL: "https://www.example.com/feed", Webhook: "hook1"}},
 	}
@@ -54,5 +54,5 @@ func TestApp(t *testing.T) {
 	a.Close()
 	info := httpmock.GetCallCountInfo()
 	assert.Equal(t, 1, info["POST https://www.example.com/hook"])
-	assert.GreaterOrEqual(t, info["GET https://www.example.com/feed"], 1)
+	assert.LessOrEqual(t, 1, info["GET https://www.example.com/feed"])
 }
