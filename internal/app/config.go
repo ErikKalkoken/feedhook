@@ -14,23 +14,23 @@ const (
 )
 
 type MyConfig struct {
-	App      configApp
-	Feeds    []configFeed
-	Webhooks []configWebhook
+	App      ConfigApp
+	Feeds    []ConfigFeed
+	Webhooks []ConfigWebhook
 }
 
-type configApp struct {
+type ConfigApp struct {
 	DiscordTimeout int `toml:"discordTimeout"`
 	FeedTimeout    int `toml:"feedTimeout"`
 }
 
-type configFeed struct {
+type ConfigFeed struct {
 	Name    string `toml:"name"`
 	URL     string `toml:"url"`
 	Webhook string `toml:"webhook"`
 }
 
-type configWebhook struct {
+type ConfigWebhook struct {
 	Name string `toml:"name"`
 	URL  string `toml:"url"`
 }

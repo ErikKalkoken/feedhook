@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	bolt "go.etcd.io/bbolt"
 
@@ -16,8 +17,14 @@ const (
 	dbFileName     = "feedexpress.db"
 )
 
+type realtime struct{}
+
+func (rt realtime) Now() time.Time {
+	return time.Now()
+}
+
 func main() {
-	config, err := app.ReadConfig(configFilename)
+	cfg, err := app.ReadConfig(configFilename)
 	if err != nil {
 		log.Fatalf("Config error: %s", err)
 	}
@@ -29,7 +36,7 @@ func main() {
 	if err := app.SetupDB(db); err != nil {
 		log.Fatalf("Failed to setup DB: %s", err)
 	}
-	app := app.New(db, config)
+	app := app.New(db, cfg, realtime{})
 	go app.Run()
 
 	// Ensure graceful shutdown

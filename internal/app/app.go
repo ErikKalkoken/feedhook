@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -12,35 +12,45 @@ import (
 )
 
 const (
-	BucketFeeds = "feeds"
+	bucketFeeds = "feeds"
 	oldest      = 24 * time.Hour
 )
 
+type Clock interface {
+	Now() time.Time
+}
+
+// message represents a message send to a webhook.
+// Consumers must listen on the errC channel to receive the result.
 type message struct {
 	payload *webhookPayload
 	errC    chan error
 }
 
+// App represents this application and holds it's global data.
 type App struct {
 	db       *bolt.DB
-	config   MyConfig
+	cfg      MyConfig
 	messageC map[string]chan message
 	fp       *gofeed.Parser
+	clock    Clock
 }
 
-func New(db *bolt.DB, config MyConfig) *App {
+// New creates a new App instance and returns it.
+func New(db *bolt.DB, cfg MyConfig, clock Clock) *App {
 	app := &App{
 		db:       db,
-		config:   config,
+		cfg:      cfg,
+		clock:    clock,
 		messageC: make(map[string]chan message),
 		fp:       gofeed.NewParser(),
 	}
-	for _, h := range config.Webhooks {
+	for _, h := range cfg.Webhooks {
 		c := make(chan message)
 		app.messageC[h.Name] = c
 		go func(url string, message <-chan message) {
 			for m := range message {
-				timeout := time.Second * time.Duration(config.App.DiscordTimeout)
+				timeout := time.Second * time.Duration(cfg.App.DiscordTimeout)
 				err := sendToWebhook(m.payload, url, timeout)
 				m.errC <- err
 			}
@@ -49,40 +59,43 @@ func New(db *bolt.DB, config MyConfig) *App {
 	return app
 }
 
+// Run runs the main loop of the application. This call is blocking.
 func (a *App) Run() {
 	var wg sync.WaitGroup
 	ticker := time.NewTicker(5 * time.Second)
 	for {
-		slog.Info("Started processing feeds", "count", len(a.config.Feeds))
-		for _, cf := range a.config.Feeds {
+		slog.Info("Started processing feeds", "count", len(a.cfg.Feeds))
+		for _, cf := range a.cfg.Feeds {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				a.processFeed(cf)
+				if err := a.ProcessFeed(cf); err != nil {
+					slog.Error("Failed to process feed", "name", cf.Name, "error", err)
+				}
 			}()
 		}
 		wg.Wait()
-		slog.Info("Completed processing feeds", "count", len(a.config.Feeds))
+		slog.Info("Completed processing feeds", "count", len(a.cfg.Feeds))
 		<-ticker.C
 	}
 }
 
-func (a *App) processFeed(cf configFeed) {
-	timeout := time.Second * time.Duration(a.config.App.DiscordTimeout)
+// ProcessFeed processes a configured feed.
+func (a *App) ProcessFeed(cf ConfigFeed) error {
+	timeout := time.Second * time.Duration(a.cfg.App.DiscordTimeout)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	feed, err := a.fp.ParseURLWithContext(cf.URL, ctx)
 	if err != nil {
-		slog.Error("failed to parse feed URL", "feed", cf.Name, "url", cf.URL)
-		return
+		return fmt.Errorf("failed to parse URL for feed %s: %w ", cf.Name, err)
 	}
-	lastPublished := a.fetchLastPublished(cf.URL)
+	lastPublished := a.fetchLastPublished(cf)
 	var newest time.Time
 	for _, item := range feed.Items {
 		if !item.PublishedParsed.After(lastPublished) {
 			continue
 		}
-		if item.PublishedParsed.Before(time.Now().Add(-oldest)) {
+		if item.PublishedParsed.Before(a.clock.Now().Add(-oldest)) {
 			continue
 		}
 		payload, err := makePayload(feed.Title, item)
@@ -93,28 +106,29 @@ func (a *App) processFeed(cf configFeed) {
 		m := message{payload: &payload, errC: make(chan error)}
 		a.messageC[cf.Webhook] <- m
 		if err := <-m.errC; err != nil {
-			slog.Error("Failed to send payload to webhook", "feed", cf.Name, "error", err)
-			continue
+			return fmt.Errorf("failed to send payload to webhook: %w", err)
 		}
 		if !item.PublishedParsed.After(newest) {
 			continue
 		}
 		newest = *item.PublishedParsed
 		if err := a.db.Update(func(tx *bolt.Tx) error {
-			b := tx.Bucket([]byte(BucketFeeds))
-			err := b.Put([]byte(cf.URL), []byte(newest.Format(time.RFC3339)))
+			b := tx.Bucket([]byte(bucketFeeds))
+			err := b.Put([]byte(cf.Name), []byte(newest.Format(time.RFC3339)))
 			return err
 		}); err != nil {
-			log.Fatal(err)
+			return fmt.Errorf("failed to update database: %w", err)
 		}
 	}
+	return nil
 }
 
-func (a *App) fetchLastPublished(url string) time.Time {
+// fetchLastPublished returns the time of the last published item (if any).
+func (a *App) fetchLastPublished(cf ConfigFeed) time.Time {
 	var lp time.Time
 	a.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(BucketFeeds))
-		v := b.Get([]byte(url))
+		b := tx.Bucket([]byte(bucketFeeds))
+		v := b.Get([]byte(cf.Name))
 		if v != nil {
 			t, err := time.Parse(time.RFC3339, string(v))
 			if err != nil {
@@ -128,9 +142,10 @@ func (a *App) fetchLastPublished(url string) time.Time {
 	return lp
 }
 
+// SetupDB initialized the database, e.g. by creating all buckets if needed.
 func SetupDB(db *bolt.DB) error {
 	err := db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte(BucketFeeds))
+		_, err := tx.CreateBucketIfNotExists([]byte(bucketFeeds))
 		return err
 	})
 	return err
