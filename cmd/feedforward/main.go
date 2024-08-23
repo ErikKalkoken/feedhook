@@ -1,6 +1,8 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -9,13 +11,16 @@ import (
 
 	bolt "go.etcd.io/bbolt"
 
-	"example/feedexpress/internal/app"
+	"example/feedforward/internal/app"
 )
 
 const (
 	configFilename = "config.toml"
-	dbFileName     = "feedexpress.db"
+	dbFileName     = "feedforward.db"
 )
+
+// Current version need to be injected via ldflags
+var Version = "0.0.0"
 
 type realtime struct{}
 
@@ -24,6 +29,13 @@ func (rt realtime) Now() time.Time {
 }
 
 func main() {
+	forkFlag := flag.Bool("v", false, "show version")
+	flag.Parse()
+	if *forkFlag {
+		fmt.Println(Version)
+		os.Exit(0)
+	}
+
 	cfg, err := app.ReadConfig(configFilename)
 	if err != nil {
 		log.Fatalf("Config error: %s", err)

@@ -1,7 +1,7 @@
 package app_test
 
 import (
-	"example/feedexpress/internal/app"
+	"example/feedforward/internal/app"
 	"os"
 	"path/filepath"
 	"testing"

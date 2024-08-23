@@ -71,15 +71,16 @@ func (a *App) Start() {
 	// process feeds until aborted
 	var wg sync.WaitGroup
 	ticker := time.NewTicker(5 * time.Second)
+	slog.Info("Started processing feeds", "count", len(a.cfg.Feeds))
 	go func() {
+	loop:
 		for {
-			slog.Info("Started processing feeds", "count", len(a.cfg.Feeds))
 			for _, cf := range a.cfg.Feeds {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
 					if err := a.processFeed(cf, messageC[cf.Webhook]); err == errUserAborted {
-						slog.Warn("user aborted")
+						slog.Debug("user aborted")
 						return
 					} else if err != nil {
 						slog.Error("Failed to process feed", "name", cf.Name, "error", err)
@@ -87,15 +88,15 @@ func (a *App) Start() {
 				}()
 			}
 			wg.Wait()
-			slog.Info("Completed processing feeds", "count", len(a.cfg.Feeds))
 			select {
 			case <-a.quit:
-				a.done <- true
-				return
+				break loop
 			default:
 				<-ticker.C
 			}
 		}
+		slog.Info("Stopped processing feeds")
+		a.done <- true
 	}()
 }
 

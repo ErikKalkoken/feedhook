@@ -1,4 +1,4 @@
-module example/feedexpress
+module example/feedforward
 
 go 1.23.0
 

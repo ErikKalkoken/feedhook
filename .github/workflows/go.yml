@@ -4,7 +4,7 @@ name: CI/CD
 
 env:
   GOVERSION: "1.23"
-  NAME: "feedexpress"
+  NAME: "feedforward"
   PREFIX: ""
 
 on: push
