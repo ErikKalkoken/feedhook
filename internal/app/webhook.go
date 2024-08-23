@@ -22,25 +22,51 @@ type webhookPayload struct {
 }
 
 type embed struct {
+	Author struct {
+		Name    string `json:"name,omitempty"`
+		IconURL string `json:"icon_url,omitempty"`
+		URL     string `json:"url,omitempty"`
+	} `json:"author,omitempty"`
 	Description string `json:"description,omitempty"`
-	Timestamp   string `json:"timestamp,omitempty"`
-	Title       string `json:"title,omitempty"`
-	URL         string `json:"url,omitempty"`
+	Image       struct {
+		URL string `json:"url,omitempty"`
+	} `json:"image,omitempty"`
+	Timestamp string `json:"timestamp,omitempty"`
+	Title     string `json:"title,omitempty"`
+	Thumbnail struct {
+		URL string `json:"url,omitempty"`
+	} `json:"thumbnail,omitempty"`
+	URL string `json:"url,omitempty"`
 }
 
-func makePayload(title string, item *gofeed.Item) (webhookPayload, error) {
-	description, err := converter.ConvertString(item.Content)
+func makePayload(feed *gofeed.Feed, item *gofeed.Item) (webhookPayload, error) {
+	content, err := converter.ConvertString(item.Content)
 	if err != nil {
 		return webhookPayload{}, fmt.Errorf("failed to parse content to markdown: %w", err)
 	}
+	description, err := converter.ConvertString(item.Description)
+	if err != nil {
+		return webhookPayload{}, fmt.Errorf("failed to parse description to markdown: %w", err)
+	}
+	if content != "" {
+		description = content
+	}
+	em := embed{
+		Description: description,
+		Timestamp:   item.PublishedParsed.Format(time.RFC3339),
+		Title:       item.Title,
+		URL:         item.Link,
+	}
+	em.Author.Name = feed.Title
+	em.Author.URL = feed.Link
+	if feed.Image != nil {
+		em.Author.IconURL = feed.Image.URL
+	}
+	if item.Image != nil {
+		em.Image.URL = item.Image.URL
+	}
 	payload := webhookPayload{
-		Content: title,
-		Embeds: []embed{{
-			Description: description,
-			Timestamp:   item.PublishedParsed.Format(time.RFC3339),
-			Title:       item.Title,
-			URL:         item.Link,
-		}},
+		Embeds: []embed{em},
 	}
 	return payload, nil
 }
@@ -69,6 +95,5 @@ func sendToWebhook(payload *webhookPayload, url string, timeout time.Duration) e
 		return err
 	}
 	slog.Debug("response", "url", url, "status", resp.Status, "headers", resp.Header, "body", string(body))
-	slog.Info("message posted", "webhook", url, "status", resp.Status)
 	return nil
 }

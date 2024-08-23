@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"sync"
 	"time"
 
@@ -116,6 +117,7 @@ func (a *App) processFeed(cf ConfigFeed, messageC chan<- message) error {
 	lastPublished := a.fetchLastPublished(cf)
 	oldest := time.Duration(a.cfg.App.Oldest) * time.Second
 	var newest time.Time
+	sort.Sort(feed)
 	for _, item := range feed.Items {
 		select {
 		case <-a.quit:
@@ -128,7 +130,7 @@ func (a *App) processFeed(cf ConfigFeed, messageC chan<- message) error {
 		if item.PublishedParsed.Before(a.clock.Now().Add(-oldest)) {
 			continue
 		}
-		payload, err := makePayload(feed.Title, item)
+		payload, err := makePayload(feed, item)
 		if err != nil {
 			slog.Error("Failed to make payload", "feed", cf.Name, "error", "err")
 			continue
@@ -138,6 +140,7 @@ func (a *App) processFeed(cf ConfigFeed, messageC chan<- message) error {
 		if err := <-m.errC; err != nil {
 			return fmt.Errorf("failed to send payload to webhook: %w", err)
 		}
+		slog.Info("Posted item", "feed", cf.Name, "webhook", cf.Webhook, "title", item.Title)
 		if !item.PublishedParsed.After(newest) {
 			continue
 		}

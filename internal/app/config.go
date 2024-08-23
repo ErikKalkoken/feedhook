@@ -110,5 +110,8 @@ func parseConfig(config *MyConfig) error {
 	if config.App.Oldest <= 0 {
 		config.App.Oldest = oldestDefault
 	}
+	if config.App.Ticker <= 0 {
+		config.App.Ticker = tickerDefault
+	}
 	return nil
 }
