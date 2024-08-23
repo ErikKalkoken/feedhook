@@ -1,0 +1,64 @@
+# Main workflow for testing and releasing
+
+name: CI/CD
+
+env:
+  GOVERSION: "1.23"
+  NAME: "feedexpress"
+  PREFIX: ""
+
+on: push
+
+jobs:
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GOVERSION }}
+
+    - name: Build
+      run: go build -v ./...
+
+    - name: Test
+      run: go test -v ./...
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: test
+    runs-on: ubuntu-latest
+    permissions: write-all
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GOVERSION }}
+
+    - name: Set prefix
+      run: |
+        VERSION=${{ github.ref_name }}
+        echo "PREFIX=${{ env.NAME }}-${VERSION:1}" >> $GITHUB_ENV
+
+    - name: Install tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install zip gzip tar
+
+    - name: Build linux
+      run: GOOS=linux GOARCH=amd64 go build -ldflags "-X main.Version=${{  github.ref_name }}" -o ./build/linux/ .
+
+    - name: Package linux
+      run: tar --directory=build/linux -czvf ${{ env.PREFIX }}-linux-amd64.tar.gz ${{ env.NAME }}
+
+    - name: Create release
+      uses: softprops/action-gh-release@v2
+      with:
+        fail_on_unmatched_files: true
+        files: |
+          ${{ env.PREFIX }}-linux-amd64.tar.gz
