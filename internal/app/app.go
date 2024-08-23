@@ -23,28 +23,28 @@ type message struct {
 
 type App struct {
 	db       *bolt.DB
-	config   configMain
+	config   MyConfig
 	messageC map[string]chan message
 	fp       *gofeed.Parser
 }
 
-func New(db *bolt.DB, config configMain) *App {
+func New(db *bolt.DB, config MyConfig) *App {
 	app := &App{
 		db:       db,
 		config:   config,
 		messageC: make(map[string]chan message),
 		fp:       gofeed.NewParser(),
 	}
-	for name, url := range config.WebhookMap {
+	for _, h := range config.Webhooks {
 		c := make(chan message)
-		app.messageC[name] = c
+		app.messageC[h.Name] = c
 		go func(url string, message <-chan message) {
 			for m := range message {
 				timeout := time.Second * time.Duration(config.App.DiscordTimeout)
 				err := sendToWebhook(m.payload, url, timeout)
 				m.errC <- err
 			}
-		}(url, c)
+		}(h.URL, c)
 	}
 	return app
 }

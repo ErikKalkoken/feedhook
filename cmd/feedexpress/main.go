@@ -17,14 +17,17 @@ const (
 )
 
 func main() {
-	config := app.ReadConfig(configFilename)
+	config, err := app.ReadConfig(configFilename)
+	if err != nil {
+		log.Fatalf("Config error: %s", err)
+	}
 	db, err := bolt.Open(dbFileName, 0600, nil)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Failed to open DB: %s", err)
 	}
 	defer db.Close()
 	if err := app.SetupDB(db); err != nil {
-		log.Fatal(err)
+		log.Fatalf("Failed to setup DB: %s", err)
 	}
 	app := app.New(db, config)
 	go app.Run()
