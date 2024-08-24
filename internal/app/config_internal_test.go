@@ -1,6 +1,7 @@
 package app
 
 import (
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -108,5 +109,22 @@ func TestParseConfig(t *testing.T) {
 			},
 		}
 		assert.Error(t, parseConfig(&cf))
+	})
+	t.Run("should return log level from config", func(t *testing.T) {
+		cases := []struct {
+			in   string
+			want slog.Level
+		}{
+			{"ERROR", slog.LevelError},
+			{"WARN", slog.LevelWarn},
+			{"INFO", slog.LevelInfo},
+			{"DEBUG", slog.LevelDebug},
+			{"", logLevelDefault},
+			{"XXX", logLevelDefault},
+		}
+		for _, tc := range cases {
+			cf := MyConfig{App: ConfigApp{LogLevel: tc.in}}
+			assert.Equal(t, tc.want, cf.App.LoggerLevel())
+		}
 	})
 }

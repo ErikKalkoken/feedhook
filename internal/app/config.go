@@ -4,14 +4,16 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
 
 const (
-	timeoutDefault = 30
-	oldestDefault  = 48 * 3600
-	tickerDefault  = 30
+	timeoutDefault  = 30
+	oldestDefault   = 48 * 3600
+	tickerDefault   = 30
+	logLevelDefault = slog.LevelInfo
 )
 
 type MyConfig struct {
@@ -21,9 +23,19 @@ type MyConfig struct {
 }
 
 type ConfigApp struct {
-	Timeout int `toml:"timeout"`
-	Oldest  int `toml:"oldest"`
-	Ticker  int `toml:"ticker"`
+	LogLevel string `toml:"loglevel"`
+	Oldest   int    `toml:"oldest"`
+	Ticker   int    `toml:"ticker"`
+	Timeout  int    `toml:"timeout"`
+}
+
+func (ca ConfigApp) LoggerLevel() slog.Level {
+	m := map[string]slog.Level{"DEBUG": slog.LevelDebug, "INFO": slog.LevelInfo, "WARN": slog.LevelWarn, "ERROR": slog.LevelError}
+	v, ok := m[strings.ToUpper(ca.LogLevel)]
+	if !ok {
+		return logLevelDefault
+	}
+	return v
 }
 
 type ConfigFeed struct {

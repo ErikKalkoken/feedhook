@@ -30,20 +30,17 @@ func (rt realtime) Now() time.Time {
 }
 
 func main() {
-	log.SetFlags(log.LstdFlags | log.Llongfile)
-	logLevelFlag := logLevelFlag{value: slog.LevelInfo}
-	flag.Var(&logLevelFlag, "loglevel", "set log level")
 	versionFlag := flag.Bool("v", false, "show version")
 	flag.Parse()
 	if *versionFlag {
 		fmt.Println(Version)
 		os.Exit(0)
 	}
-	slog.SetLogLoggerLevel(logLevelFlag.value)
 	cfg, err := app.ReadConfig(configFilename)
 	if err != nil {
 		log.Fatalf("Config error: %s", err)
 	}
+	slog.SetLogLoggerLevel(cfg.App.LoggerLevel())
 	db, err := bolt.Open(dbFileName, 0600, nil)
 	if err != nil {
 		log.Fatalf("Failed to open DB: %s", err)
