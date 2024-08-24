@@ -78,7 +78,7 @@ func (a *App) Start() {
 	// process feeds until aborted
 	var wg sync.WaitGroup
 	ticker := time.NewTicker(time.Duration(a.cfg.App.Ticker) * time.Second)
-	slog.Info("Started processing feeds", "feeds", len(a.cfg.Feeds), "webhooks", len(a.cfg.Webhooks))
+	slog.Info("Started", "feeds", len(a.cfg.Feeds), "webhooks", len(a.cfg.Webhooks))
 	go func() {
 	main:
 		for {
@@ -95,6 +95,7 @@ func (a *App) Start() {
 				}()
 			}
 			wg.Wait()
+			slog.Info("Finished processing feeds", "feeds", len(a.cfg.Feeds))
 		wait:
 			for {
 				select {
@@ -105,7 +106,7 @@ func (a *App) Start() {
 				}
 			}
 		}
-		slog.Info("Stopped processing feeds")
+		slog.Info("Stopped")
 		ticker.Stop()
 		a.done <- true
 	}()
@@ -182,7 +183,7 @@ func (a *App) fetchLastPublished(cf ConfigFeed) time.Time {
 func (a *App) Close() {
 	close(a.quit)
 	<-a.done
-	slog.Info("graceful shutdown completed")
+	slog.Info("Graceful shutdown completed")
 }
 
 // SetupDB initialized the database, e.g. by creating all buckets if needed.

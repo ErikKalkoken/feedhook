@@ -1,0 +1,14 @@
+[app]
+timeout = 30
+oldest = 3600
+ticker = 30
+loglevel = "INFO"
+
+[[webhooks]]
+name = "HOOK-1"
+url = "https://discord.com/api/webhooks/XXX/YYY"
+
+[[feeds]]
+name = "NYT"
+url = "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml"
+webhook = "HOOK-1"
