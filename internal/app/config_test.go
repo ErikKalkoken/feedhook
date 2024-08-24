@@ -11,8 +11,9 @@ import (
 
 var toml = `
 [app]
-discordTimeout = 2
-feedTimeout = 3
+timeout = 2
+oldest = 3
+ticker = 4
 
 [[webhooks]]
 name = "hook-1"
@@ -31,8 +32,9 @@ func TestConfig(t *testing.T) {
 	}
 	cf, err := app.ReadConfig(p)
 	if assert.NoError(t, err) {
-		assert.Equal(t, cf.App.DiscordTimeout, 2)
-		assert.Equal(t, cf.App.FeedTimeout, 3)
+		assert.Equal(t, cf.App.Timeout, 2)
+		assert.Equal(t, cf.App.Oldest, 3)
+		assert.Equal(t, cf.App.Ticker, 4)
 		assert.Equal(t, cf.Webhooks[0].Name, "hook-1")
 		assert.Equal(t, cf.Webhooks[0].URL, "https://www.example.com/webhook")
 		assert.Equal(t, cf.Feeds[0].Name, "Feed 1")

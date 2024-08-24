@@ -2,7 +2,6 @@ package app
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -82,21 +81,13 @@ func makePayload(feed *gofeed.Feed, item *gofeed.Item) (webhookPayload, error) {
 	return payload, nil
 }
 
-func sendToWebhook(payload *webhookPayload, url string, timeout time.Duration) error {
+func sendToWebhook(client *http.Client, payload *webhookPayload, url string) error {
 	time.Sleep(1 * time.Second)
 	dat, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.TODO(), timeout)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(dat))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := client.Post(url, "application/json", bytes.NewBuffer(dat))
 	if err != nil {
 		return err
 	}

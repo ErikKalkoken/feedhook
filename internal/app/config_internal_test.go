@@ -74,8 +74,7 @@ func TestParseConfig(t *testing.T) {
 		}
 		err := parseConfig(&cf)
 		if assert.NoError(t, err) {
-			assert.Equal(t, cf.App.DiscordTimeout, discordTimeoutDefault)
-			assert.Equal(t, cf.App.FeedTimeout, feedTimeoutDefault)
+			assert.Equal(t, cf.App.Timeout, timeoutDefault)
 			assert.Equal(t, cf.App.Oldest, oldestDefault)
 			assert.Equal(t, cf.App.Ticker, tickerDefault)
 		}

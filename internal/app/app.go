@@ -1,10 +1,10 @@
 package app
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"sort"
 	"sync"
 	"time"
@@ -32,23 +32,30 @@ type message struct {
 
 // App represents this application and holds it's global data.
 type App struct {
-	db    *bolt.DB
-	cfg   MyConfig
-	fp    *gofeed.Parser
-	clock Clock
-	done  chan bool // signals that the shutdown is complete
-	quit  chan bool // closed to signal a shutdown
+	client *http.Client
+	db     *bolt.DB
+	cfg    MyConfig
+	fp     *gofeed.Parser
+	clock  Clock
+	done   chan bool // signals that the shutdown is complete
+	quit   chan bool // closed to signal a shutdown
 }
 
 // New creates a new App instance and returns it.
 func New(db *bolt.DB, cfg MyConfig, clock Clock) *App {
+	client := &http.Client{
+		Timeout: time.Duration(cfg.App.Timeout) * time.Second,
+	}
+	fp := gofeed.NewParser()
+	fp.Client = client
 	app := &App{
-		db:    db,
-		cfg:   cfg,
-		clock: clock,
-		fp:    gofeed.NewParser(),
-		done:  make(chan bool),
-		quit:  make(chan bool),
+		client: client,
+		db:     db,
+		cfg:    cfg,
+		clock:  clock,
+		fp:     fp,
+		done:   make(chan bool),
+		quit:   make(chan bool),
 	}
 	return app
 }
@@ -63,8 +70,7 @@ func (a *App) Start() {
 		messageC[h.Name] = c
 		go func(url string, message <-chan message) {
 			for m := range message {
-				timeout := time.Second * time.Duration(a.cfg.App.DiscordTimeout)
-				err := sendToWebhook(m.payload, url, timeout)
+				err := sendToWebhook(a.client, m.payload, url)
 				m.errC <- err
 			}
 		}(h.URL, c)
@@ -107,10 +113,7 @@ func (a *App) Start() {
 
 // processFeed processes a configured feed.
 func (a *App) processFeed(cf ConfigFeed, messageC chan<- message) error {
-	timeout := time.Second * time.Duration(a.cfg.App.DiscordTimeout)
-	ctx, cancel := context.WithTimeout(context.TODO(), timeout)
-	defer cancel()
-	feed, err := a.fp.ParseURLWithContext(cf.URL, ctx)
+	feed, err := a.fp.ParseURL(cf.URL)
 	if err != nil {
 		return fmt.Errorf("failed to parse URL for feed %s: %w ", cf.Name, err)
 	}
