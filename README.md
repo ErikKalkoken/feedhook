@@ -6,7 +6,7 @@ A service for forwarding RSS and Atom feeds to Discord webhooks.
 - Build for high throughput
 - Easy configuration
 
-## Installation
+## Installation (WIP)
 
 This section explains how to install **feedforward** as a service on a Unix-like server.
 

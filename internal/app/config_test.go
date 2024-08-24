@@ -14,6 +14,8 @@ var toml = `
 timeout = 2
 oldest = 3
 ticker = 4
+loglevel = "DEBUG"
+db_path = "/path1/alpha"
 
 [[webhooks]]
 name = "hook-1"
@@ -35,6 +37,8 @@ func TestConfig(t *testing.T) {
 		assert.Equal(t, cf.App.Timeout, 2)
 		assert.Equal(t, cf.App.Oldest, 3)
 		assert.Equal(t, cf.App.Ticker, 4)
+		assert.Equal(t, cf.App.LogLevel, "DEBUG")
+		assert.Equal(t, cf.App.DBPath, "/path1/alpha")
 		assert.Equal(t, cf.Webhooks[0].Name, "hook-1")
 		assert.Equal(t, cf.Webhooks[0].URL, "https://www.example.com/webhook")
 		assert.Equal(t, cf.Feeds[0].Name, "Feed 1")

@@ -23,6 +23,7 @@ type MyConfig struct {
 }
 
 type ConfigApp struct {
+	DBPath   string `toml:"db_path"`
 	LogLevel string `toml:"loglevel"`
 	Oldest   int    `toml:"oldest"`
 	Ticker   int    `toml:"ticker"`
