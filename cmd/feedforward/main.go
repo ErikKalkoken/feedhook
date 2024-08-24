@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -29,13 +30,16 @@ func (rt realtime) Now() time.Time {
 }
 
 func main() {
-	forkFlag := flag.Bool("v", false, "show version")
+	log.SetFlags(log.LstdFlags | log.Llongfile)
+	logLevelFlag := logLevelFlag{value: slog.LevelInfo}
+	flag.Var(&logLevelFlag, "loglevel", "set log level")
+	versionFlag := flag.Bool("v", false, "show version")
 	flag.Parse()
-	if *forkFlag {
+	if *versionFlag {
 		fmt.Println(Version)
 		os.Exit(0)
 	}
-
+	slog.SetLogLoggerLevel(logLevelFlag.value)
 	cfg, err := app.ReadConfig(configFilename)
 	if err != nil {
 		log.Fatalf("Config error: %s", err)
