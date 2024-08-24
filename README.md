@@ -2,15 +2,27 @@
 
 A service for forwarding RSS and Atom feeds to Discord webhooks.
 
+![GitHub Release](https://img.shields.io/github/v/release/ErikKalkoken/feedforward)
+[![CI/CD](https://github.com/ErikKalkoken/feedforward/actions/workflows/go.yml/badge.svg)](https://github.com/ErikKalkoken/feedforward/actions/workflows/go.yml)
+![GitHub License](https://img.shields.io/github/license/ErikKalkoken/feedforward)
+
+## Description
+
 - Forward RSS and Atom feeds to webhooks on Discord
 - Build for high throughput
 - Easy configuration
+
+## Example
+
+Here is how a forwarded RSS item looks on Discord:
+
+![example](https://cdn.imgpile.com/f/s1P9K4y_xl.png)
 
 ## Installation (WIP)
 
 This section explains how to install **feedforward** as a service on a Unix-like server.
 
-> !NOTE
+> [!NOTE]
 > This guide uses [supervisor](http://supervisord.org/index.html) for running feedforward as service. Please install it first.
 
 Create a "service" user with disabled login:
