@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	bolt "go.etcd.io/bbolt"
 
-	"example/feedforward/internal/app"
+	"github.com/ErikKalkoken/feedforward/internal/app"
 )
 
 type faketime struct {

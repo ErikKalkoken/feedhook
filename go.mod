@@ -1,4 +1,4 @@
-module example/feedforward
+module github.com/ErikKalkoken/feedforward
 
 go 1.23.0
 

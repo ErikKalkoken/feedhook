@@ -1,10 +1,11 @@
 package app_test
 
 import (
-	"example/feedforward/internal/app"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/ErikKalkoken/feedforward/internal/app"
 
 	"github.com/stretchr/testify/assert"
 )
