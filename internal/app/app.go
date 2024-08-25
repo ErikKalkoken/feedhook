@@ -1,6 +1,8 @@
 package app
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -58,6 +60,48 @@ func New(db *bolt.DB, cfg MyConfig, clock Clock) *App {
 		quit:   make(chan bool),
 	}
 	return app
+}
+
+// Close conducts a graceful shutdown of the app.
+func (a *App) Close() {
+	close(a.quit)
+	<-a.done
+	slog.Info("Graceful shutdown completed")
+}
+
+// Init initialized the app, e.g. by creating buckets in the DB as needed.
+func (a *App) Init() error {
+	names := make(map[string]bool)
+	for _, f := range a.cfg.Feeds {
+		names[f.Name] = true
+	}
+	tx, err := a.db.Begin(true)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	bkt, err := tx.CreateBucketIfNotExists([]byte(bucketFeeds))
+	if err != nil {
+		return err
+	}
+	for n := range names {
+		if _, err := bkt.CreateBucketIfNotExists([]byte(n)); err != nil {
+			return err
+		}
+	}
+	bkt.ForEach(func(k, v []byte) error {
+		if name := string(k); !names[name] {
+			if err := bkt.DeleteBucket(k); err != nil {
+				return err
+			}
+			slog.Info("Deleted obsolete bucket for feed", "name", name)
+		}
+		return nil
+	})
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Start starts the main loop of the application.
@@ -120,7 +164,6 @@ func (a *App) processFeed(cf ConfigFeed, messageC chan<- message) error {
 		return fmt.Errorf("failed to parse URL for feed %s: %w ", cf.Name, err)
 	}
 	oldest := time.Duration(a.cfg.App.Oldest) * time.Second
-	var newest time.Time
 	sort.Sort(feed)
 	for _, item := range feed.Items {
 		select {
@@ -128,10 +171,10 @@ func (a *App) processFeed(cf ConfigFeed, messageC chan<- message) error {
 			return errUserAborted
 		default:
 		}
-		if oldest != 0 && item.PublishedParsed.Before(a.clock.Now().Add(-oldest)) {
+		if oldest != 0 && item.PublishedParsed != nil && item.PublishedParsed.Before(a.clock.Now().Add(-oldest)) {
 			continue
 		}
-		if !a.isItemNew(cf.Name, item) {
+		if !a.isItemNew(cf, item) {
 			continue
 		}
 		payload, err := makePayload(feed, item)
@@ -145,28 +188,29 @@ func (a *App) processFeed(cf ConfigFeed, messageC chan<- message) error {
 			return fmt.Errorf("failed to send payload to webhook: %w", err)
 		}
 		slog.Info("Posted item", "feed", cf.Name, "webhook", cf.Webhook, "title", item.Title)
-		if !item.PublishedParsed.After(newest) {
-			continue
-		}
-		if err := a.db.Update(func(tx *bolt.Tx) error {
-			root := tx.Bucket([]byte(bucketFeeds))
-			b := root.Bucket([]byte(cf.Name))
-			err := b.Put([]byte(item.GUID), []byte(item.PublishedParsed.Format(time.RFC3339)))
-			return err
-		}); err != nil {
+		if err := a.recordItem(cf, item); err != nil {
 			return fmt.Errorf("failed to record item: %w", err)
 		}
 	}
 	return nil
 }
 
+func (a *App) recordItem(cf ConfigFeed, item *gofeed.Item) error {
+	err := a.db.Update(func(tx *bolt.Tx) error {
+		root := tx.Bucket([]byte(bucketFeeds))
+		b := root.Bucket([]byte(cf.Name))
+		return b.Put([]byte(itemHash(item)), []byte(item.Published))
+	})
+	return err
+}
+
 // isItemNew reports wether an item in a feed is new
-func (a *App) isItemNew(name string, item *gofeed.Item) bool {
+func (a *App) isItemNew(cf ConfigFeed, item *gofeed.Item) bool {
 	var isNew bool
 	a.db.View(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketFeeds))
-		b := root.Bucket([]byte(name))
-		v := b.Get([]byte(item.GUID))
+		b := root.Bucket([]byte(cf.Name))
+		v := b.Get([]byte(itemHash(item)))
 		if v == nil {
 			isNew = true
 		}
@@ -175,44 +219,16 @@ func (a *App) isItemNew(name string, item *gofeed.Item) bool {
 	return isNew
 }
 
-// Close conducts a graceful shutdown of the app.
-func (a *App) Close() {
-	close(a.quit)
-	<-a.done
-	slog.Info("Graceful shutdown completed")
+func itemHash(item *gofeed.Item) string {
+	if item.GUID != "" {
+		return makeHash(item.GUID)
+	}
+	s := item.Title + item.Description + item.Content
+	return makeHash(s)
 }
 
-// Init initialized the app, e.g. by creating buckets in the DB as needed.
-func (a *App) Init() error {
-	names := make(map[string]bool)
-	for _, f := range a.cfg.Feeds {
-		names[f.Name] = true
-	}
-	tx, err := a.db.Begin(true)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	bkt, err := tx.CreateBucketIfNotExists([]byte(bucketFeeds))
-	if err != nil {
-		return err
-	}
-	for n := range names {
-		if _, err := bkt.CreateBucketIfNotExists([]byte(n)); err != nil {
-			return err
-		}
-	}
-	bkt.ForEach(func(k, v []byte) error {
-		if name := string(k); !names[name] {
-			if err := bkt.DeleteBucket(k); err != nil {
-				return err
-			}
-			slog.Info("Deleted obsolete bucket for feed", "name", name)
-		}
-		return nil
-	})
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	return nil
+func makeHash(s string) string {
+	h := sha256.New()
+	h.Write([]byte(s))
+	return hex.EncodeToString(h.Sum(nil))
 }
