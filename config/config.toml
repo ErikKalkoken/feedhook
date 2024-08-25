@@ -1,14 +1,18 @@
-[app]
-timeout = 30
-oldest = 3600
-ticker = 30
-loglevel = "INFO"
+# App related configuration
+# [app]
+# timeout = 30
+# oldest = 3600
+# ticker = 30
+# loglevel = "INFO"
 
+# A Discord webhook
 [[webhooks]]
-name = "HOOK-1"
+name = "Hook-1"
 url = "https://discord.com/api/webhooks/XXX/YYY"
 
+# A RSS or Atom feed
 [[feeds]]
 name = "NYT"
 url = "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml"
-webhook = "HOOK-1"
+webhook = "Hook-1"
+# disabled = false

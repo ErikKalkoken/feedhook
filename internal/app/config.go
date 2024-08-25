@@ -11,7 +11,7 @@ import (
 
 const (
 	timeoutDefault  = 30
-	oldestDefault   = 48 * 3600
+	oldestDefault   = 7200
 	tickerDefault   = 30
 	logLevelDefault = slog.LevelInfo
 )
@@ -20,6 +20,17 @@ type MyConfig struct {
 	App      ConfigApp
 	Feeds    []ConfigFeed
 	Webhooks []ConfigWebhook
+}
+
+func (mc *MyConfig) EnabledFeeds() []ConfigFeed {
+	feeds := make([]ConfigFeed, 0)
+	for _, f := range mc.Feeds {
+		if f.Disabled {
+			continue
+		}
+		feeds = append(feeds, f)
+	}
+	return feeds
 }
 
 type ConfigApp struct {
@@ -40,9 +51,10 @@ func (ca ConfigApp) LoggerLevel() slog.Level {
 }
 
 type ConfigFeed struct {
-	Name    string `toml:"name"`
-	URL     string `toml:"url"`
-	Webhook string `toml:"webhook"`
+	Name     string `toml:"name"`
+	URL      string `toml:"url"`
+	Webhook  string `toml:"webhook"`
+	Disabled bool   `toml:"disabled"`
 }
 
 type ConfigWebhook struct {
@@ -115,7 +127,9 @@ func parseConfig(config *MyConfig) error {
 	if config.App.Timeout <= 0 {
 		config.App.Timeout = timeoutDefault
 	}
-	if config.App.Oldest <= 0 {
+	if config.App.Oldest == -1 {
+		config.App.Oldest = 0
+	} else if config.App.Oldest == 0 {
 		config.App.Oldest = oldestDefault
 	}
 	if config.App.Ticker <= 0 {

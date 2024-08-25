@@ -52,12 +52,12 @@ func main() {
 		log.Fatalf("Failed to open DB: %s", err)
 	}
 	defer db.Close()
-	if err := app.SetupDB(db); err != nil {
-		log.Fatalf("Failed to setup DB: %s", err)
+	a := app.New(db, cfg, realtime{})
+	if err := a.Init(); err != nil {
+		log.Fatalf("Init failed: %s", err)
 	}
-	app := app.New(db, cfg, realtime{})
-	app.Start()
-	defer app.Close()
+	a.Start()
+	defer a.Close()
 
 	// Ensure graceful shutdown
 	sc := make(chan os.Signal, 1)

@@ -50,16 +50,15 @@ type embed struct {
 }
 
 func makePayload(feed *gofeed.Feed, item *gofeed.Item) (webhookPayload, error) {
-	content, err := converter.ConvertString(item.Content)
-	if err != nil {
-		return webhookPayload{}, fmt.Errorf("failed to parse content to markdown: %w", err)
+	var description string
+	var err error
+	if item.Content != "" {
+		description, err = converter.ConvertString(item.Content)
+	} else {
+		description, err = converter.ConvertString(item.Description)
 	}
-	description, err := converter.ConvertString(item.Description)
 	if err != nil {
 		return webhookPayload{}, fmt.Errorf("failed to parse description to markdown: %w", err)
-	}
-	if content != "" {
-		description = content
 	}
 	em := embed{
 		Description: description,

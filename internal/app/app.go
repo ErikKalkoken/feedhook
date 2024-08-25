@@ -61,7 +61,7 @@ func New(db *bolt.DB, cfg MyConfig, clock Clock) *App {
 }
 
 // Start starts the main loop of the application.
-// User should call Close() subsequently to shut down the loop gracefully.
+// User should call Close() subsequently to shut down the loop gracefully and free resources.
 func (a *App) Start() {
 	// start goroutines for webhooks
 	messageC := make(map[string]chan message)
@@ -78,11 +78,12 @@ func (a *App) Start() {
 	// process feeds until aborted
 	var wg sync.WaitGroup
 	ticker := time.NewTicker(time.Duration(a.cfg.App.Ticker) * time.Second)
-	slog.Info("Started", "feeds", len(a.cfg.Feeds), "webhooks", len(a.cfg.Webhooks))
+	feeds := a.cfg.EnabledFeeds()
+	slog.Info("Started", "feeds", len(feeds), "webhooks", len(a.cfg.Webhooks))
 	go func() {
 	main:
 		for {
-			for _, cf := range a.cfg.Feeds {
+			for _, cf := range feeds {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
@@ -95,7 +96,7 @@ func (a *App) Start() {
 				}()
 			}
 			wg.Wait()
-			slog.Info("Finished processing feeds", "feeds", len(a.cfg.Feeds))
+			slog.Info("Finished processing feeds", "feeds", len(feeds))
 		wait:
 			for {
 				select {
@@ -118,7 +119,6 @@ func (a *App) processFeed(cf ConfigFeed, messageC chan<- message) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse URL for feed %s: %w ", cf.Name, err)
 	}
-	lastPublished := a.fetchLastPublished(cf)
 	oldest := time.Duration(a.cfg.App.Oldest) * time.Second
 	var newest time.Time
 	sort.Sort(feed)
@@ -128,10 +128,10 @@ func (a *App) processFeed(cf ConfigFeed, messageC chan<- message) error {
 			return errUserAborted
 		default:
 		}
-		if !item.PublishedParsed.After(lastPublished) {
+		if oldest != 0 && item.PublishedParsed.Before(a.clock.Now().Add(-oldest)) {
 			continue
 		}
-		if item.PublishedParsed.Before(a.clock.Now().Add(-oldest)) {
+		if !a.isItemNew(cf.Name, item) {
 			continue
 		}
 		payload, err := makePayload(feed, item)
@@ -148,35 +148,31 @@ func (a *App) processFeed(cf ConfigFeed, messageC chan<- message) error {
 		if !item.PublishedParsed.After(newest) {
 			continue
 		}
-		newest = *item.PublishedParsed
 		if err := a.db.Update(func(tx *bolt.Tx) error {
-			b := tx.Bucket([]byte(bucketFeeds))
-			err := b.Put([]byte(cf.Name), []byte(newest.Format(time.RFC3339)))
+			root := tx.Bucket([]byte(bucketFeeds))
+			b := root.Bucket([]byte(cf.Name))
+			err := b.Put([]byte(item.GUID), []byte(item.PublishedParsed.Format(time.RFC3339)))
 			return err
 		}); err != nil {
-			return fmt.Errorf("failed to update database: %w", err)
+			return fmt.Errorf("failed to record item: %w", err)
 		}
 	}
 	return nil
 }
 
-// fetchLastPublished returns the time of the last published item (if any).
-func (a *App) fetchLastPublished(cf ConfigFeed) time.Time {
-	var lp time.Time
+// isItemNew reports wether an item in a feed is new
+func (a *App) isItemNew(name string, item *gofeed.Item) bool {
+	var isNew bool
 	a.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(bucketFeeds))
-		v := b.Get([]byte(cf.Name))
-		if v != nil {
-			t, err := time.Parse(time.RFC3339, string(v))
-			if err != nil {
-				slog.Error("failed to parse last published", "value", v, "error", err)
-			} else {
-				lp = t
-			}
+		root := tx.Bucket([]byte(bucketFeeds))
+		b := root.Bucket([]byte(name))
+		v := b.Get([]byte(item.GUID))
+		if v == nil {
+			isNew = true
 		}
 		return nil
 	})
-	return lp
+	return isNew
 }
 
 // Close conducts a graceful shutdown of the app.
@@ -186,11 +182,37 @@ func (a *App) Close() {
 	slog.Info("Graceful shutdown completed")
 }
 
-// SetupDB initialized the database, e.g. by creating all buckets if needed.
-func SetupDB(db *bolt.DB) error {
-	err := db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte(bucketFeeds))
+// Init initialized the app, e.g. by creating buckets in the DB as needed.
+func (a *App) Init() error {
+	names := make(map[string]bool)
+	for _, f := range a.cfg.Feeds {
+		names[f.Name] = true
+	}
+	tx, err := a.db.Begin(true)
+	if err != nil {
 		return err
+	}
+	defer tx.Rollback()
+	bkt, err := tx.CreateBucketIfNotExists([]byte(bucketFeeds))
+	if err != nil {
+		return err
+	}
+	for n := range names {
+		if _, err := bkt.CreateBucketIfNotExists([]byte(n)); err != nil {
+			return err
+		}
+	}
+	bkt.ForEach(func(k, v []byte) error {
+		if name := string(k); !names[name] {
+			if err := bkt.DeleteBucket(k); err != nil {
+				return err
+			}
+			slog.Info("Deleted obsolete bucket for feed", "name", name)
+		}
+		return nil
 	})
-	return err
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	return nil
 }

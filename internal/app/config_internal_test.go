@@ -128,3 +128,26 @@ func TestParseConfig(t *testing.T) {
 		}
 	})
 }
+
+func TestEnabledFeeds(t *testing.T) {
+	t.Run("should return enabled feeds only 1", func(t *testing.T) {
+		cf := MyConfig{
+			Feeds: []ConfigFeed{
+				{Name: "feed1", URL: "https://www.example.com/url1", Webhook: "hook1"},
+				{Name: "feed2", URL: "https://www.example.com/url2", Webhook: "hook1"},
+			},
+		}
+		f := cf.EnabledFeeds()
+		assert.Len(t, f, 2)
+	})
+	t.Run("should return enabled feeds only 2", func(t *testing.T) {
+		cf := MyConfig{
+			Feeds: []ConfigFeed{
+				{Name: "feed1", URL: "https://www.example.com/url1", Webhook: "hook1", Disabled: true},
+				{Name: "feed2", URL: "https://www.example.com/url2", Webhook: "hook1"},
+			},
+		}
+		f := cf.EnabledFeeds()
+		assert.Len(t, f, 1)
+	})
+}
