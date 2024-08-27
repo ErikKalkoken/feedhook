@@ -109,7 +109,7 @@ func TestStats(t *testing.T) {
 	}
 	st := storage.New(db, cfg)
 	if err := st.Init(); err != nil {
-		log.Fatalf("Failed to init: %s", err)
+		t.Fatalf("Failed to init: %s", err)
 	}
 	t.Run("should return empty feed stats", func(t *testing.T) {
 		if err := st.ClearFeeds(); err != nil {
