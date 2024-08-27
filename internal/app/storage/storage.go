@@ -1,8 +1,11 @@
 package storage
 
 import (
+	"bytes"
 	"crypto/sha256"
+	"encoding/gob"
 	"encoding/hex"
+	"errors"
 	"log/slog"
 	"slices"
 	"time"
@@ -13,8 +16,12 @@ import (
 )
 
 const (
-	bucketFeeds = "feeds"
+	bucketFeeds    = "feeds"
+	bucketStats    = "stats"
+	bucketWebhooks = "webhooks"
 )
+
+var ErrNotFound = errors.New("not found")
 
 type Storage struct {
 	db  *bolt.DB
@@ -36,26 +43,38 @@ func (st *Storage) Init() error {
 		feeds[f.Name] = true
 	}
 	err := st.db.Update(func(tx *bolt.Tx) error {
-		root, err := tx.CreateBucketIfNotExists([]byte(bucketFeeds))
+		// feeds bucket
+		bf, err := tx.CreateBucketIfNotExists([]byte(bucketFeeds))
 		if err != nil {
 			return err
 		}
-		// Create new buckets
+		// Create new buckets as needed
 		for f := range feeds {
-			if _, err := root.CreateBucketIfNotExists([]byte(f)); err != nil {
+			if _, err := bf.CreateBucketIfNotExists([]byte(f)); err != nil {
 				return err
 			}
 		}
 		// Delete obsolete buckets
-		root.ForEach(func(k, v []byte) error {
+		bf.ForEach(func(k, v []byte) error {
 			if name := string(k); !feeds[name] {
-				if err := root.DeleteBucket(k); err != nil {
+				if err := bf.DeleteBucket(k); err != nil {
 					return err
 				}
 				slog.Info("Deleted obsolete bucket for feed", "name", name)
 			}
 			return nil
 		})
+		// stats bucket
+		bs, err := tx.CreateBucketIfNotExists([]byte(bucketStats))
+		if err != nil {
+			return err
+		}
+		if _, err := bs.CreateBucketIfNotExists([]byte(bucketFeeds)); err != nil {
+			return err
+		}
+		if _, err := bs.CreateBucketIfNotExists([]byte(bucketWebhooks)); err != nil {
+			return err
+		}
 		return nil
 	})
 	return err
@@ -177,6 +196,71 @@ func (st *Storage) ItemCount(cf app.ConfigFeed) int {
 		return nil
 	})
 	return c
+}
+
+func (st *Storage) UpdateFeedStats(name string) error {
+	err := st.db.Update(func(tx *bolt.Tx) error {
+		root := tx.Bucket([]byte(bucketStats))
+		b := root.Bucket([]byte(bucketFeeds))
+		var fs *app.FeedStats
+		v := b.Get([]byte(name))
+		var err error
+		if v != nil {
+			fs, err = feedStatsFromDB(v)
+			if err != nil {
+				return err
+			}
+		} else {
+			fs = &app.FeedStats{Name: name}
+		}
+		fs.SentCount++
+		fs.SentLast = time.Now().UTC()
+		v, err = dbFromFeedStats(fs)
+		if err != nil {
+			return err
+		}
+		return b.Put([]byte(name), v)
+	})
+	return err
+}
+
+func (st *Storage) ReadFeedStats(name string) (*app.FeedStats, error) {
+	var fs *app.FeedStats
+	err := st.db.View(func(tx *bolt.Tx) error {
+		root := tx.Bucket([]byte(bucketStats))
+		b := root.Bucket([]byte(bucketFeeds))
+		v := b.Get([]byte(name))
+		if v == nil {
+			return ErrNotFound
+		}
+		var err error
+		fs, err = feedStatsFromDB(v)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	return fs, err
+}
+
+func feedStatsFromDB(v []byte) (*app.FeedStats, error) {
+	buf := bytes.NewBuffer(v)
+	dec := gob.NewDecoder(buf)
+	var o app.FeedStats
+	if err := dec.Decode(&o); err != nil {
+		return nil, err
+	}
+	return &o, nil
+}
+
+func dbFromFeedStats(fs *app.FeedStats) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	err := enc.Encode(*fs)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 func sentItemFromDB(k, v []byte) (*app.SentItem, error) {

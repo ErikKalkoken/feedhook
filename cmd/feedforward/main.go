@@ -74,6 +74,7 @@ func main() {
 }
 
 func printDBContent(st *storage.Storage) {
+	// Sent items
 	feeds, err := st.ListFeeds()
 	if err != nil {
 		log.Fatal(err)
@@ -88,6 +89,17 @@ func printDBContent(st *storage.Storage) {
 		for _, i := range items {
 			fmt.Printf("        %s | %s\n", i.Published, i.ID)
 		}
+	}
+	// Stats
+	fmt.Printf("stats\n")
+	for _, f := range feeds {
+		o, err := st.ReadFeedStats(f)
+		if err == storage.ErrNotFound {
+			continue
+		} else if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("    %+v\n", o)
 	}
 }
 

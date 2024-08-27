@@ -140,10 +140,11 @@ func (a *App) processFeed(cf app.ConfigFeed, messageC chan<- Message) error {
 		if err := <-m.errC; err != nil {
 			return fmt.Errorf("failed to send payload to webhook: %w", err)
 		}
-		slog.Info("Posted item", "feed", cf.Name, "webhook", cf.Webhook, "title", item.Title)
 		if err := a.st.RecordItem(cf, item); err != nil {
 			return fmt.Errorf("failed to record item: %w", err)
 		}
+		a.st.UpdateFeedStats(cf.Name)
+		slog.Info("Posted item", "feed", cf.Name, "webhook", cf.Webhook, "title", item.Title)
 	}
 	err = a.st.CullFeed(cf, 1000)
 	return err
