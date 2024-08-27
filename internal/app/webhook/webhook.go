@@ -1,4 +1,4 @@
-package service
+package webhook
 
 import (
 	"bytes"
@@ -87,13 +87,46 @@ func makePayload(feed *gofeed.Feed, item *gofeed.Item) (webhookPayload, error) {
 	return payload, nil
 }
 
-func sendToWebhook(client *http.Client, payload *webhookPayload, url string) error {
+type Webhook struct {
+	client   *http.Client
+	messageC chan Message
+	url      string
+}
+
+func New(client *http.Client, url string) *Webhook {
+	wh := &Webhook{
+		client:   client,
+		messageC: make(chan Message),
+		url:      url,
+	}
+	return wh
+}
+
+func (wh *Webhook) Start() {
+	go func() {
+		for m := range wh.messageC {
+			m.errC <- wh.sendToWebhook(m.payload)
+		}
+	}()
+}
+
+func (wh *Webhook) Send(feed *gofeed.Feed, item *gofeed.Item) error {
+	p, err := makePayload(feed, item)
+	if err != nil {
+		return err
+	}
+	m := Message{payload: &p, errC: make(chan error)}
+	wh.messageC <- m
+	return <-m.errC
+}
+
+func (wh *Webhook) sendToWebhook(payload *webhookPayload) error {
 	time.Sleep(1 * time.Second)
 	dat, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-	resp, err := client.Post(url, "application/json", bytes.NewBuffer(dat))
+	resp, err := wh.client.Post(wh.url, "application/json", bytes.NewBuffer(dat))
 	if err != nil {
 		return err
 	}
@@ -102,6 +135,6 @@ func sendToWebhook(client *http.Client, payload *webhookPayload, url string) err
 	if err != nil {
 		return err
 	}
-	slog.Debug("response", "url", url, "status", resp.Status, "headers", resp.Header, "body", string(body))
+	slog.Debug("response", "url", wh.url, "status", resp.Status, "headers", resp.Header, "body", string(body))
 	return nil
 }

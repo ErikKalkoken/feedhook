@@ -13,6 +13,7 @@ import (
 
 	"github.com/ErikKalkoken/feedforward/internal/app"
 	"github.com/ErikKalkoken/feedforward/internal/app/storage"
+	"github.com/ErikKalkoken/feedforward/internal/app/webhook"
 )
 
 var errUserAborted = errors.New("aborted by user")
@@ -61,17 +62,11 @@ func (a *App) Close() {
 // Start starts the main loop of the application.
 // User should call Close() subsequently to shut down the loop gracefully and free resources.
 func (a *App) Start() {
-	// start goroutines for webhooks
-	messageC := make(map[string]chan Message)
+	// Create and start webhooks
+	hooks := make(map[string]*webhook.Webhook)
 	for _, h := range a.cfg.Webhooks {
-		c := make(chan Message)
-		messageC[h.Name] = c
-		go func(url string, message <-chan Message) {
-			for m := range message {
-				err := sendToWebhook(a.client, m.payload, url)
-				m.errC <- err
-			}
-		}(h.URL, c)
+		hooks[h.Name] = webhook.New(a.client, h.URL)
+		hooks[h.Name].Start()
 	}
 	// process feeds until aborted
 	var wg sync.WaitGroup
@@ -85,7 +80,7 @@ func (a *App) Start() {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					if err := a.processFeed(cf, messageC[cf.Webhook]); err == errUserAborted {
+					if err := a.processFeed(cf, hooks[cf.Webhook]); err == errUserAborted {
 						slog.Debug("user aborted")
 						return
 					} else if err != nil {
@@ -112,7 +107,7 @@ func (a *App) Start() {
 }
 
 // processFeed processes a configured feed.
-func (a *App) processFeed(cf app.ConfigFeed, messageC chan<- Message) error {
+func (a *App) processFeed(cf app.ConfigFeed, hook *webhook.Webhook) error {
 	feed, err := a.fp.ParseURL(cf.URL)
 	if err != nil {
 		return fmt.Errorf("failed to parse URL for feed %s: %w ", cf.Name, err)
@@ -131,15 +126,9 @@ func (a *App) processFeed(cf app.ConfigFeed, messageC chan<- Message) error {
 		if !a.st.IsItemNew(cf, item) {
 			continue
 		}
-		payload, err := makePayload(feed, item)
-		if err != nil {
-			slog.Error("Failed to make payload", "feed", cf.Name, "error", "err")
+		if err := hook.Send(feed, item); err != nil {
+			slog.Error("Failed to send item", "feed", cf.Name, "error", "err")
 			continue
-		}
-		m := Message{payload: &payload, errC: make(chan error)}
-		messageC <- m
-		if err := <-m.errC; err != nil {
-			return fmt.Errorf("failed to send payload to webhook: %w", err)
 		}
 		if err := a.st.RecordItem(cf, item); err != nil {
 			return fmt.Errorf("failed to record item: %w", err)
