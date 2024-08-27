@@ -1,4 +1,4 @@
-package app
+package service
 
 import (
 	"errors"
@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ErikKalkoken/feedforward/internal/app"
+	"github.com/ErikKalkoken/feedforward/internal/app/storage"
 	"github.com/mmcdole/gofeed"
 )
 
@@ -21,15 +23,15 @@ type Clock interface {
 // message represents a message send to a webhook.
 // Consumers must listen on the errC channel to receive the result.
 type message struct {
-	payload *webhookPayload
+	payload *WebhookPayload
 	errC    chan error
 }
 
 // App represents this application and holds it's global data.
 type App struct {
 	client *http.Client
-	st     *Storage
-	cfg    MyConfig
+	st     *storage.Storage
+	cfg    app.MyConfig
 	fp     *gofeed.Parser
 	clock  Clock
 	done   chan bool // signals that the shutdown is complete
@@ -37,7 +39,7 @@ type App struct {
 }
 
 // New creates a new App instance and returns it.
-func New(st *Storage, cfg MyConfig, clock Clock) *App {
+func New(st *storage.Storage, cfg app.MyConfig, clock Clock) *App {
 	client := &http.Client{
 		Timeout: time.Duration(cfg.App.Timeout) * time.Second,
 	}
@@ -116,7 +118,7 @@ func (a *App) Start() {
 }
 
 // processFeed processes a configured feed.
-func (a *App) processFeed(cf ConfigFeed, messageC chan<- message) error {
+func (a *App) processFeed(cf app.ConfigFeed, messageC chan<- message) error {
 	feed, err := a.fp.ParseURL(cf.URL)
 	if err != nil {
 		return fmt.Errorf("failed to parse URL for feed %s: %w ", cf.Name, err)

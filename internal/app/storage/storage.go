@@ -1,9 +1,13 @@
-package app
+package storage
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"log/slog"
 	"slices"
+	"time"
 
+	"github.com/ErikKalkoken/feedforward/internal/app"
 	"github.com/mmcdole/gofeed"
 	bolt "go.etcd.io/bbolt"
 )
@@ -14,10 +18,10 @@ const (
 
 type Storage struct {
 	db  *bolt.DB
-	cfg MyConfig
+	cfg app.MyConfig
 }
 
-func NewStorage(db *bolt.DB, cfg MyConfig) *Storage {
+func New(db *bolt.DB, cfg app.MyConfig) *Storage {
 	st := &Storage{
 		db:  db,
 		cfg: cfg,
@@ -57,7 +61,7 @@ func (st *Storage) Init() error {
 	return err
 }
 
-func (st *Storage) RecordItem(cf ConfigFeed, item *gofeed.Item) error {
+func (st *Storage) RecordItem(cf app.ConfigFeed, item *gofeed.Item) error {
 	err := st.db.Update(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketFeeds))
 		b := root.Bucket([]byte(cf.Name))
@@ -68,7 +72,7 @@ func (st *Storage) RecordItem(cf ConfigFeed, item *gofeed.Item) error {
 }
 
 // IsItemNew reports wether an item in a feed is new
-func (st *Storage) IsItemNew(cf ConfigFeed, item *gofeed.Item) bool {
+func (st *Storage) IsItemNew(cf app.ConfigFeed, item *gofeed.Item) bool {
 	var isNew bool
 	st.db.View(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketFeeds))
@@ -83,11 +87,11 @@ func (st *Storage) IsItemNew(cf ConfigFeed, item *gofeed.Item) bool {
 }
 
 // CullFeed deletes the oldest items when there are more items then a limit
-func (st *Storage) CullFeed(cf ConfigFeed, limit int) error {
+func (st *Storage) CullFeed(cf app.ConfigFeed, limit int) error {
 	err := st.db.Update(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketFeeds))
 		b := root.Bucket([]byte(cf.Name))
-		items := make([]*SentItem, 0)
+		items := make([]*app.SentItem, 0)
 		b.ForEach(func(k, v []byte) error {
 			i, err := sentItemFromDB(k, v)
 			if err != nil {
@@ -96,7 +100,7 @@ func (st *Storage) CullFeed(cf ConfigFeed, limit int) error {
 			items = append(items, i)
 			return nil
 		})
-		slices.SortFunc(items, func(a *SentItem, b *SentItem) int {
+		slices.SortFunc(items, func(a *app.SentItem, b *app.SentItem) int {
 			return a.Published.Compare(b.Published) * -1
 		})
 		if len(items) <= limit {
@@ -112,8 +116,8 @@ func (st *Storage) CullFeed(cf ConfigFeed, limit int) error {
 	return err
 }
 
-func (st *Storage) ListItems(cf ConfigFeed) ([]*SentItem, error) {
-	var items []*SentItem
+func (st *Storage) ListItems(cf app.ConfigFeed) ([]*app.SentItem, error) {
+	var items []*app.SentItem
 	err := st.db.View(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketFeeds))
 		b := root.Bucket([]byte(cf.Name))
@@ -161,7 +165,7 @@ func (st *Storage) ClearFeeds() error {
 	return err
 }
 
-func (st *Storage) ItemCount(cf ConfigFeed) int {
+func (st *Storage) ItemCount(cf app.ConfigFeed) int {
 	var c int
 	st.db.View(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketFeeds))
@@ -173,4 +177,36 @@ func (st *Storage) ItemCount(cf ConfigFeed) int {
 		return nil
 	})
 	return c
+}
+
+func sentItemFromDB(k, v []byte) (*app.SentItem, error) {
+	t, err := time.Parse(time.RFC3339, string(v))
+	if err != nil {
+		return nil, err
+	}
+	return &app.SentItem{ID: string(k), Published: t}, nil
+}
+func sentItemFromFeed(item *gofeed.Item) *app.SentItem {
+	var t time.Time
+	if item.PublishedParsed != nil {
+		t = *item.PublishedParsed
+	} else {
+		t = time.Now().UTC()
+	}
+	return &app.SentItem{ID: itemUniqueID(item), Published: t}
+}
+
+// itemUniqueID returns a unique ID of an item.
+func itemUniqueID(item *gofeed.Item) string {
+	if item.GUID != "" {
+		return item.GUID
+	}
+	s := item.Title + item.Description + item.Content
+	return makeHash(s)
+}
+
+func makeHash(s string) string {
+	h := sha256.New()
+	h.Write([]byte(s))
+	return hex.EncodeToString(h.Sum(nil))
 }

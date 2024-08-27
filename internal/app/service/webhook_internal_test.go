@@ -1,4 +1,4 @@
-package app
+package service
 
 import (
 	"net/http"
@@ -18,7 +18,7 @@ func TestSendToWebhook(t *testing.T) {
 		"https://www.example.com",
 		httpmock.NewStringResponder(204, ""),
 	)
-	p := webhookPayload{
+	p := WebhookPayload{
 		Content: "contents",
 	}
 	err := sendToWebhook(http.DefaultClient, &p, "https://www.example.com")

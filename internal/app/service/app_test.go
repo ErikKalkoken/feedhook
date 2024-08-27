@@ -1,4 +1,4 @@
-package app_test
+package service_test
 
 import (
 	"log"
@@ -11,6 +11,8 @@ import (
 	bolt "go.etcd.io/bbolt"
 
 	"github.com/ErikKalkoken/feedforward/internal/app"
+	"github.com/ErikKalkoken/feedforward/internal/app/service"
+	"github.com/ErikKalkoken/feedforward/internal/app/storage"
 )
 
 type faketime struct {
@@ -45,11 +47,11 @@ func TestApp(t *testing.T) {
 		Webhooks: []app.ConfigWebhook{{Name: "hook1", URL: "https://www.example.com/hook"}},
 		Feeds:    []app.ConfigFeed{{Name: "feed1", URL: "https://www.example.com/feed", Webhook: "hook1"}},
 	}
-	st := app.NewStorage(db, cfg)
+	st := storage.New(db, cfg)
 	if err := st.Init(); err != nil {
 		log.Fatalf("Failed to init: %s", err)
 	}
-	a := app.New(st, cfg, faketime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
+	a := service.New(st, cfg, faketime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
 	a.Start()
 	time.Sleep(2 * time.Second)
 	a.Close()

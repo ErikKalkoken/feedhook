@@ -14,6 +14,8 @@ import (
 	bolt "go.etcd.io/bbolt"
 
 	"github.com/ErikKalkoken/feedforward/internal/app"
+	"github.com/ErikKalkoken/feedforward/internal/app/service"
+	"github.com/ErikKalkoken/feedforward/internal/app/storage"
 )
 
 const (
@@ -52,11 +54,11 @@ func main() {
 		log.Fatalf("Failed to open DB: %s", err)
 	}
 	defer db.Close()
-	st := app.NewStorage(db, cfg)
+	st := storage.New(db, cfg)
 	if err := st.Init(); err != nil {
-		log.Fatalf("Init failed: %s", err)
+		log.Fatalf("DB init failed: %s", err)
 	}
-	a := app.New(st, cfg, realtime{})
+	a := service.New(st, cfg, realtime{})
 	a.Start()
 	defer a.Close()
 
