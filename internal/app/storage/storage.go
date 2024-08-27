@@ -116,11 +116,11 @@ func (st *Storage) CullFeed(cf app.ConfigFeed, limit int) error {
 	return err
 }
 
-func (st *Storage) ListItems(cf app.ConfigFeed) ([]*app.SentItem, error) {
+func (st *Storage) ListItems(feed string) ([]*app.SentItem, error) {
 	var items []*app.SentItem
 	err := st.db.View(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketFeeds))
-		b := root.Bucket([]byte(cf.Name))
+		b := root.Bucket([]byte(feed))
 		b.ForEach(func(k, v []byte) error {
 			i, err := sentItemFromDB(k, v)
 			if err != nil {

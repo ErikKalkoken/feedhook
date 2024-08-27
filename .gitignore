@@ -2,6 +2,4 @@
 .temp/
 *.db
 config.toml
-feedforward
-!feedforward/*
 !config/*

@@ -36,6 +36,7 @@ func main() {
 	cfgPathFlag := flag.String("config", ".", "path to configuration file")
 	dbPathFlag := flag.String("db", ".", "path to database file")
 	versionFlag := flag.Bool("v", false, "show version")
+	showDBFlag := flag.Bool("show-db", false, "show contents of database")
 	flag.Usage = myUsage
 	flag.Parse()
 	if *versionFlag {
@@ -58,6 +59,10 @@ func main() {
 	if err := st.Init(); err != nil {
 		log.Fatalf("DB init failed: %s", err)
 	}
+	if *showDBFlag {
+		printDBContent(st)
+		os.Exit(0)
+	}
 	a := service.New(st, cfg, realtime{})
 	a.Start()
 	defer a.Close()
@@ -66,6 +71,24 @@ func main() {
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sc
+}
+
+func printDBContent(st *storage.Storage) {
+	feeds, err := st.ListFeeds()
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("feeds (%d)\n", len(feeds))
+	for _, f := range feeds {
+		items, err := st.ListItems(f)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("    %s (%d)\n", f, len(items))
+		for _, i := range items {
+			fmt.Printf("        %s | %s\n", i.Published, i.ID)
+		}
+	}
 }
 
 // myUsage writes a custom usage message to configured output stream.

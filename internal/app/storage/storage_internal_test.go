@@ -82,7 +82,7 @@ func TestStorage(t *testing.T) {
 		err := st.CullFeed(cf, 2)
 		if assert.NoError(t, err) {
 			assert.Equal(t, 2, st.ItemCount(cf))
-			ii, err := st.ListItems(cf)
+			ii, err := st.ListItems(cf.Name)
 			if assert.NoError(t, err) {
 				var ids []string
 				for _, i := range ii {
