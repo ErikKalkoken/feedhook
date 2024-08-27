@@ -26,7 +26,14 @@ func init() {
 	converter.AddRules(x)
 }
 
-type WebhookPayload struct {
+// Message represents a Message send to a webhook.
+// Consumers must listen on the errC channel to receive the result.
+type Message struct {
+	payload *webhookPayload
+	errC    chan error
+}
+
+type webhookPayload struct {
 	Content string  `json:"content,omitempty"`
 	Embeds  []embed `json:"embeds,omitempty"`
 }
@@ -49,7 +56,7 @@ type embed struct {
 	URL string `json:"url,omitempty"`
 }
 
-func makePayload(feed *gofeed.Feed, item *gofeed.Item) (WebhookPayload, error) {
+func makePayload(feed *gofeed.Feed, item *gofeed.Item) (webhookPayload, error) {
 	var description string
 	var err error
 	if item.Content != "" {
@@ -58,7 +65,7 @@ func makePayload(feed *gofeed.Feed, item *gofeed.Item) (WebhookPayload, error) {
 		description, err = converter.ConvertString(item.Description)
 	}
 	if err != nil {
-		return WebhookPayload{}, fmt.Errorf("failed to parse description to markdown: %w", err)
+		return webhookPayload{}, fmt.Errorf("failed to parse description to markdown: %w", err)
 	}
 	em := embed{
 		Description: description,
@@ -74,13 +81,13 @@ func makePayload(feed *gofeed.Feed, item *gofeed.Item) (WebhookPayload, error) {
 	if item.Image != nil {
 		em.Image.URL = item.Image.URL
 	}
-	payload := WebhookPayload{
+	payload := webhookPayload{
 		Embeds: []embed{em},
 	}
 	return payload, nil
 }
 
-func sendToWebhook(client *http.Client, payload *WebhookPayload, url string) error {
+func sendToWebhook(client *http.Client, payload *webhookPayload, url string) error {
 	time.Sleep(1 * time.Second)
 	dat, err := json.Marshal(payload)
 	if err != nil {

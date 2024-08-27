@@ -18,7 +18,7 @@ func TestSendToWebhook(t *testing.T) {
 		"https://www.example.com",
 		httpmock.NewStringResponder(204, ""),
 	)
-	p := WebhookPayload{
+	p := webhookPayload{
 		Content: "contents",
 	}
 	err := sendToWebhook(http.DefaultClient, &p, "https://www.example.com")

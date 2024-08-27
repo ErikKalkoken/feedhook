@@ -20,13 +20,6 @@ type Clock interface {
 	Now() time.Time
 }
 
-// message represents a message send to a webhook.
-// Consumers must listen on the errC channel to receive the result.
-type message struct {
-	payload *WebhookPayload
-	errC    chan error
-}
-
 // App represents this application and holds it's global data.
 type App struct {
 	client *http.Client
@@ -68,11 +61,11 @@ func (a *App) Close() {
 // User should call Close() subsequently to shut down the loop gracefully and free resources.
 func (a *App) Start() {
 	// start goroutines for webhooks
-	messageC := make(map[string]chan message)
+	messageC := make(map[string]chan Message)
 	for _, h := range a.cfg.Webhooks {
-		c := make(chan message)
+		c := make(chan Message)
 		messageC[h.Name] = c
-		go func(url string, message <-chan message) {
+		go func(url string, message <-chan Message) {
 			for m := range message {
 				err := sendToWebhook(a.client, m.payload, url)
 				m.errC <- err
@@ -118,7 +111,7 @@ func (a *App) Start() {
 }
 
 // processFeed processes a configured feed.
-func (a *App) processFeed(cf app.ConfigFeed, messageC chan<- message) error {
+func (a *App) processFeed(cf app.ConfigFeed, messageC chan<- Message) error {
 	feed, err := a.fp.ParseURL(cf.URL)
 	if err != nil {
 		return fmt.Errorf("failed to parse URL for feed %s: %w ", cf.Name, err)
@@ -142,7 +135,7 @@ func (a *App) processFeed(cf app.ConfigFeed, messageC chan<- message) error {
 			slog.Error("Failed to make payload", "feed", cf.Name, "error", "err")
 			continue
 		}
-		m := message{payload: &payload, errC: make(chan error)}
+		m := Message{payload: &payload, errC: make(chan error)}
 		messageC <- m
 		if err := <-m.errC; err != nil {
 			return fmt.Errorf("failed to send payload to webhook: %w", err)
