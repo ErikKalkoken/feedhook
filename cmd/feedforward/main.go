@@ -52,10 +52,11 @@ func main() {
 		log.Fatalf("Failed to open DB: %s", err)
 	}
 	defer db.Close()
-	a := app.New(db, cfg, realtime{})
-	if err := a.Init(); err != nil {
+	st := app.NewStorage(db, cfg)
+	if err := st.Init(); err != nil {
 		log.Fatalf("Init failed: %s", err)
 	}
+	a := app.New(st, cfg, realtime{})
 	a.Start()
 	defer a.Close()
 

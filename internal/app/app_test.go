@@ -45,10 +45,11 @@ func TestApp(t *testing.T) {
 		Webhooks: []app.ConfigWebhook{{Name: "hook1", URL: "https://www.example.com/hook"}},
 		Feeds:    []app.ConfigFeed{{Name: "feed1", URL: "https://www.example.com/feed", Webhook: "hook1"}},
 	}
-	a := app.New(db, cfg, faketime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
-	if err := a.Init(); err != nil {
+	st := app.NewStorage(db, cfg)
+	if err := st.Init(); err != nil {
 		log.Fatalf("Failed to init: %s", err)
 	}
+	a := app.New(st, cfg, faketime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
 	a.Start()
 	time.Sleep(2 * time.Second)
 	a.Close()
