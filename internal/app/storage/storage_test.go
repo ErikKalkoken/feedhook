@@ -80,7 +80,7 @@ func TestStorage(t *testing.T) {
 		if err := st.RecordItem(cf, &gofeed.Item{GUID: "3", PublishedParsed: &t3}); err != nil {
 			t.Fatal(err)
 		}
-		err := st.CullFeed(cf, 2)
+		err := st.CullItems(cf, 2)
 		if assert.NoError(t, err) {
 			assert.Equal(t, 2, st.ItemCount(cf))
 			ii, err := st.ListItems(cf.Name)
@@ -91,6 +91,49 @@ func TestStorage(t *testing.T) {
 				}
 				assert.Contains(t, ids, "1")
 				assert.Contains(t, ids, "3")
+			}
+		}
+	})
+}
+
+func TestStats(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "test.db")
+	db, err := bolt.Open(p, 0600, nil)
+	if err != nil {
+		log.Fatalf("Failed to open DB: %s", err)
+	}
+	defer db.Close()
+	cf := app.ConfigFeed{Name: "feed1", URL: "https://www.example.com/feed", Webhook: "hook1"}
+	cfg := app.MyConfig{
+		Feeds: []app.ConfigFeed{cf},
+	}
+	st := storage.New(db, cfg)
+	if err := st.Init(); err != nil {
+		log.Fatalf("Failed to init: %s", err)
+	}
+	t.Run("should return empty feed stats", func(t *testing.T) {
+		if err := st.ClearFeeds(); err != nil {
+			t.Fatal(err)
+		}
+		got, err := st.GetFeedStats("feed1")
+		if assert.NoError(t, err) {
+			want := &app.FeedStats{
+				Name: "feed1",
+			}
+			assert.Equal(t, want, got)
+		}
+	})
+	t.Run("should update feed stats with data", func(t *testing.T) {
+		if err := st.ClearFeeds(); err != nil {
+			t.Fatal(err)
+		}
+		err := st.UpdateFeedStats("feed1")
+		if assert.NoError(t, err) {
+			got, err := st.GetFeedStats("feed1")
+			if assert.NoError(t, err) {
+				assert.Equal(t, "feed1", got.Name)
+				assert.Equal(t, 1, got.SentCount)
+				assert.WithinRange(t, got.SentLast, time.Now().Add(-5*time.Second), time.Now().Add(+5*time.Second))
 			}
 		}
 	})

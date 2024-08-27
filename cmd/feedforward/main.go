@@ -60,7 +60,7 @@ func main() {
 		log.Fatalf("DB init failed: %s", err)
 	}
 	if *showDBFlag {
-		printDBContent(st)
+		printDBContent(st, cfg)
 		os.Exit(0)
 	}
 	a := service.New(st, cfg, realtime{})
@@ -73,27 +73,34 @@ func main() {
 	<-sc
 }
 
-func printDBContent(st *storage.Storage) {
+func printDBContent(st *storage.Storage, cfg app.MyConfig) {
 	// Sent items
-	feeds, err := st.ListFeeds()
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("feeds (%d)\n", len(feeds))
-	for _, f := range feeds {
-		items, err := st.ListItems(f)
+	fmt.Printf("feeds (%d)\n", len(cfg.Feeds))
+	for _, cf := range cfg.Feeds {
+		items, err := st.ListItems(cf.Name)
 		if err != nil {
 			log.Fatal(err)
 		}
-		fmt.Printf("    %s (%d)\n", f, len(items))
+		fmt.Printf("    %s (%d)\n", cf.Name, len(items))
 		for _, i := range items {
 			fmt.Printf("        %s | %s\n", i.Published, i.ID)
 		}
 	}
-	// Stats
-	fmt.Printf("stats\n")
-	for _, f := range feeds {
-		o, err := st.ReadFeedStats(f)
+	// Feed stats
+	fmt.Printf("feed stats\n")
+	for _, cf := range cfg.Feeds {
+		o, err := st.GetFeedStats(cf.Name)
+		if err == storage.ErrNotFound {
+			continue
+		} else if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("    %+v\n", o)
+	}
+	// Webhook stats
+	fmt.Printf("webhook stats\n")
+	for _, cw := range cfg.Webhooks {
+		o, err := st.GetWebhookStats(cw.Name)
 		if err == storage.ErrNotFound {
 			continue
 		} else if err != nil {

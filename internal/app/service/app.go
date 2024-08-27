@@ -144,9 +144,14 @@ func (a *App) processFeed(cf app.ConfigFeed, messageC chan<- Message) error {
 		if err := a.st.RecordItem(cf, item); err != nil {
 			return fmt.Errorf("failed to record item: %w", err)
 		}
-		a.st.UpdateFeedStats(cf.Name)
+		if err := a.st.UpdateFeedStats(cf.Name); err != nil {
+			slog.Error("failed to update feed stats", "name", cf.Name, "error", err)
+		}
+		if err := a.st.UpdateWebhookStats(cf.Webhook); err != nil {
+			slog.Error("failed to update webhook stats", "name", cf.Webhook, "error", err)
+		}
 		slog.Info("Posted item", "feed", cf.Name, "webhook", cf.Webhook, "title", item.Title)
 	}
-	err = a.st.CullFeed(cf, 1000)
+	err = a.st.CullItems(cf, 1000)
 	return err
 }
