@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -192,14 +193,21 @@ func (a *App) processFeed(cf ConfigFeed, messageC chan<- message) error {
 			return fmt.Errorf("failed to record item: %w", err)
 		}
 	}
-	return nil
+	err = a.cullFeed(cf, 1000)
+	return err
 }
 
 func (a *App) recordItem(cf ConfigFeed, item *gofeed.Item) error {
 	err := a.db.Update(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketFeeds))
 		b := root.Bucket([]byte(cf.Name))
-		return b.Put([]byte(itemHash(item)), []byte(item.Published))
+		var t time.Time
+		if item.PublishedParsed != nil {
+			t = *item.PublishedParsed
+		} else {
+			t = time.Now().UTC()
+		}
+		return b.Put([]byte(itemUniqueID(item)), []byte(t.Format(time.RFC3339)))
 	})
 	return err
 }
@@ -210,7 +218,7 @@ func (a *App) isItemNew(cf ConfigFeed, item *gofeed.Item) bool {
 	a.db.View(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketFeeds))
 		b := root.Bucket([]byte(cf.Name))
-		v := b.Get([]byte(itemHash(item)))
+		v := b.Get([]byte(itemUniqueID(item)))
 		if v == nil {
 			isNew = true
 		}
@@ -219,9 +227,45 @@ func (a *App) isItemNew(cf ConfigFeed, item *gofeed.Item) bool {
 	return isNew
 }
 
-func itemHash(item *gofeed.Item) string {
+type item struct {
+	time time.Time
+	key  []byte
+}
+
+// cullFeed deletes the oldest items when there are more items then a limit
+func (a *App) cullFeed(cf ConfigFeed, limit int) error {
+	err := a.db.Update(func(tx *bolt.Tx) error {
+		root := tx.Bucket([]byte(bucketFeeds))
+		b := root.Bucket([]byte(cf.Name))
+		items := make([]item, 0)
+		b.ForEach(func(k, v []byte) error {
+			t, err := time.Parse(time.RFC3339, string(v))
+			if err != nil {
+				return err
+			}
+			items = append(items, item{time: t, key: k})
+			return nil
+		})
+		slices.SortFunc(items, func(a item, b item) int {
+			return a.time.Compare(b.time) * -1
+		})
+		if len(items) <= limit {
+			return nil
+		}
+		for _, i := range items[limit:] {
+			if err := b.Delete(i.key); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return err
+}
+
+// itemUniqueID returns a unique ID of an item.
+func itemUniqueID(item *gofeed.Item) string {
 	if item.GUID != "" {
-		return makeHash(item.GUID)
+		return item.GUID
 	}
 	s := item.Title + item.Description + item.Content
 	return makeHash(s)
