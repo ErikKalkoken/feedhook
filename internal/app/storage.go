@@ -1,11 +1,8 @@
 package app
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"log/slog"
 	"slices"
-	"time"
 
 	"github.com/mmcdole/gofeed"
 	bolt "go.etcd.io/bbolt"
@@ -14,11 +11,6 @@ import (
 const (
 	bucketFeeds = "feeds"
 )
-
-type Item struct {
-	time time.Time
-	key  []byte
-}
 
 type Storage struct {
 	db  *bolt.DB
@@ -69,13 +61,8 @@ func (st *Storage) RecordItem(cf ConfigFeed, item *gofeed.Item) error {
 	err := st.db.Update(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketFeeds))
 		b := root.Bucket([]byte(cf.Name))
-		var t time.Time
-		if item.PublishedParsed != nil {
-			t = *item.PublishedParsed
-		} else {
-			t = time.Now().UTC()
-		}
-		return b.Put([]byte(itemUniqueID(item)), []byte(t.Format(time.RFC3339)))
+		i := sentItemFromFeed(item)
+		return b.Put(i.Key(), i.Value())
 	})
 	return err
 }
@@ -86,7 +73,7 @@ func (st *Storage) IsItemNew(cf ConfigFeed, item *gofeed.Item) bool {
 	st.db.View(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketFeeds))
 		b := root.Bucket([]byte(cf.Name))
-		v := b.Get([]byte(itemUniqueID(item)))
+		v := b.Get(sentItemFromFeed(item).Key())
 		if v == nil {
 			isNew = true
 		}
@@ -95,43 +82,28 @@ func (st *Storage) IsItemNew(cf ConfigFeed, item *gofeed.Item) bool {
 	return isNew
 }
 
-// itemUniqueID returns a unique ID of an item.
-func itemUniqueID(item *gofeed.Item) string {
-	if item.GUID != "" {
-		return item.GUID
-	}
-	s := item.Title + item.Description + item.Content
-	return makeHash(s)
-}
-
-func makeHash(s string) string {
-	h := sha256.New()
-	h.Write([]byte(s))
-	return hex.EncodeToString(h.Sum(nil))
-}
-
 // CullFeed deletes the oldest items when there are more items then a limit
 func (st *Storage) CullFeed(cf ConfigFeed, limit int) error {
 	err := st.db.Update(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketFeeds))
 		b := root.Bucket([]byte(cf.Name))
-		items := make([]Item, 0)
+		items := make([]*SentItem, 0)
 		b.ForEach(func(k, v []byte) error {
-			t, err := time.Parse(time.RFC3339, string(v))
+			i, err := sentItemFromDB(k, v)
 			if err != nil {
 				return err
 			}
-			items = append(items, Item{time: t, key: k})
+			items = append(items, i)
 			return nil
 		})
-		slices.SortFunc(items, func(a Item, b Item) int {
-			return a.time.Compare(b.time) * -1
+		slices.SortFunc(items, func(a *SentItem, b *SentItem) int {
+			return a.Published.Compare(b.Published) * -1
 		})
 		if len(items) <= limit {
 			return nil
 		}
 		for _, i := range items[limit:] {
-			if err := b.Delete(i.key); err != nil {
+			if err := b.Delete(i.Key()); err != nil {
 				return err
 			}
 		}
@@ -140,22 +112,22 @@ func (st *Storage) CullFeed(cf ConfigFeed, limit int) error {
 	return err
 }
 
-func (st *Storage) ListItems(cf ConfigFeed) ([]Item, error) {
-	var ii []Item
+func (st *Storage) ListItems(cf ConfigFeed) ([]*SentItem, error) {
+	var items []*SentItem
 	err := st.db.View(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketFeeds))
 		b := root.Bucket([]byte(cf.Name))
 		b.ForEach(func(k, v []byte) error {
-			x, err := time.Parse(time.RFC3339, string(v))
+			i, err := sentItemFromDB(k, v)
 			if err != nil {
 				return err
 			}
-			ii = append(ii, Item{key: k, time: x})
+			items = append(items, i)
 			return nil
 		})
 		return nil
 	})
-	return ii, err
+	return items, err
 }
 
 func (st *Storage) ListFeeds() ([]string, error) {

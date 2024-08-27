@@ -85,7 +85,7 @@ func TestStorage(t *testing.T) {
 			if assert.NoError(t, err) {
 				var ids []string
 				for _, i := range ii {
-					ids = append(ids, string(i.key))
+					ids = append(ids, string(i.ID))
 				}
 				assert.Contains(t, ids, "1")
 				assert.Contains(t, ids, "3")
