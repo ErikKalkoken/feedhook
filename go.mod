@@ -10,6 +10,7 @@ require (
 	github.com/mmcdole/gofeed v1.3.0
 	github.com/stretchr/testify v1.9.0
 	go.etcd.io/bbolt v1.3.11
+	golang.org/x/sync v0.8.0
 )
 
 require (
