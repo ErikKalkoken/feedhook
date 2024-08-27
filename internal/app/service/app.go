@@ -9,9 +9,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mmcdole/gofeed"
+
 	"github.com/ErikKalkoken/feedforward/internal/app"
 	"github.com/ErikKalkoken/feedforward/internal/app/storage"
-	"github.com/mmcdole/gofeed"
 )
 
 var errUserAborted = errors.New("aborted by user")

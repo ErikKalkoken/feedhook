@@ -1,4 +1,4 @@
-package storage
+package storage_test
 
 import (
 	"log"
@@ -6,10 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ErikKalkoken/feedforward/internal/app"
 	"github.com/mmcdole/gofeed"
 	"github.com/stretchr/testify/assert"
 	bolt "go.etcd.io/bbolt"
+
+	"github.com/ErikKalkoken/feedforward/internal/app"
+	"github.com/ErikKalkoken/feedforward/internal/app/storage"
 )
 
 func TestStorage(t *testing.T) {
@@ -21,10 +23,9 @@ func TestStorage(t *testing.T) {
 	defer db.Close()
 	cf := app.ConfigFeed{Name: "feed1", URL: "https://www.example.com/feed", Webhook: "hook1"}
 	cfg := app.MyConfig{
-		App:   app.ConfigApp{Oldest: 3600 * 24, Ticker: 1},
 		Feeds: []app.ConfigFeed{cf},
 	}
-	st := New(db, cfg)
+	st := storage.New(db, cfg)
 	if err := st.Init(); err != nil {
 		log.Fatalf("Failed to init: %s", err)
 	}

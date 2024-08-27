@@ -19,7 +19,7 @@ var converter = md.NewConverter("", true, nil)
 func init() {
 	x := md.Rule{
 		Filter: []string{"img"},
-		Replacement: func(content string, selec *goquery.Selection, opt *md.Options) *string {
+		Replacement: func(_ string, _ *goquery.Selection, _ *md.Options) *string {
 			return md.String("")
 		},
 	}
