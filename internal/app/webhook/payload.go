@@ -1,6 +1,8 @@
 package webhook
 
 import (
+	"bytes"
+	"encoding/gob"
 	"fmt"
 	"time"
 
@@ -30,7 +32,7 @@ type embed struct {
 	URL string `json:"url,omitempty"`
 }
 
-func makePayload(feed *gofeed.Feed, item *gofeed.Item) (webhookPayload, error) {
+func newPayload(feed *gofeed.Feed, item *gofeed.Item) (webhookPayload, error) {
 	var description string
 	var err error
 	if item.Content != "" {
@@ -59,4 +61,23 @@ func makePayload(feed *gofeed.Feed, item *gofeed.Item) (webhookPayload, error) {
 		Embeds: []embed{em},
 	}
 	return payload, nil
+}
+
+func (wp webhookPayload) ToBytes() ([]byte, error) {
+	b := bytes.Buffer{}
+	e := gob.NewEncoder(&b)
+	if err := e.Encode(wp); err != nil {
+		return nil, err
+	}
+	return b.Bytes(), nil
+}
+
+func newPayloadFromBytes(byt []byte) (webhookPayload, error) {
+	b := bytes.NewBuffer(byt)
+	d := gob.NewDecoder(b)
+	var wp webhookPayload
+	if err := d.Decode(&wp); err != nil {
+		return wp, err
+	}
+	return wp, nil
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/ErikKalkoken/feedforward/internal/app"
 	"github.com/ErikKalkoken/feedforward/internal/app/storage"
 	"github.com/ErikKalkoken/feedforward/internal/app/webhook"
+	"github.com/ErikKalkoken/feedforward/internal/queue"
 )
 
 var errUserAborted = errors.New("aborted by user")
@@ -65,7 +66,11 @@ func (a *App) Start() {
 	// Create and start webhooks
 	hooks := make(map[string]*webhook.Webhook)
 	for _, h := range a.cfg.Webhooks {
-		hooks[h.Name] = webhook.New(a.client, h.URL)
+		q, err := queue.New(a.st.DB(), h.Name)
+		if err != nil {
+			panic(err)
+		}
+		hooks[h.Name] = webhook.New(a.client, q, h.Name, h.URL)
 		hooks[h.Name].Start()
 	}
 	// process feeds until aborted
@@ -127,7 +132,7 @@ func (a *App) processFeed(cf app.ConfigFeed, hook *webhook.Webhook) error {
 			continue
 		}
 		if err := hook.Send(feed, item); err != nil {
-			slog.Error("Failed to send item", "feed", cf.Name, "error", "err")
+			slog.Error("Failed to add item to send queue", "feed", cf.Name, "error", "err")
 			continue
 		}
 		if err := a.st.RecordItem(cf, item); err != nil {
@@ -139,7 +144,7 @@ func (a *App) processFeed(cf app.ConfigFeed, hook *webhook.Webhook) error {
 		if err := a.st.UpdateWebhookStats(cf.Webhook); err != nil {
 			slog.Error("failed to update webhook stats", "name", cf.Webhook, "error", err)
 		}
-		slog.Info("Posted item", "feed", cf.Name, "webhook", cf.Webhook, "title", item.Title)
+		slog.Info("Received item", "feed", cf.Name, "webhook", cf.Webhook, "title", item.Title)
 	}
 	err = a.st.CullItems(cf, 1000)
 	return err

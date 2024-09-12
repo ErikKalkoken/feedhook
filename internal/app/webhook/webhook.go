@@ -11,6 +11,8 @@ import (
 	md "github.com/JohannesKaufmann/html-to-markdown"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/mmcdole/gofeed"
+
+	"github.com/ErikKalkoken/feedforward/internal/queue"
 )
 
 var converter = md.NewConverter("", true, nil)
@@ -25,47 +27,58 @@ func init() {
 	converter.AddRules(x)
 }
 
-// message represents a message send to a webhook.
-// Consumers must listen on the errC channel to receive the result.
-type message struct {
-	payload *webhookPayload
-	errC    chan error
-}
-
 type Webhook struct {
-	client   *http.Client
-	messageC chan message
-	url      string
+	client *http.Client
+	name   string
+	queue  *queue.Queue
+	url    string
 }
 
-func New(client *http.Client, url string) *Webhook {
+func New(client *http.Client, queue *queue.Queue, name, url string) *Webhook {
 	wh := &Webhook{
-		client:   client,
-		messageC: make(chan message),
-		url:      url,
+		client: client,
+		name:   name,
+		queue:  queue,
+		url:    url,
 	}
 	return wh
 }
 
 func (wh *Webhook) Start() {
 	go func() {
-		for m := range wh.messageC {
-			m.errC <- wh.sendToWebhook(m.payload)
+		for {
+			v, err := wh.queue.Get()
+			if err != nil {
+				slog.Error("Failed to read from queue", "error", err)
+				continue
+			}
+			pl, err := newPayloadFromBytes(v)
+			if err != nil {
+				slog.Error("Failed to de-serialize payload", "error", err)
+				continue
+			}
+			if err := wh.sendToWebhook(pl); err != nil {
+				slog.Error("Failed to send to webhook", "error", err)
+				continue
+			}
+			slog.Info("Posted item", "webhook", wh.name)
 		}
 	}()
 }
 
 func (wh *Webhook) Send(feed *gofeed.Feed, item *gofeed.Item) error {
-	p, err := makePayload(feed, item)
+	p, err := newPayload(feed, item)
 	if err != nil {
 		return err
 	}
-	m := message{payload: &p, errC: make(chan error)}
-	wh.messageC <- m
-	return <-m.errC
+	v, err := p.ToBytes()
+	if err != nil {
+		return err
+	}
+	return wh.queue.Put(v)
 }
 
-func (wh *Webhook) sendToWebhook(payload *webhookPayload) error {
+func (wh *Webhook) sendToWebhook(payload webhookPayload) error {
 	time.Sleep(1 * time.Second)
 	dat, err := json.Marshal(payload)
 	if err != nil {

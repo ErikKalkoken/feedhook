@@ -73,3 +73,7 @@ func (st *Storage) Init() error {
 	})
 	return err
 }
+
+func (st *Storage) DB() *bolt.DB {
+	return st.db
+}

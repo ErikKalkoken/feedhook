@@ -23,8 +23,8 @@ const (
 	dbFileName     = "feedforward.db"
 )
 
-// Current version need to be injected via ldflags
-var Version = "0.0.0"
+// Overwritten with current tag when released
+var Version = "0.1.0"
 
 type realtime struct{}
 

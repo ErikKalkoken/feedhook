@@ -4,7 +4,6 @@ package queue
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"sync"
 
 	bolt "go.etcd.io/bbolt"
@@ -15,8 +14,8 @@ var ErrEmpty = errors.New("empty queue")
 // Queue represents a persistent FIFO queue and support multiple concurrent consumers and produces.
 // It uses Bolt as database.
 type Queue struct {
-	db         *bolt.DB
-	bucketName string
+	db   *bolt.DB
+	name string
 
 	mu   sync.Mutex
 	cond *sync.Cond
@@ -25,14 +24,13 @@ type Queue struct {
 // New returns a new Queue object with a given name.
 // When a queue with that name already exists in the DB, it will be re-used.
 func New(db *bolt.DB, name string) (*Queue, error) {
-	bn := fmt.Sprintf("queue-%s", name)
 	q := &Queue{
-		db:         db,
-		bucketName: bn,
+		db:   db,
+		name: name,
 	}
 	q.cond = sync.NewCond(&q.mu)
 	err := db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte(bn))
+		_, err := tx.CreateBucketIfNotExists([]byte(name))
 		return err
 	})
 	if err != nil {
@@ -44,7 +42,7 @@ func New(db *bolt.DB, name string) (*Queue, error) {
 // Clear deletes all items from the queue.
 func (q *Queue) Clear() error {
 	err := q.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(q.bucketName))
+		b := tx.Bucket([]byte(q.name))
 		b.ForEach(func(k, v []byte) error {
 			return b.Delete(k)
 		})
@@ -63,7 +61,7 @@ func (q *Queue) IsEmpty() bool {
 func (q *Queue) GetNoWait() ([]byte, error) {
 	var v2 []byte
 	err := q.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(q.bucketName))
+		b := tx.Bucket([]byte(q.name))
 		c := b.Cursor()
 		k, v := c.First()
 		if k == nil {
@@ -96,7 +94,7 @@ func (q *Queue) Get() ([]byte, error) {
 // Puts adds an item to the queue.
 func (q *Queue) Put(v []byte) error {
 	err := q.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(q.bucketName))
+		b := tx.Bucket([]byte(q.name))
 		id, err := b.NextSequence()
 		if err != nil {
 			return err
@@ -119,7 +117,7 @@ func itob(v uint64) []byte {
 func (q *Queue) Size() int {
 	var c int
 	q.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(q.bucketName))
+		b := tx.Bucket([]byte(q.name))
 		b.ForEach(func(k, v []byte) error {
 			c++
 			return nil
