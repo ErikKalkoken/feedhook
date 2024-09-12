@@ -38,7 +38,7 @@ func TestWebhook(t *testing.T) {
 	feed := &gofeed.Feed{Title: "title"}
 	now := time.Now()
 	item := &gofeed.Item{Content: "content", PublishedParsed: &now}
-	err = wh.Send(feed, item)
+	err = wh.Send("dummy", feed, item)
 	time.Sleep(2 * time.Second)
 	if assert.NoError(t, err) {
 		assert.Equal(t, 1, httpmock.GetTotalCallCount())

@@ -46,32 +46,33 @@ func New(client *http.Client, queue *queue.Queue, name, url string) *Webhook {
 
 func (wh *Webhook) Start() {
 	go func() {
+		slog.Info("Started webhook", "name", wh.name, "queued", wh.queue.Size())
 		for {
 			v, err := wh.queue.Get()
 			if err != nil {
 				slog.Error("Failed to read from queue", "error", err)
 				continue
 			}
-			pl, err := newPayloadFromBytes(v)
+			m, err := newMessageFromBytes(v)
 			if err != nil {
 				slog.Error("Failed to de-serialize payload", "error", err)
 				continue
 			}
-			if err := wh.sendToWebhook(pl); err != nil {
+			if err := wh.sendToWebhook(m.Payload); err != nil {
 				slog.Error("Failed to send to webhook", "error", err)
 				continue
 			}
-			slog.Info("Posted item", "webhook", wh.name)
+			slog.Info("Posted item", "webhook", wh.name, "feed", m.Feed, "title", m.Title, "queued", wh.queue.Size())
 		}
 	}()
 }
 
-func (wh *Webhook) Send(feed *gofeed.Feed, item *gofeed.Item) error {
-	p, err := newPayload(feed, item)
+func (wh *Webhook) Send(feedName string, feed *gofeed.Feed, item *gofeed.Item) error {
+	p, err := newMessage(feedName, feed, item)
 	if err != nil {
 		return err
 	}
-	v, err := p.ToBytes()
+	v, err := p.toBytes()
 	if err != nil {
 		return err
 	}

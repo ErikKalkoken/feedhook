@@ -131,7 +131,7 @@ func (a *App) processFeed(cf app.ConfigFeed, hook *webhook.Webhook) error {
 		if !a.st.IsItemNew(cf, item) {
 			continue
 		}
-		if err := hook.Send(feed, item); err != nil {
+		if err := hook.Send(cf.Name, feed, item); err != nil {
 			slog.Error("Failed to add item to send queue", "feed", cf.Name, "error", "err")
 			continue
 		}
