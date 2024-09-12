@@ -37,14 +37,14 @@ func TestSerialization(t *testing.T) {
 		pl := WebhookPayload{
 			Content: "content",
 			Embeds: []Embed{{
-				Author: Author{Name: "name", IconURL: "iconURL", URL: "url"},
+				Author: EmbedAuthor{Name: "name", IconURL: "iconURL", URL: "url"},
 				Title:  "In Fight for Congress, Democrats Run as ‘Team Normal,’ Casting G.O.P. as ‘Weird’",
 			}},
 		}
 		m := Message{
 			Title:     "In Fight for Congress, Democrats Run as ‘Team Normal,’ Casting G.O.P. as ‘Weird’",
 			Feed:      "feed",
-			Timestamp: "timestamp",
+			Timestamp: time.Now().UTC(),
 			Payload:   pl,
 		}
 		b, err := m.toBytes()

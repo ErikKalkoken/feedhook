@@ -12,7 +12,7 @@ import (
 type Message struct {
 	Title     string         `json:"title,omitempty"`
 	Feed      string         `json:"feed,omitempty"`
-	Timestamp string         `json:"timestamp,omitempty"`
+	Timestamp time.Time      `json:"timestamp,omitempty"`
 	Payload   WebhookPayload `json:"payload,omitempty"`
 }
 
@@ -24,26 +24,26 @@ type WebhookPayload struct {
 
 // Embed represents a Discord Embed.
 type Embed struct {
-	Author      Author    `json:"author,omitempty"`
-	Description string    `json:"description,omitempty"`
-	Image       Image     `json:"image,omitempty"`
-	Timestamp   string    `json:"timestamp,omitempty"`
-	Title       string    `json:"title,omitempty"`
-	Thumbnail   Thumbnail `json:"thumbnail,omitempty"`
-	URL         string    `json:"url,omitempty"`
+	Author      EmbedAuthor    `json:"author,omitempty"`
+	Description string         `json:"description,omitempty"`
+	Image       EmbedImage     `json:"image,omitempty"`
+	Timestamp   string         `json:"timestamp,omitempty"`
+	Title       string         `json:"title,omitempty"`
+	Thumbnail   EmbedThumbnail `json:"thumbnail,omitempty"`
+	URL         string         `json:"url,omitempty"`
 }
 
-type Author struct {
+type EmbedAuthor struct {
 	Name    string `json:"name,omitempty"`
 	IconURL string `json:"icon_url,omitempty"`
 	URL     string `json:"url,omitempty"`
 }
 
-type Image struct {
+type EmbedImage struct {
 	URL string `json:"url,omitempty"`
 }
 
-type Thumbnail struct {
+type EmbedThumbnail struct {
 	URL string `json:"url,omitempty"`
 }
 
@@ -79,7 +79,7 @@ func newMessage(feedName string, feed *gofeed.Feed, item *gofeed.Item) (Message,
 	m := Message{
 		Feed:      feedName,
 		Title:     item.Title,
-		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Timestamp: time.Now().UTC(),
 		Payload:   wpl,
 	}
 	return m, nil
