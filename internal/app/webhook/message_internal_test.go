@@ -38,11 +38,11 @@ func TestSerialization(t *testing.T) {
 			Content: "content",
 			Embeds: []Embed{{
 				Author: Author{Name: "name", IconURL: "iconURL", URL: "url"},
-				Title:  "title",
+				Title:  "In Fight for Congress, Democrats Run as ‘Team Normal,’ Casting G.O.P. as ‘Weird’",
 			}},
 		}
 		m := Message{
-			Title:     "title",
+			Title:     "In Fight for Congress, Democrats Run as ‘Team Normal,’ Casting G.O.P. as ‘Weird’",
 			Feed:      "feed",
 			Timestamp: "timestamp",
 			Payload:   pl,

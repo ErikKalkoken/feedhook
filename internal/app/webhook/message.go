@@ -1,8 +1,7 @@
 package webhook
 
 import (
-	"bytes"
-	"encoding/gob"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -87,20 +86,11 @@ func newMessage(feedName string, feed *gofeed.Feed, item *gofeed.Item) (Message,
 }
 
 func (m Message) toBytes() ([]byte, error) {
-	b := bytes.Buffer{}
-	e := gob.NewEncoder(&b)
-	if err := e.Encode(m); err != nil {
-		return nil, err
-	}
-	return b.Bytes(), nil
+	return json.Marshal(m)
 }
 
-func newMessageFromBytes(byt []byte) (Message, error) {
-	b := bytes.NewBuffer(byt)
-	d := gob.NewDecoder(b)
+func newMessageFromBytes(data []byte) (Message, error) {
 	var m Message
-	if err := d.Decode(&m); err != nil {
-		return m, err
-	}
-	return m, nil
+	err := json.Unmarshal(data, &m)
+	return m, err
 }
