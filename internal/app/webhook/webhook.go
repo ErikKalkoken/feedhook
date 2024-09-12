@@ -3,9 +3,11 @@ package webhook
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"time"
 
 	md "github.com/JohannesKaufmann/html-to-markdown"
@@ -15,7 +17,18 @@ import (
 	"github.com/ErikKalkoken/feedforward/internal/queue"
 )
 
+const maxAttempts = 3
+
 var converter = md.NewConverter("", true, nil)
+
+type httpError struct {
+	status  int
+	message string
+}
+
+func (e httpError) Error() string {
+	return e.message
+}
 
 func init() {
 	x := md.Rule{
@@ -59,7 +72,20 @@ func (wh *Webhook) Start() {
 				continue
 			}
 			if err := wh.sendToWebhook(m.Payload); err != nil {
-				slog.Error("Failed to send to webhook", "error", err)
+				m.Attempt++
+				slog.Error("Failed to send to webhook", "error", err, "attempt", m.Attempt)
+				if m.Attempt == maxAttempts {
+					slog.Error("Discarding message after too many attempts")
+					continue
+				}
+				v, err := m.toBytes()
+				if err != nil {
+					slog.Error("Failed to serialize message after failure", "error", err)
+					continue
+				}
+				if err := wh.queue.Put(v); err != nil {
+					slog.Error("Failed to enqueue message after failure", "error", err)
+				}
 				continue
 			}
 			slog.Info("Posted item", "webhook", wh.name, "feed", m.Feed, "title", m.Title, "queued", wh.queue.Size())
@@ -85,7 +111,10 @@ func (wh *Webhook) sendToWebhook(payload WebhookPayload) error {
 	if err != nil {
 		return err
 	}
-	resp, err := wh.client.Post(wh.url, "application/json", bytes.NewBuffer(dat))
+	v := url.Values{}
+	v.Set("wait", "true")
+	u := fmt.Sprintf("%s?%s", wh.url, v.Encode())
+	resp, err := wh.client.Post(u, "application/json", bytes.NewBuffer(dat))
 	if err != nil {
 		return err
 	}
@@ -95,5 +124,12 @@ func (wh *Webhook) sendToWebhook(payload WebhookPayload) error {
 		return err
 	}
 	slog.Debug("response", "url", wh.url, "status", resp.Status, "headers", resp.Header, "body", string(body))
+	if resp.StatusCode >= 400 {
+		err := httpError{
+			status:  resp.StatusCode,
+			message: resp.Status,
+		}
+		return err
+	}
 	return nil
 }

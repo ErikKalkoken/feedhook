@@ -13,6 +13,7 @@ type Message struct {
 	Title     string         `json:"title,omitempty"`
 	Feed      string         `json:"feed,omitempty"`
 	Timestamp time.Time      `json:"timestamp,omitempty"`
+	Attempt   int            `json:"attempt,omitempty"`
 	Payload   WebhookPayload `json:"payload,omitempty"`
 }
 
