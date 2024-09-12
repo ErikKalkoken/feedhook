@@ -41,10 +41,19 @@ cd ~
 Download files:
 
 ```sh
-wget executable
-wget supervisor.conf
-wget config.toml
+wget https://path-to/feedforward
+wget https://path-to/supervisor.conf
+wget https://path-to/config.toml
 ```
+
+Setup and configure:
+
+```sh
+chmod +x feedforward
+touch feedforward.log
+```
+
+Setup feeds and webhooks by adding them to `config.toml`.
 
 Add feedforward to supervisor:
 
@@ -53,9 +62,7 @@ sudo ln -s /home/feedforward/supervisor.conf /etc/supervisor/conf.d/feedforward.
 sudo systemctl restart supervisor
 ```
 
-Setup feeds and webhooks by adding them to config.toml.
-
-Restart feedforward to enable the latest configuration.
+Restart feedforward to start feedforward.
 
 ```sh
 sudo supervisorctl restart feedforward

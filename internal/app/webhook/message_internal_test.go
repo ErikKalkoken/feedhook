@@ -1,6 +1,7 @@
 package webhook
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -31,22 +32,26 @@ func TestMakeMessage(t *testing.T) {
 	})
 }
 
-func TestSerialize(t *testing.T) {
+func TestSerialization(t *testing.T) {
 	t.Run("can serialize and de-serialize payload", func(t *testing.T) {
-		pl := webhookPayload{
+		pl := WebhookPayload{
 			Content: "content",
-			Embeds:  []embed{{Title: "title"}},
+			Embeds: []Embed{{
+				Author: Author{Name: "name", IconURL: "iconURL", URL: "url"},
+				Title:  "title",
+			}},
 		}
-		m := message{
-			Title:   "title",
-			Feed:    "feed",
-			Payload: pl,
+		m := Message{
+			Title:     "title",
+			Feed:      "feed",
+			Timestamp: "timestamp",
+			Payload:   pl,
 		}
 		b, err := m.toBytes()
 		if assert.NoError(t, err) {
 			m2, err := newMessageFromBytes(b)
 			if assert.NoError(t, err) {
-				assert.Equal(t, m, m2)
+				assert.True(t, reflect.DeepEqual(m, m2))
 			}
 		}
 	})

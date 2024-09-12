@@ -55,7 +55,7 @@ func (wh *Webhook) Start() {
 			}
 			m, err := newMessageFromBytes(v)
 			if err != nil {
-				slog.Error("Failed to de-serialize payload", "error", err)
+				slog.Error("Failed to de-serialize payload", "error", err, "data", string(v))
 				continue
 			}
 			if err := wh.sendToWebhook(m.Payload); err != nil {
@@ -79,7 +79,7 @@ func (wh *Webhook) Send(feedName string, feed *gofeed.Feed, item *gofeed.Item) e
 	return wh.queue.Put(v)
 }
 
-func (wh *Webhook) sendToWebhook(payload webhookPayload) error {
+func (wh *Webhook) sendToWebhook(payload WebhookPayload) error {
 	time.Sleep(1 * time.Second)
 	dat, err := json.Marshal(payload)
 	if err != nil {

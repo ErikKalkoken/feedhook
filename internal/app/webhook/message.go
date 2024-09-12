@@ -9,41 +9,47 @@ import (
 	"github.com/mmcdole/gofeed"
 )
 
-// message represents an item that can be queued and contains the payload to be sent and header information.
-type message struct {
+// Message represents an item that can be queued and contains the payload to be sent and header information.
+type Message struct {
 	Title     string         `json:"title,omitempty"`
 	Feed      string         `json:"feed,omitempty"`
 	Timestamp string         `json:"timestamp,omitempty"`
-	Payload   webhookPayload `json:"payload,omitempty"`
+	Payload   WebhookPayload `json:"payload,omitempty"`
 }
 
-// webhookPayload represents a Discord post for a webhook.
-type webhookPayload struct {
+// WebhookPayload represents a Discord post for a webhook.
+type WebhookPayload struct {
 	Content string  `json:"content,omitempty"`
-	Embeds  []embed `json:"embeds,omitempty"`
+	Embeds  []Embed `json:"embeds,omitempty"`
 }
 
-// embed represents a Discord embed.
-type embed struct {
-	Author struct {
-		Name    string `json:"name,omitempty"`
-		IconURL string `json:"icon_url,omitempty"`
-		URL     string `json:"url,omitempty"`
-	} `json:"author,omitempty"`
-	Description string `json:"description,omitempty"`
-	Image       struct {
-		URL string `json:"url,omitempty"`
-	} `json:"image,omitempty"`
-	Timestamp string `json:"timestamp,omitempty"`
-	Title     string `json:"title,omitempty"`
-	Thumbnail struct {
-		URL string `json:"url,omitempty"`
-	} `json:"thumbnail,omitempty"`
+// Embed represents a Discord Embed.
+type Embed struct {
+	Author      Author    `json:"author,omitempty"`
+	Description string    `json:"description,omitempty"`
+	Image       Image     `json:"image,omitempty"`
+	Timestamp   string    `json:"timestamp,omitempty"`
+	Title       string    `json:"title,omitempty"`
+	Thumbnail   Thumbnail `json:"thumbnail,omitempty"`
+	URL         string    `json:"url,omitempty"`
+}
+
+type Author struct {
+	Name    string `json:"name,omitempty"`
+	IconURL string `json:"icon_url,omitempty"`
+	URL     string `json:"url,omitempty"`
+}
+
+type Image struct {
+	URL string `json:"url,omitempty"`
+}
+
+type Thumbnail struct {
 	URL string `json:"url,omitempty"`
 }
 
 // newMessage returns a new message from a feed item.
-func newMessage(feedName string, feed *gofeed.Feed, item *gofeed.Item) (message, error) {
+func newMessage(feedName string, feed *gofeed.Feed, item *gofeed.Item) (Message, error) {
 	var description string
 	var err error
 	if item.Content != "" {
@@ -52,9 +58,9 @@ func newMessage(feedName string, feed *gofeed.Feed, item *gofeed.Item) (message,
 		description, err = converter.ConvertString(item.Description)
 	}
 	if err != nil {
-		return message{}, fmt.Errorf("failed to parse description to markdown: %w", err)
+		return Message{}, fmt.Errorf("failed to parse description to markdown: %w", err)
 	}
-	em := embed{
+	em := Embed{
 		Description: description,
 		Timestamp:   item.PublishedParsed.Format(time.RFC3339),
 		Title:       item.Title,
@@ -68,10 +74,10 @@ func newMessage(feedName string, feed *gofeed.Feed, item *gofeed.Item) (message,
 	if item.Image != nil {
 		em.Image.URL = item.Image.URL
 	}
-	wpl := webhookPayload{
-		Embeds: []embed{em},
+	wpl := WebhookPayload{
+		Embeds: []Embed{em},
 	}
-	m := message{
+	m := Message{
 		Feed:      feedName,
 		Title:     item.Title,
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
@@ -80,7 +86,7 @@ func newMessage(feedName string, feed *gofeed.Feed, item *gofeed.Item) (message,
 	return m, nil
 }
 
-func (m message) toBytes() ([]byte, error) {
+func (m Message) toBytes() ([]byte, error) {
 	b := bytes.Buffer{}
 	e := gob.NewEncoder(&b)
 	if err := e.Encode(m); err != nil {
@@ -89,10 +95,10 @@ func (m message) toBytes() ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-func newMessageFromBytes(byt []byte) (message, error) {
+func newMessageFromBytes(byt []byte) (Message, error) {
 	b := bytes.NewBuffer(byt)
 	d := gob.NewDecoder(b)
-	var m message
+	var m Message
 	if err := d.Decode(&m); err != nil {
 		return m, err
 	}
