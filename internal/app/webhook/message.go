@@ -1,7 +1,8 @@
 package webhook
 
 import (
-	"encoding/json"
+	"bytes"
+	"encoding/gob"
 	"fmt"
 	"time"
 
@@ -10,11 +11,11 @@ import (
 
 // Message represents an item that can be queued and contains the payload to be sent and header information.
 type Message struct {
-	Title     string         `json:"title,omitempty"`
-	Feed      string         `json:"feed,omitempty"`
-	Timestamp time.Time      `json:"timestamp,omitempty"`
-	Attempt   int            `json:"attempt,omitempty"`
-	Payload   WebhookPayload `json:"payload,omitempty"`
+	Title     string
+	Feed      string
+	Timestamp time.Time
+	Attempt   int
+	Payload   WebhookPayload
 }
 
 // WebhookPayload represents a Discord post for a webhook.
@@ -87,11 +88,20 @@ func newMessage(feedName string, feed *gofeed.Feed, item *gofeed.Item) (Message,
 }
 
 func (m Message) toBytes() ([]byte, error) {
-	return json.Marshal(m)
+	b := bytes.Buffer{}
+	e := gob.NewEncoder(&b)
+	if err := e.Encode(m); err != nil {
+		return nil, err
+	}
+	return b.Bytes(), nil
 }
 
-func newMessageFromBytes(data []byte) (Message, error) {
+func newMessageFromBytes(byt []byte) (Message, error) {
+	b := bytes.NewBuffer(byt)
+	d := gob.NewDecoder(b)
 	var m Message
-	err := json.Unmarshal(data, &m)
-	return m, err
+	if err := d.Decode(&m); err != nil {
+		return m, err
+	}
+	return m, nil
 }
