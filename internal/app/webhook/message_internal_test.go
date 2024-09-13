@@ -1,6 +1,7 @@
 package webhook
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -54,5 +55,34 @@ func TestSerialization(t *testing.T) {
 				assert.True(t, reflect.DeepEqual(m, m2))
 			}
 		}
+	})
+}
+
+func TestEllipsis(t *testing.T) {
+	cases := []struct {
+		in   string
+		max  int
+		want string
+	}{
+		{"alpha 😀 boy", 11, "alpha 😀 boy"},
+		{"alpha 😀 boy", 100, "alpha 😀 boy"},
+		{"alpha 😀 boy", 10, "alpha 😀..."},
+		{"alpha boy", 3, "..."},
+		{"", 3, ""},
+	}
+	for i, tc := range cases {
+		t.Run(fmt.Sprintf("#%d", i+1), func(t *testing.T) {
+			got := truncateString(tc.in, tc.max)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+
+	t.Run("should panic when maxLen is below 3", func(t *testing.T) {
+		assert.Panics(t, func() {
+			truncateString("xyz", 2)
+		})
+		assert.Panics(t, func() {
+			truncateString("xyz", -1)
+		})
 	})
 }

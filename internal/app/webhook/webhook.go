@@ -114,6 +114,7 @@ func (wh *Webhook) sendToWebhook(payload WebhookPayload) error {
 	v := url.Values{}
 	v.Set("wait", "true")
 	u := fmt.Sprintf("%s?%s", wh.url, v.Encode())
+	slog.Debug("request", "url", wh.url, "body", string(dat))
 	resp, err := wh.client.Post(u, "application/json", bytes.NewBuffer(dat))
 	if err != nil {
 		return err

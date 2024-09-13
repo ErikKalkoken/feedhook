@@ -9,6 +9,12 @@ import (
 	"github.com/mmcdole/gofeed"
 )
 
+const (
+	// contentMaxLength = 2000
+	embedMaxFieldLength       = 256 // title, author name, field names
+	embedDescriptionMaxLength = 4096
+)
+
 // Message represents an item that can be queued and contains the payload to be sent and header information.
 type Message struct {
 	Title     string
@@ -62,12 +68,12 @@ func newMessage(feedName string, feed *gofeed.Feed, item *gofeed.Item) (Message,
 		return Message{}, fmt.Errorf("failed to parse description to markdown: %w", err)
 	}
 	em := Embed{
-		Description: description,
+		Description: truncateString(description, embedDescriptionMaxLength),
 		Timestamp:   item.PublishedParsed.Format(time.RFC3339),
-		Title:       item.Title,
+		Title:       truncateString(item.Title, embedMaxFieldLength),
 		URL:         item.Link,
 	}
-	em.Author.Name = feed.Title
+	em.Author.Name = truncateString(feed.Title, embedMaxFieldLength)
 	em.Author.URL = feed.Link
 	if feed.Image != nil {
 		em.Author.IconURL = feed.Image.URL
@@ -104,4 +110,18 @@ func newMessageFromBytes(byt []byte) (Message, error) {
 		return m, err
 	}
 	return m, nil
+}
+
+// truncateString truncates a given string if it longer then a limit
+// and also adds an ellipsis at the end of truncated strings.
+// It returns the new string.
+func truncateString(s string, maxLen int) string {
+	if maxLen < 3 {
+		panic("Length can not be below 3")
+	}
+	runes := []rune(s)
+	if len(runes) <= maxLen {
+		return s
+	}
+	return string(runes[0:maxLen-3]) + "..."
 }
