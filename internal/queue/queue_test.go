@@ -3,6 +3,7 @@ package queue_test
 import (
 	"math/rand/v2"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -144,6 +145,43 @@ func TestQueue(t *testing.T) {
 		assert.True(t, q.IsEmpty())
 		assert.ElementsMatch(t, results, []string{"alpha", "bravo", "charlie", "delta", "echo", "foxtrot"})
 	})
+	t.Run("should process larger workload with parallel consumers without error", func(t *testing.T) {
+		if err := q.Clear(); err != nil {
+			t.Fatal(err)
+		}
+		items := make([]string, 1000)
+		for i := range len(items) {
+			items[i] = randSeq(rand.IntN(20) + 5)
+		}
+		for _, v := range items {
+			if err := q.Put([]byte(v)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		mu := sync.Mutex{}
+		results := make([]string, 0)
+		g := new(errgroup.Group)
+		for range 3 {
+			g.Go(func() error {
+				for {
+					v, err := q.GetNoWait()
+					if err == queue.ErrEmpty {
+						break
+					} else if err != nil {
+						return err
+					}
+					mu.Lock()
+					results = append(results, string(v))
+					mu.Unlock()
+				}
+				return nil
+			})
+		}
+		if err := g.Wait(); err != nil {
+			t.Fatal(err)
+		}
+		assert.ElementsMatch(t, results, items)
+	})
 }
 
 func TestResurrectQueue(t *testing.T) {
@@ -174,4 +212,14 @@ func TestResurrectQueue(t *testing.T) {
 	}
 	assert.Equal(t, []byte("alpha"), v)
 	db.Close()
+}
+
+var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+func randSeq(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letters[rand.IntN(len(letters))]
+	}
+	return string(b)
 }

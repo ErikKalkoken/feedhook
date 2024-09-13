@@ -2,6 +2,7 @@
 package queue
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"sync"
@@ -59,20 +60,24 @@ func (q *Queue) IsEmpty() bool {
 // GetNoWait return an item from the queue.
 // When the queue is empty it returns the ErrEmpty error.
 func (q *Queue) GetNoWait() ([]byte, error) {
-	var v2 []byte
-	err := q.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(q.name))
-		c := b.Cursor()
-		k, v := c.First()
-		if k == nil {
-			return ErrEmpty
-		}
-		if err := b.Delete(k); err != nil {
-			return err
-		}
-		v2 = v
-		return nil
-	})
+	tx, err := q.db.Begin(true)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	b := tx.Bucket([]byte(q.name))
+	c := b.Cursor()
+	k, v := c.First()
+	if k == nil {
+		return nil, ErrEmpty
+	}
+	if err := b.Delete(k); err != nil {
+		return nil, err
+	}
+	v2 := bytes.Clone(v) // v is only valid for the life of the transaction
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
 	return v2, err
 }
 
