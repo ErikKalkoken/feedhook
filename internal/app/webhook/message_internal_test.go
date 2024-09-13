@@ -60,20 +60,22 @@ func TestSerialization(t *testing.T) {
 
 func TestEllipsis(t *testing.T) {
 	cases := []struct {
-		in   string
-		max  int
-		want string
+		in        string
+		max       int
+		want      string
+		truncated bool
 	}{
-		{"alpha 😀 boy", 11, "alpha 😀 boy"},
-		{"alpha 😀 boy", 100, "alpha 😀 boy"},
-		{"alpha 😀 boy", 10, "alpha 😀..."},
-		{"alpha boy", 3, "..."},
-		{"", 3, ""},
+		{"alpha 😀 boy", 11, "alpha 😀 boy", false},
+		{"alpha 😀 boy", 100, "alpha 😀 boy", false},
+		{"alpha 😀 boy", 10, "alpha 😀...", true},
+		{"alpha boy", 3, "...", true},
+		{"", 3, "", false},
 	}
 	for i, tc := range cases {
 		t.Run(fmt.Sprintf("#%d", i+1), func(t *testing.T) {
-			got := truncateString(tc.in, tc.max)
+			got, truncated := truncateString(tc.in, tc.max)
 			assert.Equal(t, tc.want, got)
+			assert.Equal(t, tc.truncated, truncated)
 		})
 	}
 

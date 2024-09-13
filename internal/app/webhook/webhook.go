@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	md "github.com/JohannesKaufmann/html-to-markdown"
@@ -125,6 +126,20 @@ func (wh *Webhook) sendToWebhook(payload WebhookPayload) error {
 		return err
 	}
 	slog.Debug("response", "url", wh.url, "status", resp.Status, "headers", resp.Header, "body", string(body))
+	if resp.StatusCode >= 400 {
+		slog.Warn("response", "url", wh.url, "status", resp.Status)
+	} else {
+		slog.Info("response", "url", wh.url, "status", resp.Status)
+	}
+	if resp.StatusCode == 429 {
+		retryAfter, err := strconv.Atoi(resp.Header.Get("Retry-After"))
+		if err != nil {
+			slog.Error("failed to parse retry after. Assuming default.", "error", err)
+			retryAfter = 300
+		}
+		slog.Warn("Waiting as requested by 429 error", "retryAfter", retryAfter)
+		time.Sleep(time.Duration(retryAfter) * time.Second)
+	}
 	if resp.StatusCode >= 400 {
 		err := httpError{
 			status:  resp.StatusCode,

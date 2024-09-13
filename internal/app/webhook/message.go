@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/mmcdole/gofeed"
@@ -67,13 +68,24 @@ func newMessage(feedName string, feed *gofeed.Feed, item *gofeed.Item) (Message,
 	if err != nil {
 		return Message{}, fmt.Errorf("failed to parse description to markdown: %w", err)
 	}
+	desc, truncated := truncateString(description, embedDescriptionMaxLength)
+	if truncated {
+		slog.Warn("description was truncated", "description", description)
+	}
+	title, truncated := truncateString(item.Title, embedMaxFieldLength)
+	if truncated {
+		slog.Warn("title was truncated", "title", title)
+	}
 	em := Embed{
-		Description: truncateString(description, embedDescriptionMaxLength),
+		Description: desc,
 		Timestamp:   item.PublishedParsed.Format(time.RFC3339),
-		Title:       truncateString(item.Title, embedMaxFieldLength),
+		Title:       title,
 		URL:         item.Link,
 	}
-	em.Author.Name = truncateString(feed.Title, embedMaxFieldLength)
+	em.Author.Name, truncated = truncateString(feed.Title, embedMaxFieldLength)
+	if truncated {
+		slog.Warn("author name was truncated", "feed.Title", feed.Title)
+	}
 	em.Author.URL = feed.Link
 	if feed.Image != nil {
 		em.Author.IconURL = feed.Image.URL
@@ -115,13 +127,13 @@ func newMessageFromBytes(byt []byte) (Message, error) {
 // truncateString truncates a given string if it longer then a limit
 // and also adds an ellipsis at the end of truncated strings.
 // It returns the new string.
-func truncateString(s string, maxLen int) string {
+func truncateString(s string, maxLen int) (string, bool) {
 	if maxLen < 3 {
 		panic("Length can not be below 3")
 	}
 	runes := []rune(s)
 	if len(runes) <= maxLen {
-		return s
+		return s, false
 	}
-	return string(runes[0:maxLen-3]) + "..."
+	return string(runes[0:maxLen-3]) + "...", true
 }
