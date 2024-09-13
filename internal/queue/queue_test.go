@@ -3,7 +3,6 @@ package queue_test
 import (
 	"math/rand/v2"
 	"path/filepath"
-	"sync"
 	"testing"
 	"time"
 
@@ -158,8 +157,7 @@ func TestQueue(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		mu := sync.Mutex{}
-		results := make([]string, 0)
+		resultsC := make(chan string, len(items))
 		g := new(errgroup.Group)
 		for range 3 {
 			g.Go(func() error {
@@ -170,15 +168,17 @@ func TestQueue(t *testing.T) {
 					} else if err != nil {
 						return err
 					}
-					mu.Lock()
-					results = append(results, string(v))
-					mu.Unlock()
+					resultsC <- string(v)
 				}
 				return nil
 			})
 		}
 		if err := g.Wait(); err != nil {
 			t.Fatal(err)
+		}
+		results := make([]string, 0)
+		for len(resultsC) > 0 {
+			results = append(results, <-resultsC)
 		}
 		assert.ElementsMatch(t, results, items)
 	})
