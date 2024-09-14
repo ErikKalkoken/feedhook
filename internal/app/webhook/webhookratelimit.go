@@ -31,7 +31,7 @@ func (rl *webhookRateLimit) recordRequest() {
 	rl.s = append(rl.s, rl.clock.Now())
 }
 
-// calc reports how many request are remaining and when the current period will be reset
+// calc reports how many request are remaining and the duration until the limit will reset
 func (rl *webhookRateLimit) calc() (int, time.Duration) {
 	deadline := rl.clock.Now().Add(-webhookRateLimitPeriod)
 	s2 := make([]time.Time, 0)

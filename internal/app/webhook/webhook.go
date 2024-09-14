@@ -131,17 +131,19 @@ func (wh *Webhook) updateAPIRateLimit(h http.Header) {
 }
 
 func (wh *Webhook) sendToWebhook(payload WebhookPayload) error {
-	slog.Debug("API rate limit", "info", wh.arl)
-	if wh.arl.limitExceeded(time.Now()) {
-		w := time.Until(wh.arl.reset)
-		slog.Warn("API rate limit reached. Waiting for reset.", "duration", w)
-		time.Sleep(w)
+	if wh.arl.isSet() {
+		slog.Debug("API rate limit", "info", wh.arl)
+		if wh.arl.limitExceeded(time.Now()) {
+			retryAfter := roundUpDuration(time.Until(wh.arl.reset), time.Second)
+			slog.Warn("API rate limit reached. Waiting for reset.", "duration", retryAfter)
+			time.Sleep(retryAfter)
+		}
 	}
-	remaining, reset := wh.wrl.calc()
-	slog.Debug("Webhook rate limit", "remaining", remaining, "reset", reset)
+	remaining, retryAfter := wh.wrl.calc()
+	slog.Debug("Webhook rate limit", "remaining", remaining, "reset", retryAfter)
 	if remaining == 0 {
-		slog.Warn("Webhook rate limit reached. Waiting for reset.", "duration", reset)
-		time.Sleep(reset)
+		slog.Warn("Webhook rate limit reached. Waiting for reset.", "duration", retryAfter)
+		time.Sleep(retryAfter)
 	}
 	dat, err := json.Marshal(payload)
 	if err != nil {
