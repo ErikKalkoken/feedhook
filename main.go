@@ -19,12 +19,13 @@ import (
 )
 
 const (
-	configFilename = "config.toml"
-	dbFileName     = "feedforward.db"
+	configFilename  = "config.toml"
+	dbFileName      = "feedforward.db"
+	boltOpenTimeout = 5 * time.Second
 )
 
 // Overwritten with current tag when released
-var Version = "0.1.9"
+var Version = "0.1.10"
 
 type realtime struct{}
 
@@ -50,7 +51,7 @@ func main() {
 	}
 	slog.SetLogLoggerLevel(cfg.App.LoggerLevel())
 	p = filepath.Join(*dbPathFlag, dbFileName)
-	db, err := bolt.Open(p, 0600, nil)
+	db, err := bolt.Open(p, 0600, &bolt.Options{Timeout: boltOpenTimeout})
 	if err != nil {
 		log.Fatalf("Failed to open DB: %s", err)
 	}
