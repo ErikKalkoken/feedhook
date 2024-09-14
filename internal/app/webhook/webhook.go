@@ -18,7 +18,10 @@ import (
 	"github.com/ErikKalkoken/feedforward/internal/queue"
 )
 
-const maxAttempts = 3
+const (
+	maxAttempts                     = 3
+	retryAfterTooManyRequestDefault = 60 * time.Second
+)
 
 var converter = md.NewConverter("", true, nil)
 
@@ -46,14 +49,99 @@ type Webhook struct {
 	name   string
 	queue  *queue.Queue
 	url    string
+	arl    apiRateLimit
+	wrl    webhookRateLimit
 }
 
-func New(client *http.Client, queue *queue.Queue, name, url string) *Webhook {
+// apiRateLimit represents the official API rate limit
+// as communicated through through "X-RateLimit-" headers.
+type apiRateLimit struct {
+	limit      int
+	remaining  int
+	reset      time.Time
+	resetAfter float64
+	bucket     string
+	timestamp  time.Time
+}
+
+func (rl apiRateLimit) String() string {
+	return fmt.Sprintf(
+		"limit:%d remaining:%d reset:%s resetAfter:%f",
+		rl.limit,
+		rl.remaining,
+		rl.reset, time.Until(rl.reset).Seconds(),
+	)
+}
+
+func (rl apiRateLimit) IsSet() bool {
+	return !rl.timestamp.IsZero()
+}
+
+func (rl apiRateLimit) limitExceeded(now time.Time) bool {
+	if !rl.IsSet() {
+		return false
+	}
+	if rl.remaining > 0 {
+		return false
+	}
+	if rl.reset.Before(now) {
+		return false
+	}
+	return true
+}
+
+func rateLimitFromHeader(h http.Header) (apiRateLimit, error) {
+	var r apiRateLimit
+	var err error
+	limit := h.Get("X-RateLimit-Limit")
+	if limit == "" {
+		return r, nil
+	}
+	remaining := h.Get("X-RateLimit-Remaining")
+	if remaining == "" {
+		return r, nil
+	}
+	reset := h.Get("X-RateLimit-Reset")
+	if reset == "" {
+		return r, nil
+	}
+	resetAfter := h.Get("X-RateLimit-Reset-After")
+	if resetAfter == "" {
+		return r, nil
+	}
+	bucket := h.Get("X-RateLimit-Bucket")
+	if bucket == "" {
+		return r, nil
+	}
+	r.limit, err = strconv.Atoi(limit)
+	if err != nil {
+		return r, err
+	}
+	r.remaining, err = strconv.Atoi(remaining)
+	if err != nil {
+		return r, err
+	}
+	resetEpoch, err := strconv.Atoi(reset)
+	if err != nil {
+		return r, err
+	}
+	r.reset = time.Unix(int64(resetEpoch), 0).UTC()
+	r.resetAfter, err = strconv.ParseFloat(resetAfter, 64)
+	if err != nil {
+		return r, err
+	}
+	r.bucket = bucket
+	r.timestamp = time.Now().UTC()
+	return r, nil
+}
+
+func New(client *http.Client, queue *queue.Queue, name, url string, clock clock) *Webhook {
 	wh := &Webhook{
 		client: client,
 		name:   name,
 		queue:  queue,
 		url:    url,
+		wrl:    newWebhookRateLimit(clock),
 	}
 	return wh
 }
@@ -106,8 +194,34 @@ func (wh *Webhook) Send(feedName string, feed *gofeed.Feed, item *gofeed.Item) e
 	return wh.queue.Put(v)
 }
 
+func (wh *Webhook) updateAPIRateLimit(h http.Header) {
+	if wh.arl.remaining > 0 {
+		wh.arl.remaining--
+	}
+	rl, err := rateLimitFromHeader(h)
+	if err != nil {
+		slog.Warn("failed to parse rate limit header", "error", err)
+		return
+	}
+	if !rl.IsSet() || rl.reset == wh.arl.reset {
+		return
+	}
+	wh.arl = rl
+}
+
 func (wh *Webhook) sendToWebhook(payload WebhookPayload) error {
-	time.Sleep(1 * time.Second)
+	slog.Info("API rate limit", "info", wh.arl)
+	if wh.arl.limitExceeded(time.Now()) {
+		w := time.Until(wh.arl.reset)
+		slog.Info("API rate limit reached. Waiting for reset.", "duration", w)
+		time.Sleep(w)
+	}
+	remaining, reset := wh.wrl.calc()
+	slog.Info("Webhook rate limit", "remaining", remaining, "reset", reset)
+	if remaining == 0 {
+		slog.Info("Webhook rate limit reached. Waiting for reset.", "duration", reset)
+		time.Sleep(reset)
+	}
 	dat, err := json.Marshal(payload)
 	if err != nil {
 		return err
@@ -121,24 +235,29 @@ func (wh *Webhook) sendToWebhook(payload WebhookPayload) error {
 		return err
 	}
 	defer resp.Body.Close()
+	wh.updateAPIRateLimit(resp.Header)
+	wh.wrl.record()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
 	slog.Debug("response", "url", wh.url, "status", resp.Status, "headers", resp.Header, "body", string(body))
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode >= http.StatusBadRequest {
 		slog.Warn("response", "url", wh.url, "status", resp.Status)
 	} else {
 		slog.Info("response", "url", wh.url, "status", resp.Status)
 	}
-	if resp.StatusCode == 429 {
-		retryAfter, err := strconv.Atoi(resp.Header.Get("Retry-After"))
+	if resp.StatusCode == http.StatusTooManyRequests {
+		var retryAfter time.Duration
+		x, err := strconv.Atoi(resp.Header.Get("Retry-After"))
 		if err != nil {
-			slog.Error("failed to parse retry after. Assuming default.", "error", err)
-			retryAfter = 300
+			slog.Warn("Failed to parse retry after. Assuming default", "error", err)
+			retryAfter = retryAfterTooManyRequestDefault
+		} else {
+			retryAfter = time.Duration(x) * time.Second
 		}
-		slog.Warn("Waiting as requested by 429 error", "retryAfter", retryAfter)
-		time.Sleep(time.Duration(retryAfter) * time.Second)
+		slog.Info("429 limit reached. Waiting for reset", "retryAfter", retryAfter)
+		time.Sleep(retryAfter)
 	}
 	if resp.StatusCode >= 400 {
 		err := httpError{

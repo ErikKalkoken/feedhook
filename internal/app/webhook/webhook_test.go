@@ -15,6 +15,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type faketime struct {
+	now time.Time
+}
+
+func (rt faketime) Now() time.Time {
+	return rt.now
+}
+
 func TestWebhook(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "test.db")
 	db, err := bolt.Open(p, 0600, nil)
@@ -33,7 +41,7 @@ func TestWebhook(t *testing.T) {
 		"https://www.example.com",
 		httpmock.NewStringResponder(204, ""),
 	)
-	wh := webhook.New(http.DefaultClient, q, "dummy", "https://www.example.com")
+	wh := webhook.New(http.DefaultClient, q, "dummy", "https://www.example.com", faketime{})
 	wh.Start()
 	feed := &gofeed.Feed{Title: "title"}
 	now := time.Now()

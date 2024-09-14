@@ -70,7 +70,7 @@ func (a *App) Start() {
 		if err != nil {
 			panic(err)
 		}
-		hooks[h.Name] = webhook.New(a.client, q, h.Name, h.URL)
+		hooks[h.Name] = webhook.New(a.client, q, h.Name, h.URL, a.clock)
 		hooks[h.Name].Start()
 	}
 	// process feeds until aborted
