@@ -14,6 +14,7 @@ type clock interface {
 	Now() time.Time
 }
 
+// webhookRateLimit allows handling of the undocumented webhook rate limit
 type webhookRateLimit struct {
 	s     []time.Time
 	clock clock
@@ -25,11 +26,12 @@ func newWebhookRateLimit(clock clock) webhookRateLimit {
 	return ts
 }
 
-func (rl *webhookRateLimit) record() {
+// recordRequest records the time of a request
+func (rl *webhookRateLimit) recordRequest() {
 	rl.s = append(rl.s, rl.clock.Now())
 }
 
-// calc reports how many request are remaining and when the current period is reset
+// calc reports how many request are remaining and when the current period will be reset
 func (rl *webhookRateLimit) calc() (int, time.Duration) {
 	deadline := rl.clock.Now().Add(-webhookRateLimitPeriod)
 	s2 := make([]time.Time, 0)
@@ -47,7 +49,15 @@ func (rl *webhookRateLimit) calc() (int, time.Duration) {
 		oldest := slices.MinFunc(rl.s, func(a time.Time, b time.Time) int {
 			return a.Compare(b)
 		})
-		reset = time.Until(oldest.Add(webhookRateLimitPeriod))
+		reset = roundUpDuration(time.Until(oldest.Add(webhookRateLimitPeriod)), time.Second)
 	}
 	return remaining, reset
+}
+
+func roundUpDuration(d time.Duration, m time.Duration) time.Duration {
+	x := d.Round(m)
+	if x < d {
+		return x + m
+	}
+	return x
 }
