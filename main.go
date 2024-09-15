@@ -10,7 +10,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"slices"
-	"strings"
 	"syscall"
 	"time"
 
@@ -19,18 +18,17 @@ import (
 	"github.com/ErikKalkoken/feedforward/internal/app"
 	"github.com/ErikKalkoken/feedforward/internal/app/service"
 	"github.com/ErikKalkoken/feedforward/internal/app/storage"
+	"github.com/ErikKalkoken/feedforward/internal/consoletable"
 )
 
 const (
 	configFilename  = "config.toml"
 	dbFileName      = "feedforward.db"
 	boltOpenTimeout = 5 * time.Second
-	tableMargin     = 2
-	rowIndentation  = 4
 )
 
 // Overwritten with current tag when released
-var Version = "0.1.13"
+var Version = "0.1.14"
 
 type realtime struct{}
 
@@ -79,68 +77,6 @@ func main() {
 	<-sc
 }
 
-type consoleTable struct {
-	cells [][]any
-	title string
-}
-
-func newConsoleTable(title string) consoleTable {
-	st := consoleTable{
-		cells: make([][]any, 0),
-		title: title,
-	}
-	return st
-}
-
-func (t *consoleTable) AddRow(r []any) {
-	t.cells = append(t.cells, r)
-}
-
-func renderCell(v any) string {
-	switch x := v.(type) {
-	case string:
-		return x
-	case int:
-		return fmt.Sprintf("%d", x)
-	case time.Time:
-		return x.Format(time.RFC3339)
-	default:
-		return fmt.Sprint(v)
-	}
-}
-
-func (t *consoleTable) Print() {
-	fmt.Printf("%s:\n\n", t.title)
-	cols := make([]int, len(t.cells[0]))
-	for _, row := range t.cells {
-		for i, v := range row {
-			cols[i] = max(cols[i], len(renderCell(v)))
-		}
-	}
-	printRow := func(row []any) {
-		fmt.Print(strings.Repeat(" ", rowIndentation))
-		margin := strings.Repeat(" ", tableMargin)
-		for i, v := range row {
-			_, ok := v.(int)
-			if ok {
-				fmt.Printf("%*s%s", cols[i], renderCell(v), margin)
-			} else {
-				fmt.Printf("%-*s%s", cols[i], renderCell(v), margin)
-			}
-		}
-		fmt.Println()
-	}
-	printRow(t.cells[0])
-	h := make([]any, len(t.cells[0]))
-	for i := range len(h) {
-		h[i] = strings.Repeat("-", cols[i])
-	}
-	printRow(h)
-	for _, r := range t.cells[1:] {
-		printRow(r)
-	}
-}
-
 func printStatistics(st *storage.Storage, cfg app.MyConfig) {
 	// // Sent items
 	// fmt.Printf("feeds (%d)\n", len(cfg.Feeds))
@@ -155,7 +91,7 @@ func printStatistics(st *storage.Storage, cfg app.MyConfig) {
 	// 	}
 	// }
 	// Feed stats
-	feedsTable := newConsoleTable("Feeds")
+	feedsTable := consoletable.New("Feeds", 3)
 	feedsTable.AddRow([]any{"Name", "SentCount", "SendLast"})
 	slices.SortFunc(cfg.Feeds, func(a, b app.ConfigFeed) int {
 		return cmp.Compare(a.Name, b.Name)
@@ -172,7 +108,7 @@ func printStatistics(st *storage.Storage, cfg app.MyConfig) {
 	feedsTable.Print()
 	fmt.Println()
 	// Webhook stats
-	whTable := newConsoleTable("Webhooks")
+	whTable := consoletable.New("Webhooks", 3)
 	whTable.AddRow([]any{"Name", "SentCount", "SendLast"})
 	slices.SortFunc(cfg.Webhooks, func(a, b app.ConfigWebhook) int {
 		return cmp.Compare(a.Name, b.Name)
