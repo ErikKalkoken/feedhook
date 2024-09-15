@@ -8,7 +8,7 @@ import (
 )
 
 // apiRateLimit represents the official API rate limit
-// as communicated through through "X-RateLimit-" headers.
+// as communicated by "X-RateLimit-" response headers.
 type apiRateLimit struct {
 	limit      int
 	remaining  int

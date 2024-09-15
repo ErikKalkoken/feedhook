@@ -34,7 +34,7 @@ func init() {
 type WebhookService struct {
 	name  string
 	queue *queue.Queue
-	wh    *discordhook.Webhook
+	wh    *discordhook.DiscordWebhook
 }
 
 func NewWebhookService(client *http.Client, queue *queue.Queue, name, url string) *WebhookService {

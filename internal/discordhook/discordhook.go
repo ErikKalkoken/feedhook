@@ -16,12 +16,13 @@ const (
 	retryAfterTooManyRequestDefault = 60 * time.Second
 )
 
-type HttpError struct {
+// ErrHTTP represents a HTTP error, e.g. 400 Bad Request
+type ErrHTTP struct {
 	status  int
 	message string
 }
 
-func (e HttpError) Error() string {
+func (e ErrHTTP) Error() string {
 	return e.message
 }
 
@@ -29,7 +30,8 @@ type Clock interface {
 	Now() time.Time
 }
 
-type Webhook struct {
+// DiscordWebhook represents a Discord webhook.
+type DiscordWebhook struct {
 	client *http.Client
 	url    string
 	arl    apiRateLimit
@@ -42,8 +44,9 @@ func (rt realtime) Now() time.Time {
 	return time.Now()
 }
 
-func New(client *http.Client, url string) *Webhook {
-	wh := &Webhook{
+// New returns a new webhook.
+func New(client *http.Client, url string) *DiscordWebhook {
+	wh := &DiscordWebhook{
 		client: client,
 		url:    url,
 		wrl:    newWebhookRateLimit(realtime{}),
@@ -51,7 +54,10 @@ func New(client *http.Client, url string) *Webhook {
 	return wh
 }
 
-func (wh *Webhook) Send(payload WebhookPayload) error {
+// Send sends a payload to the webhook.
+// HTTP errors are returns as error values.
+// It will wait out http errors.
+func (wh *DiscordWebhook) Send(payload WebhookPayload) error {
 	if wh.arl.isSet() {
 		slog.Debug("API rate limit", "info", wh.arl)
 		if wh.arl.limitExceeded(time.Now()) {
@@ -104,7 +110,7 @@ func (wh *Webhook) Send(payload WebhookPayload) error {
 		time.Sleep(retryAfter)
 	}
 	if resp.StatusCode >= 400 {
-		err := HttpError{
+		err := ErrHTTP{
 			status:  resp.StatusCode,
 			message: resp.Status,
 		}
@@ -113,7 +119,7 @@ func (wh *Webhook) Send(payload WebhookPayload) error {
 	return nil
 }
 
-func (wh *Webhook) updateAPIRateLimit(h http.Header) {
+func (wh *DiscordWebhook) updateAPIRateLimit(h http.Header) {
 	if wh.arl.remaining > 0 {
 		wh.arl.remaining--
 	}
