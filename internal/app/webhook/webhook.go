@@ -67,7 +67,7 @@ func (wh *WebhookService) Start() {
 				if err == nil {
 					break
 				}
-				errRateLimit, ok := err.(discordhook.ErrRateLimited)
+				errRateLimit, ok := err.(discordhook.RateLimitedError)
 				if !ok {
 					break
 				}

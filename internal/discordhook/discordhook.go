@@ -16,13 +16,13 @@ const (
 	retryAfterTooManyRequestDefault = 60 * time.Second
 )
 
-// ErrHTTP represents a HTTP error, e.g. 400 Bad Request
-type ErrHTTP struct {
+// HTTPError represents a HTTP error, e.g. 400 Bad Request
+type HTTPError struct {
 	status  int
 	message string
 }
 
-func (e ErrHTTP) Error() string {
+func (e HTTPError) Error() string {
 	return e.message
 }
 
@@ -46,51 +46,22 @@ const (
 	BreachedRateLimit
 )
 
-type ErrRateLimited struct {
+type RateLimitedError struct {
 	RetryAfter time.Duration
 	Type       RateLimitType
 }
 
-func (e ErrRateLimited) Error() string {
+func (e RateLimitedError) Error() string {
 	return fmt.Sprintf("%s rate limited. Retry After %v", e.Type, e.RetryAfter)
 }
 
-type Clock interface {
-	Now() time.Time
-}
-
-// DiscordWebhook represents a Discord webhook.
+// DiscordWebhook represents a Discord webhook which respects rate limits.
 type DiscordWebhook struct {
 	client *http.Client
 	arl    apiRateLimit
 	brl    breachedRateLimit
 	wrl    webhookRateLimit
 	url    string
-}
-
-type breachedRateLimit struct {
-	resetAt time.Time
-}
-
-func (brl breachedRateLimit) String() string {
-	return fmt.Sprintf("resetAt: %v", brl.resetAt)
-}
-
-func (brl *breachedRateLimit) retryAfter() time.Duration {
-	if brl.resetAt.IsZero() {
-		return 0
-	}
-	d := time.Until(brl.resetAt)
-	if d < 0 {
-		brl.resetAt = time.Time{}
-	}
-	return d
-}
-
-type realtime struct{}
-
-func (rt realtime) Now() time.Time {
-	return time.Now()
 }
 
 // New returns a new webhook.
@@ -103,26 +74,32 @@ func New(client *http.Client, url string) *DiscordWebhook {
 	return wh
 }
 
+type realtime struct{}
+
+func (rt realtime) Now() time.Time {
+	return time.Now()
+}
+
 // Send sends a payload to the webhook.
 //
-// Returns ErrHTTP errors for HTTP errors.
-// And ErrRateLimited errors when a rate limit is reached or exceeded.
+// When a rate limit is exceeded or breached a RateLimitedError error is returned.
+// HTTP errors are returns as HTTPError errors.
 func (wh *DiscordWebhook) Send(payload WebhookPayload) error {
 	slog.Debug("Breached rate limit", "info", wh.brl)
 	if retryAfter := wh.brl.retryAfter(); retryAfter > 0 {
-		return ErrRateLimited{RetryAfter: retryAfter, Type: BreachedRateLimit}
+		return RateLimitedError{RetryAfter: retryAfter, Type: BreachedRateLimit}
 	}
 	if wh.arl.isSet() {
 		slog.Debug("API rate limit", "info", wh.arl)
 		if wh.arl.limitExceeded(time.Now()) {
 			retryAfter := roundUpDuration(time.Until(wh.arl.resetAt), time.Second)
-			return ErrRateLimited{RetryAfter: retryAfter, Type: APIRateLimit}
+			return RateLimitedError{RetryAfter: retryAfter, Type: APIRateLimit}
 		}
 	}
 	remaining, retryAfter := wh.wrl.calc()
 	slog.Debug("Webhook rate limit", "remaining", remaining, "reset", retryAfter)
 	if remaining == 0 {
-		return ErrRateLimited{RetryAfter: retryAfter, Type: WebhookRateLimit}
+		return RateLimitedError{RetryAfter: retryAfter, Type: WebhookRateLimit}
 	}
 	dat, err := json.Marshal(payload)
 	if err != nil {
@@ -158,10 +135,10 @@ func (wh *DiscordWebhook) Send(payload WebhookPayload) error {
 		} else {
 			retryAfter = time.Duration(x) * time.Second
 		}
-		return ErrRateLimited{RetryAfter: retryAfter, Type: BreachedRateLimit}
+		return RateLimitedError{RetryAfter: retryAfter, Type: BreachedRateLimit}
 	}
 	if resp.StatusCode >= 400 {
-		err := ErrHTTP{
+		err := HTTPError{
 			status:  resp.StatusCode,
 			message: resp.Status,
 		}
