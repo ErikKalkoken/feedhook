@@ -15,26 +15,26 @@ const (
 	maxAttempts = 3
 )
 
-// A WebhookClient handles posting messages to webhooks.
+// A Webhook handles posting messages to webhooks.
 // Messages are kept in a permanent queue and do not disappear after a restart.
 // Failed messages are automatically retried and rate limits are respected.
-type WebhookClient struct {
+type Webhook struct {
 	name  string
 	queue *queue.Queue
-	wh    *discordhook.DiscordWebhook
+	dwh   *discordhook.DiscordWebhook
 }
 
-func NewWebhookClient(httpClient *http.Client, queue *queue.Queue, name, url string) *WebhookClient {
-	wc := &WebhookClient{
+func NewWebhook(httpClient *http.Client, queue *queue.Queue, name, url string) *Webhook {
+	wc := &Webhook{
 		name:  name,
 		queue: queue,
-		wh:    discordhook.New(httpClient, url),
+		dwh:   discordhook.New(httpClient, url),
 	}
 	return wc
 }
 
 // Start starts the service.
-func (wc *WebhookClient) Start() {
+func (wc *Webhook) Start() {
 	go func() {
 		slog.Info("Started webhook", "name", wc.name, "queued", wc.queue.Size())
 		for {
@@ -45,11 +45,15 @@ func (wc *WebhookClient) Start() {
 			}
 			m, err := newMessageFromBytes(v)
 			if err != nil {
-				slog.Error("Failed to de-serialize payload", "error", err, "data", string(v))
+				slog.Error("Failed to de-serialize message", "error", err, "data", string(v))
 				continue
 			}
+			pl, err := m.Item.ToDiscordPayload()
+			if err != nil {
+				slog.Error("Failed to convert message to payload", "error", err, "data", string(v))
+			}
 			for {
-				err = wc.wh.Send(m.Payload)
+				err = wc.dwh.Send(pl)
 				if err == nil {
 					break
 				}
@@ -77,13 +81,13 @@ func (wc *WebhookClient) Start() {
 				}
 				continue
 			}
-			slog.Info("Posted item", "webhook", wc.name, "feed", m.Feed, "title", m.Title, "queued", wc.queue.Size())
+			slog.Info("Posted item", "webhook", wc.name, "feed", m.Item.FeedName, "title", m.Item.Title, "queued", wc.queue.Size())
 		}
 	}()
 }
 
 // Add adds a new message for being send to to webhook
-func (wc *WebhookClient) Add(feedName string, feed *gofeed.Feed, item *gofeed.Item) error {
+func (wc *Webhook) Add(feedName string, feed *gofeed.Feed, item *gofeed.Item) error {
 	p, err := newMessage(feedName, feed, item)
 	if err != nil {
 		return err

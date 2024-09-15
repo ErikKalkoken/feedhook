@@ -33,7 +33,7 @@ func TestWebhook(t *testing.T) {
 		"https://www.example.com",
 		httpmock.NewStringResponder(204, ""),
 	)
-	wh := service.NewWebhookClient(http.DefaultClient, q, "dummy", "https://www.example.com")
+	wh := service.NewWebhook(http.DefaultClient, q, "dummy", "https://www.example.com")
 	wh.Start()
 	feed := &gofeed.Feed{Title: "title"}
 	now := time.Now()

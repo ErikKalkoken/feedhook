@@ -63,13 +63,13 @@ func (s *Service) Close() {
 // User should call Close() subsequently to shut down the loop gracefully and free resources.
 func (s *Service) Start() {
 	// Create and start webhooks
-	hooks := make(map[string]*WebhookClient)
+	hooks := make(map[string]*Webhook)
 	for _, h := range s.cfg.Webhooks {
 		q, err := queue.New(s.st.DB(), h.Name)
 		if err != nil {
 			panic(err)
 		}
-		hooks[h.Name] = NewWebhookClient(s.client, q, h.Name, h.URL)
+		hooks[h.Name] = NewWebhook(s.client, q, h.Name, h.URL)
 		hooks[h.Name].Start()
 	}
 	// process feeds until aborted
@@ -111,7 +111,7 @@ func (s *Service) Start() {
 }
 
 // processFeed processes a configured feed.
-func (s *Service) processFeed(cf app.ConfigFeed, hook *WebhookClient) error {
+func (s *Service) processFeed(cf app.ConfigFeed, hook *Webhook) error {
 	feed, err := s.fp.ParseURL(cf.URL)
 	if err != nil {
 		return fmt.Errorf("failed to parse URL for feed %s: %w ", cf.Name, err)

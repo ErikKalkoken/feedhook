@@ -3,99 +3,48 @@ package service
 import (
 	"bytes"
 	"encoding/gob"
-	"fmt"
-	"log/slog"
 	"time"
 
-	"github.com/ErikKalkoken/feedforward/internal/discordhook"
-	md "github.com/JohannesKaufmann/html-to-markdown"
-	"github.com/PuerkitoBio/goquery"
 	"github.com/mmcdole/gofeed"
 )
 
-const (
-	// contentMaxLength = 2000
-	embedMaxFieldLength       = 256 // title, author name, field names
-	embedDescriptionMaxLength = 4096
-)
-
-var converter = md.NewConverter("", true, nil)
-
-func init() {
-	x := md.Rule{
-		Filter: []string{"img"},
-		Replacement: func(_ string, _ *goquery.Selection, _ *md.Options) *string {
-			return md.String("")
-		},
-	}
-	converter.AddRules(x)
-}
-
-// Message represents an item that can be queued and contains the payload to be sent and header information.
+// Message represents a wrapper around a feed item with additional header information for queue processing.
 type Message struct {
-	Title     string
-	Feed      string
-	Timestamp time.Time
 	Attempt   int
-	Payload   discordhook.WebhookPayload
+	Item      FeedItem
+	Timestamp time.Time
 }
 
 // newMessage returns a new message from a feed item.
 func newMessage(feedName string, feed *gofeed.Feed, item *gofeed.Item) (Message, error) {
 	var description string
-	var err error
 	if item.Content != "" {
-		description, err = converter.ConvertString(item.Content)
+		description = item.Content
 	} else {
-		description, err = converter.ConvertString(item.Description)
+		description = item.Description
 	}
-	if err != nil {
-		return Message{}, fmt.Errorf("failed to parse description to markdown: %w", err)
+	fi := FeedItem{
+		Description: description,
+		FeedName:    feedName,
+		FeedTitle:   feed.Title,
+		FeedURL:     feed.Link,
+		ItemURL:     item.Link,
+		Title:       item.Title,
 	}
-	desc, truncated := truncateString(description, embedDescriptionMaxLength)
-	if truncated {
-		slog.Warn("description was truncated", "description", description)
+	if item.PublishedParsed != nil {
+		fi.Published = *item.PublishedParsed
 	}
-	title, truncated := truncateString(item.Title, embedMaxFieldLength)
-	if truncated {
-		slog.Warn("title was truncated", "title", title)
-	}
-	em := discordhook.Embed{
-		Description: desc,
-		Timestamp:   item.PublishedParsed.Format(time.RFC3339),
-		Title:       title,
-		URL:         item.Link,
-	}
-	em.Author.Name, truncated = truncateString(feed.Title, embedMaxFieldLength)
-	if truncated {
-		slog.Warn("author name was truncated", "feed.Title", feed.Title)
-	}
-	em.Author.URL = feed.Link
 	if feed.Image != nil {
-		em.Author.IconURL = feed.Image.URL
+		fi.IconURL = feed.Image.URL
 	}
 	if item.Image != nil {
-		em.Image.URL = item.Image.URL
-	}
-	wpl := discordhook.WebhookPayload{
-		Embeds: []discordhook.Embed{em},
+		fi.ImageURL = item.Image.URL
 	}
 	m := Message{
-		Feed:      feedName,
-		Title:     item.Title,
 		Timestamp: time.Now().UTC(),
-		Payload:   wpl,
+		Item:      fi,
 	}
 	return m, nil
-}
-
-func (m Message) toBytes() ([]byte, error) {
-	b := bytes.Buffer{}
-	e := gob.NewEncoder(&b)
-	if err := e.Encode(m); err != nil {
-		return nil, err
-	}
-	return b.Bytes(), nil
 }
 
 func newMessageFromBytes(byt []byte) (Message, error) {
@@ -108,16 +57,11 @@ func newMessageFromBytes(byt []byte) (Message, error) {
 	return m, nil
 }
 
-// truncateString truncates a given string if it longer then a limit
-// and also adds an ellipsis at the end of truncated strings.
-// It returns the new string.
-func truncateString(s string, maxLen int) (string, bool) {
-	if maxLen < 3 {
-		panic("Length can not be below 3")
+func (m Message) toBytes() ([]byte, error) {
+	b := bytes.Buffer{}
+	e := gob.NewEncoder(&b)
+	if err := e.Encode(m); err != nil {
+		return nil, err
 	}
-	runes := []rune(s)
-	if len(runes) <= maxLen {
-		return s, false
-	}
-	return string(runes[0:maxLen-3]) + "...", true
+	return b.Bytes(), nil
 }
