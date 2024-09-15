@@ -21,7 +21,7 @@ func TestRateLimit(t *testing.T) {
 		if assert.NoError(t, err) {
 			assert.Equal(t, 5, rl.limit)
 			assert.Equal(t, 1, rl.remaining)
-			assert.Equal(t, time.Date(2016, 8, 2, 21, 23, 43, 0, time.UTC), rl.reset)
+			assert.Equal(t, time.Date(2016, 8, 2, 21, 23, 43, 0, time.UTC), rl.resetAt)
 			assert.Equal(t, 1.2, rl.resetAfter)
 			assert.Equal(t, "abcd1234", rl.bucket)
 		}
@@ -30,7 +30,7 @@ func TestRateLimit(t *testing.T) {
 		header := http.Header{}
 		rl, err := rateLimitFromHeader(header)
 		if assert.NoError(t, err) {
-			assert.True(t, rl.reset.IsZero())
+			assert.True(t, rl.resetAt.IsZero())
 		}
 	})
 }
@@ -42,8 +42,8 @@ func TestRateLimitWait(t *testing.T) {
 	}{
 		{apiRateLimit{}, false},
 		{apiRateLimit{timestamp: now, remaining: 1}, false},
-		{apiRateLimit{timestamp: now, remaining: 0, reset: now.Add(-5 * time.Second)}, false},
-		{apiRateLimit{timestamp: now, remaining: 0, reset: now.Add(5 * time.Second)}, true},
+		{apiRateLimit{timestamp: now, remaining: 0, resetAt: now.Add(-5 * time.Second)}, false},
+		{apiRateLimit{timestamp: now, remaining: 0, resetAt: now.Add(5 * time.Second)}, true},
 	}
 	for i, tc := range cases {
 		t.Run(fmt.Sprintf("case %d", i+1), func(t *testing.T) {

@@ -12,7 +12,7 @@ import (
 type apiRateLimit struct {
 	limit      int
 	remaining  int
-	reset      time.Time
+	resetAt    time.Time
 	resetAfter float64
 	bucket     string
 	timestamp  time.Time
@@ -23,7 +23,7 @@ func (rl apiRateLimit) String() string {
 		"limit:%d remaining:%d reset:%s resetAfter:%f",
 		rl.limit,
 		rl.remaining,
-		rl.reset, time.Until(rl.reset).Seconds(),
+		rl.resetAt, time.Until(rl.resetAt).Seconds(),
 	)
 }
 
@@ -38,7 +38,7 @@ func (rl apiRateLimit) limitExceeded(now time.Time) bool {
 	if rl.remaining > 0 {
 		return false
 	}
-	if rl.reset.Before(now) {
+	if rl.resetAt.Before(now) {
 		return false
 	}
 	return true
@@ -79,7 +79,7 @@ func rateLimitFromHeader(h http.Header) (apiRateLimit, error) {
 	if err != nil {
 		return r, err
 	}
-	r.reset = time.Unix(int64(resetEpoch), 0).UTC()
+	r.resetAt = time.Unix(int64(resetEpoch), 0).UTC()
 	r.resetAfter, err = strconv.ParseFloat(resetAfter, 64)
 	if err != nil {
 		return r, err

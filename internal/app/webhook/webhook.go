@@ -3,6 +3,7 @@ package webhook
 import (
 	"log/slog"
 	"net/http"
+	"time"
 
 	md "github.com/JohannesKaufmann/html-to-markdown"
 	"github.com/PuerkitoBio/goquery"
@@ -61,7 +62,19 @@ func (wh *WebhookService) Start() {
 				slog.Error("Failed to de-serialize payload", "error", err, "data", string(v))
 				continue
 			}
-			if err := wh.wh.Send(m.Payload); err != nil {
+			for {
+				err = wh.wh.Send(m.Payload)
+				if err == nil {
+					break
+				}
+				errRateLimit, ok := err.(discordhook.ErrRateLimited)
+				if !ok {
+					break
+				}
+				slog.Warn("rate limited", "type", errRateLimit.Type, "retryAfter", errRateLimit.RetryAfter)
+				time.Sleep(errRateLimit.RetryAfter)
+			}
+			if err != nil {
 				m.Attempt++
 				slog.Error("Failed to send to webhook", "error", err, "attempt", m.Attempt)
 				if m.Attempt == maxAttempts {
