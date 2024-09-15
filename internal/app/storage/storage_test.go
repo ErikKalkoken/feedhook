@@ -111,29 +111,35 @@ func TestStats(t *testing.T) {
 	if err := st.Init(); err != nil {
 		t.Fatalf("Failed to init: %s", err)
 	}
-	t.Run("should return empty feed stats", func(t *testing.T) {
+	t.Run("can update and read feed stats", func(t *testing.T) {
 		if err := st.ClearFeeds(); err != nil {
 			t.Fatal(err)
 		}
-		got, err := st.GetFeedStats("feed1")
-		if assert.NoError(t, err) {
-			want := &app.FeedStats{
-				Name: "feed1",
-			}
-			assert.Equal(t, want, got)
-		}
-	})
-	t.Run("should update feed stats with data", func(t *testing.T) {
-		if err := st.ClearFeeds(); err != nil {
-			t.Fatal(err)
-		}
-		err := st.RecordReceivedItem("feed1")
+		err := st.UpdateFeedStats("feed1", func(fs *app.FeedStats) error {
+			fs.ReceivedCount++
+			return nil
+		})
 		if assert.NoError(t, err) {
 			got, err := st.GetFeedStats("feed1")
 			if assert.NoError(t, err) {
 				assert.Equal(t, "feed1", got.Name)
 				assert.Equal(t, 1, got.ReceivedCount)
-				assert.WithinRange(t, got.ReceivedLast, time.Now().Add(-5*time.Second), time.Now().Add(+5*time.Second))
+			}
+		}
+	})
+	t.Run("can update and read webhook stats", func(t *testing.T) {
+		if err := st.ClearFeeds(); err != nil {
+			t.Fatal(err)
+		}
+		err := st.UpdateWebhookStats("hook1", func(fs *app.WebhookStats) error {
+			fs.SentCount++
+			return nil
+		})
+		if assert.NoError(t, err) {
+			got, err := st.GetWebhookStats("hook1")
+			if assert.NoError(t, err) {
+				assert.Equal(t, "hook1", got.Name)
+				assert.Equal(t, 1, got.SentCount)
 			}
 		}
 	})

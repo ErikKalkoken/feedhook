@@ -132,12 +132,22 @@ func (s *Service) processFeed(cf app.ConfigFeed, hook *Webhook) error {
 		}
 		if err := hook.Add(cf.Name, feed, item); err != nil {
 			slog.Error("Failed to add item to send queue", "feed", cf.Name, "error", "err")
+			if err := s.st.UpdateFeedStats(cf.Name, func(fs *app.FeedStats) error {
+				fs.ErrorCount++
+				return nil
+			}); err != nil {
+				slog.Error("failed to update feed stats", "name", cf.Name, "error", err)
+			}
 			continue
 		}
 		if err := s.st.RecordItem(cf, item); err != nil {
 			return fmt.Errorf("failed to record item: %w", err)
 		}
-		if err := s.st.RecordReceivedItem(cf.Name); err != nil {
+		if err := s.st.UpdateFeedStats(cf.Name, func(fs *app.FeedStats) error {
+			fs.ReceivedCount++
+			fs.ReceivedLast = time.Now().UTC()
+			return nil
+		}); err != nil {
 			slog.Error("failed to update feed stats", "name", cf.Name, "error", err)
 		}
 		slog.Info("Received item", "feed", cf.Name, "webhook", cf.Webhook, "title", item.Title)

@@ -1,7 +1,6 @@
 package service_test
 
 import (
-	"log"
 	"path/filepath"
 	"testing"
 	"time"
@@ -39,7 +38,7 @@ func TestService(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "test.db")
 	db, err := bolt.Open(p, 0600, nil)
 	if err != nil {
-		log.Fatalf("Failed to open DB: %s", err)
+		t.Fatalf("Failed to open DB: %s", err)
 	}
 	defer db.Close()
 	cfg := app.MyConfig{
@@ -49,7 +48,7 @@ func TestService(t *testing.T) {
 	}
 	st := storage.New(db, cfg)
 	if err := st.Init(); err != nil {
-		log.Fatalf("Failed to init: %s", err)
+		t.Fatalf("Failed to init: %s", err)
 	}
 	s := service.NewService(st, cfg, faketime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
 	s.Start()
@@ -58,4 +57,8 @@ func TestService(t *testing.T) {
 	info := httpmock.GetCallCountInfo()
 	assert.Equal(t, 1, info["POST https://www.example.com/hook"])
 	assert.LessOrEqual(t, 1, info["GET https://www.example.com/feed"])
+	fs, err := st.GetFeedStats("feed1")
+	if assert.NoError(t, err) {
+		assert.Equal(t, 1, fs.ReceivedCount)
+	}
 }

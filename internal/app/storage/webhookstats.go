@@ -3,13 +3,13 @@ package storage
 import (
 	"bytes"
 	"encoding/gob"
-	"time"
 
 	"github.com/ErikKalkoken/feedforward/internal/app"
 	bolt "go.etcd.io/bbolt"
 )
 
-func (st *Storage) RecordMessageSent(name string) error {
+// UpdateWebhookStats executes a function that updates the stats for webhook by name.
+func (st *Storage) UpdateWebhookStats(name string, f func(ws *app.WebhookStats) error) error {
 	err := st.db.Update(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketStats))
 		b := root.Bucket([]byte(bucketWebhooks))
@@ -24,8 +24,9 @@ func (st *Storage) RecordMessageSent(name string) error {
 		} else {
 			fs = &app.WebhookStats{Name: name}
 		}
-		fs.SentCount++
-		fs.SentLast = time.Now().UTC()
+		if err := f(fs); err != nil {
+			return err
+		}
 		v, err = dbFromWebhookStats(fs)
 		if err != nil {
 			return err

@@ -29,6 +29,9 @@ func TestWebhook(t *testing.T) {
 		t.Fatalf("Failed to create queue: %s", err)
 	}
 	st := storage.New(db, app.MyConfig{})
+	if err := st.Init(); err != nil {
+		t.Fatalf("Failed to init: %s", err)
+	}
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	httpmock.RegisterResponder(
@@ -45,5 +48,9 @@ func TestWebhook(t *testing.T) {
 	time.Sleep(2 * time.Second)
 	if assert.NoError(t, err) {
 		assert.Equal(t, 1, httpmock.GetTotalCallCount())
+	}
+	ws, err := st.GetWebhookStats("dummy")
+	if assert.NoError(t, err) {
+		assert.Equal(t, 1, ws.SentCount)
 	}
 }

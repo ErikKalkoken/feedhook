@@ -3,13 +3,13 @@ package storage
 import (
 	"bytes"
 	"encoding/gob"
-	"time"
 
 	"github.com/ErikKalkoken/feedforward/internal/app"
 	bolt "go.etcd.io/bbolt"
 )
 
-func (st *Storage) RecordReceivedItem(name string) error {
+// UpdateFeedStats executes a function that updates the stats for feed by name.
+func (st *Storage) UpdateFeedStats(name string, f func(fs *app.FeedStats) error) error {
 	err := st.db.Update(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketStats))
 		b := root.Bucket([]byte(bucketFeeds))
@@ -24,8 +24,9 @@ func (st *Storage) RecordReceivedItem(name string) error {
 		} else {
 			fs = &app.FeedStats{Name: name}
 		}
-		fs.ReceivedCount++
-		fs.ReceivedLast = time.Now().UTC()
+		if err := f(fs); err != nil {
+			return err
+		}
 		v, err = dbFromFeedStats(fs)
 		if err != nil {
 			return err
@@ -35,6 +36,7 @@ func (st *Storage) RecordReceivedItem(name string) error {
 	return err
 }
 
+// GetFeedStats returns the stats for a feed.
 func (st *Storage) GetFeedStats(name string) (*app.FeedStats, error) {
 	fs := &app.FeedStats{Name: name}
 	err := st.db.View(func(tx *bolt.Tx) error {

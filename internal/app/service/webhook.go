@@ -7,6 +7,7 @@ import (
 
 	"github.com/mmcdole/gofeed"
 
+	"github.com/ErikKalkoken/feedforward/internal/app"
 	"github.com/ErikKalkoken/feedforward/internal/app/storage"
 	"github.com/ErikKalkoken/feedforward/internal/discordhook"
 	"github.com/ErikKalkoken/feedforward/internal/queue"
@@ -70,6 +71,12 @@ func (wh *Webhook) Start() {
 			if err != nil {
 				m.Attempt++
 				slog.Error("Failed to send to webhook", "error", err, "attempt", m.Attempt)
+				if err := wh.st.UpdateWebhookStats(wh.name, func(ws *app.WebhookStats) error {
+					ws.ErrorCount++
+					return nil
+				}); err != nil {
+					slog.Error("failed to update webhook stats", "name", wh.name, "error", err)
+				}
 				if m.Attempt == maxAttempts {
 					slog.Error("Discarding message after too many attempts")
 					continue
@@ -84,7 +91,11 @@ func (wh *Webhook) Start() {
 				}
 				continue
 			}
-			if err := wh.st.RecordMessageSent(wh.name); err != nil {
+			if err := wh.st.UpdateWebhookStats(wh.name, func(ws *app.WebhookStats) error {
+				ws.SentCount++
+				ws.SentLast = time.Now().UTC()
+				return nil
+			}); err != nil {
 				slog.Error("failed to update webhook stats", "name", wh.name, "error", err)
 			}
 			slog.Info("Posted item", "webhook", wh.name, "feed", m.Item.FeedName, "title", m.Item.Title, "queued", wh.queue.Size())

@@ -28,7 +28,7 @@ const (
 )
 
 // Overwritten with current tag when released
-var Version = "0.1.14"
+var Version = "0.1.15"
 
 type realtime struct{}
 
@@ -78,21 +78,9 @@ func main() {
 }
 
 func printStatistics(st *storage.Storage, cfg app.MyConfig) {
-	// // Sent items
-	// fmt.Printf("feeds (%d)\n", len(cfg.Feeds))
-	// for _, cf := range cfg.Feeds {
-	// 	items, err := st.ListItems(cf.Name)
-	// 	if err != nil {
-	// 		log.Fatal(err)
-	// 	}
-	// 	fmt.Printf("    %s (%d)\n", cf.Name, len(items))
-	// 	for _, i := range items {
-	// 		fmt.Printf("        %s | %s\n", i.Published, i.ID)
-	// 	}
-	// }
 	// Feed stats
-	feedsTable := consoletable.New("Feeds", 5)
-	feedsTable.AddRow([]any{"Name", "Hook", "ReceivedCount", "ReceivedLast", "Enabled"})
+	feedsTable := consoletable.New("Feeds", 6)
+	feedsTable.AddRow([]any{"Name", "Hook", "ReceivedCount", "ReceivedLast", "ErrorCount", "Enabled"})
 	slices.SortFunc(cfg.Feeds, func(a, b app.ConfigFeed) int {
 		return cmp.Compare(a.Name, b.Name)
 	})
@@ -103,13 +91,13 @@ func printStatistics(st *storage.Storage, cfg app.MyConfig) {
 		} else if err != nil {
 			log.Fatal(err)
 		}
-		feedsTable.AddRow([]any{o.Name, cf.Webhook, o.ReceivedCount, o.ReceivedLast, !cf.Disabled})
+		feedsTable.AddRow([]any{o.Name, cf.Webhook, o.ReceivedCount, o.ReceivedLast, o.ErrorCount, !cf.Disabled})
 	}
 	feedsTable.Print()
 	fmt.Println()
 	// Webhook stats
-	whTable := consoletable.New("Webhooks", 3)
-	whTable.AddRow([]any{"Name", "SentCount", "SendLast"})
+	whTable := consoletable.New("Webhooks", 4)
+	whTable.AddRow([]any{"Name", "SentCount", "SendLast", "ErrorCount"})
 	slices.SortFunc(cfg.Webhooks, func(a, b app.ConfigWebhook) int {
 		return cmp.Compare(a.Name, b.Name)
 	})
@@ -120,7 +108,7 @@ func printStatistics(st *storage.Storage, cfg app.MyConfig) {
 		} else if err != nil {
 			log.Fatal(err)
 		}
-		whTable.AddRow([]any{o.Name, o.SentCount, o.SentLast})
+		whTable.AddRow([]any{o.Name, o.SentCount, o.SentLast, o.ErrorCount})
 	}
 	whTable.Print()
 }
