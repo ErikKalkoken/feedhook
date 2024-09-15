@@ -9,7 +9,7 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-func (st *Storage) UpdateWebhookStats(name string) error {
+func (st *Storage) RecordMessageSent(name string) error {
 	err := st.db.Update(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketStats))
 		b := root.Bucket([]byte(bucketWebhooks))

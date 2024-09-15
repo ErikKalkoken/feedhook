@@ -7,6 +7,7 @@ import (
 
 	"github.com/mmcdole/gofeed"
 
+	"github.com/ErikKalkoken/feedforward/internal/app/storage"
 	"github.com/ErikKalkoken/feedforward/internal/discordhook"
 	"github.com/ErikKalkoken/feedforward/internal/queue"
 )
@@ -19,26 +20,28 @@ const (
 // Messages are kept in a permanent queue and do not disappear after a restart.
 // Failed messages are automatically retried and rate limits are respected.
 type Webhook struct {
+	dwh   *discordhook.DiscordWebhook
 	name  string
 	queue *queue.Queue
-	dwh   *discordhook.DiscordWebhook
+	st    *storage.Storage
 }
 
-func NewWebhook(httpClient *http.Client, queue *queue.Queue, name, url string) *Webhook {
-	wc := &Webhook{
+func NewWebhook(httpClient *http.Client, queue *queue.Queue, name, url string, st *storage.Storage) *Webhook {
+	wh := &Webhook{
+		dwh:   discordhook.New(httpClient, url),
 		name:  name,
 		queue: queue,
-		dwh:   discordhook.New(httpClient, url),
+		st:    st,
 	}
-	return wc
+	return wh
 }
 
 // Start starts the service.
-func (wc *Webhook) Start() {
+func (wh *Webhook) Start() {
 	go func() {
-		slog.Info("Started webhook", "name", wc.name, "queued", wc.queue.Size())
+		slog.Info("Started webhook", "name", wh.name, "queued", wh.queue.Size())
 		for {
-			v, err := wc.queue.Get()
+			v, err := wh.queue.Get()
 			if err != nil {
 				slog.Error("Failed to read from queue", "error", err)
 				continue
@@ -53,7 +56,7 @@ func (wc *Webhook) Start() {
 				slog.Error("Failed to convert message to payload", "error", err, "data", string(v))
 			}
 			for {
-				err = wc.dwh.Send(pl)
+				err = wh.dwh.Send(pl)
 				if err == nil {
 					break
 				}
@@ -76,18 +79,21 @@ func (wc *Webhook) Start() {
 					slog.Error("Failed to serialize message after failure", "error", err)
 					continue
 				}
-				if err := wc.queue.Put(v); err != nil {
+				if err := wh.queue.Put(v); err != nil {
 					slog.Error("Failed to enqueue message after failure", "error", err)
 				}
 				continue
 			}
-			slog.Info("Posted item", "webhook", wc.name, "feed", m.Item.FeedName, "title", m.Item.Title, "queued", wc.queue.Size())
+			if err := wh.st.RecordMessageSent(wh.name); err != nil {
+				slog.Error("failed to update webhook stats", "name", wh.name, "error", err)
+			}
+			slog.Info("Posted item", "webhook", wh.name, "feed", m.Item.FeedName, "title", m.Item.Title, "queued", wh.queue.Size())
 		}
 	}()
 }
 
 // Add adds a new message for being send to to webhook
-func (wc *Webhook) Add(feedName string, feed *gofeed.Feed, item *gofeed.Item) error {
+func (wh *Webhook) Add(feedName string, feed *gofeed.Feed, item *gofeed.Item) error {
 	p, err := newMessage(feedName, feed, item)
 	if err != nil {
 		return err
@@ -96,5 +102,5 @@ func (wc *Webhook) Add(feedName string, feed *gofeed.Feed, item *gofeed.Item) er
 	if err != nil {
 		return err
 	}
-	return wc.queue.Put(v)
+	return wh.queue.Put(v)
 }

@@ -9,7 +9,7 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-func (st *Storage) UpdateFeedStats(name string) error {
+func (st *Storage) RecordReceivedItem(name string) error {
 	err := st.db.Update(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketStats))
 		b := root.Bucket([]byte(bucketFeeds))
@@ -24,8 +24,8 @@ func (st *Storage) UpdateFeedStats(name string) error {
 		} else {
 			fs = &app.FeedStats{Name: name}
 		}
-		fs.SentCount++
-		fs.SentLast = time.Now().UTC()
+		fs.ReceivedCount++
+		fs.ReceivedLast = time.Now().UTC()
 		v, err = dbFromFeedStats(fs)
 		if err != nil {
 			return err

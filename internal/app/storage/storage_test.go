@@ -127,13 +127,13 @@ func TestStats(t *testing.T) {
 		if err := st.ClearFeeds(); err != nil {
 			t.Fatal(err)
 		}
-		err := st.UpdateFeedStats("feed1")
+		err := st.RecordReceivedItem("feed1")
 		if assert.NoError(t, err) {
 			got, err := st.GetFeedStats("feed1")
 			if assert.NoError(t, err) {
 				assert.Equal(t, "feed1", got.Name)
-				assert.Equal(t, 1, got.SentCount)
-				assert.WithinRange(t, got.SentLast, time.Now().Add(-5*time.Second), time.Now().Add(+5*time.Second))
+				assert.Equal(t, 1, got.ReceivedCount)
+				assert.WithinRange(t, got.ReceivedLast, time.Now().Add(-5*time.Second), time.Now().Add(+5*time.Second))
 			}
 		}
 	})

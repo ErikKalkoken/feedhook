@@ -91,8 +91,8 @@ func printStatistics(st *storage.Storage, cfg app.MyConfig) {
 	// 	}
 	// }
 	// Feed stats
-	feedsTable := consoletable.New("Feeds", 3)
-	feedsTable.AddRow([]any{"Name", "SentCount", "SendLast"})
+	feedsTable := consoletable.New("Feeds", 5)
+	feedsTable.AddRow([]any{"Name", "Hook", "ReceivedCount", "ReceivedLast", "Enabled"})
 	slices.SortFunc(cfg.Feeds, func(a, b app.ConfigFeed) int {
 		return cmp.Compare(a.Name, b.Name)
 	})
@@ -103,7 +103,7 @@ func printStatistics(st *storage.Storage, cfg app.MyConfig) {
 		} else if err != nil {
 			log.Fatal(err)
 		}
-		feedsTable.AddRow([]any{o.Name, o.SentCount, o.SentLast})
+		feedsTable.AddRow([]any{o.Name, cf.Webhook, o.ReceivedCount, o.ReceivedLast, !cf.Disabled})
 	}
 	feedsTable.Print()
 	fmt.Println()

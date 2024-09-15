@@ -8,7 +8,9 @@ import (
 
 	bolt "go.etcd.io/bbolt"
 
+	"github.com/ErikKalkoken/feedforward/internal/app"
 	"github.com/ErikKalkoken/feedforward/internal/app/service"
+	"github.com/ErikKalkoken/feedforward/internal/app/storage"
 	"github.com/ErikKalkoken/feedforward/internal/queue"
 	"github.com/jarcoal/httpmock"
 	"github.com/mmcdole/gofeed"
@@ -26,6 +28,7 @@ func TestWebhook(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create queue: %s", err)
 	}
+	st := storage.New(db, app.MyConfig{})
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	httpmock.RegisterResponder(
@@ -33,7 +36,7 @@ func TestWebhook(t *testing.T) {
 		"https://www.example.com",
 		httpmock.NewStringResponder(204, ""),
 	)
-	wh := service.NewWebhook(http.DefaultClient, q, "dummy", "https://www.example.com")
+	wh := service.NewWebhook(http.DefaultClient, q, "dummy", "https://www.example.com", st)
 	wh.Start()
 	feed := &gofeed.Feed{Title: "title"}
 	now := time.Now()

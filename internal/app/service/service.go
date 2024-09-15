@@ -69,7 +69,7 @@ func (s *Service) Start() {
 		if err != nil {
 			panic(err)
 		}
-		hooks[h.Name] = NewWebhook(s.client, q, h.Name, h.URL)
+		hooks[h.Name] = NewWebhook(s.client, q, h.Name, h.URL, s.st)
 		hooks[h.Name].Start()
 	}
 	// process feeds until aborted
@@ -137,11 +137,8 @@ func (s *Service) processFeed(cf app.ConfigFeed, hook *Webhook) error {
 		if err := s.st.RecordItem(cf, item); err != nil {
 			return fmt.Errorf("failed to record item: %w", err)
 		}
-		if err := s.st.UpdateFeedStats(cf.Name); err != nil {
+		if err := s.st.RecordReceivedItem(cf.Name); err != nil {
 			slog.Error("failed to update feed stats", "name", cf.Name, "error", err)
-		}
-		if err := s.st.UpdateWebhookStats(cf.Webhook); err != nil {
-			slog.Error("failed to update webhook stats", "name", cf.Webhook, "error", err)
 		}
 		slog.Info("Received item", "feed", cf.Name, "webhook", cf.Webhook, "title", item.Title)
 	}
