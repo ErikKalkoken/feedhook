@@ -64,13 +64,13 @@ func (a *App) Close() {
 // User should call Close() subsequently to shut down the loop gracefully and free resources.
 func (a *App) Start() {
 	// Create and start webhooks
-	hooks := make(map[string]*webhook.Webhook)
+	hooks := make(map[string]*webhook.WebhookService)
 	for _, h := range a.cfg.Webhooks {
 		q, err := queue.New(a.st.DB(), h.Name)
 		if err != nil {
 			panic(err)
 		}
-		hooks[h.Name] = webhook.New(a.client, q, h.Name, h.URL, a.clock)
+		hooks[h.Name] = webhook.NewWebhookService(a.client, q, h.Name, h.URL)
 		hooks[h.Name].Start()
 	}
 	// process feeds until aborted
@@ -112,7 +112,7 @@ func (a *App) Start() {
 }
 
 // processFeed processes a configured feed.
-func (a *App) processFeed(cf app.ConfigFeed, hook *webhook.Webhook) error {
+func (a *App) processFeed(cf app.ConfigFeed, hook *webhook.WebhookService) error {
 	feed, err := a.fp.ParseURL(cf.URL)
 	if err != nil {
 		return fmt.Errorf("failed to parse URL for feed %s: %w ", cf.Name, err)
@@ -131,7 +131,7 @@ func (a *App) processFeed(cf app.ConfigFeed, hook *webhook.Webhook) error {
 		if !a.st.IsItemNew(cf, item) {
 			continue
 		}
-		if err := hook.Send(cf.Name, feed, item); err != nil {
+		if err := hook.Add(cf.Name, feed, item); err != nil {
 			slog.Error("Failed to add item to send queue", "feed", cf.Name, "error", "err")
 			continue
 		}

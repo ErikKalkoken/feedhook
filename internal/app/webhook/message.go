@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/ErikKalkoken/feedforward/internal/discordhook"
 	"github.com/mmcdole/gofeed"
 )
 
@@ -22,38 +23,7 @@ type Message struct {
 	Feed      string
 	Timestamp time.Time
 	Attempt   int
-	Payload   WebhookPayload
-}
-
-// WebhookPayload represents a Discord post for a webhook.
-type WebhookPayload struct {
-	Content string  `json:"content,omitempty"`
-	Embeds  []Embed `json:"embeds,omitempty"`
-}
-
-// Embed represents a Discord Embed.
-type Embed struct {
-	Author      EmbedAuthor    `json:"author,omitempty"`
-	Description string         `json:"description,omitempty"`
-	Image       EmbedImage     `json:"image,omitempty"`
-	Timestamp   string         `json:"timestamp,omitempty"`
-	Title       string         `json:"title,omitempty"`
-	Thumbnail   EmbedThumbnail `json:"thumbnail,omitempty"`
-	URL         string         `json:"url,omitempty"`
-}
-
-type EmbedAuthor struct {
-	Name    string `json:"name,omitempty"`
-	IconURL string `json:"icon_url,omitempty"`
-	URL     string `json:"url,omitempty"`
-}
-
-type EmbedImage struct {
-	URL string `json:"url,omitempty"`
-}
-
-type EmbedThumbnail struct {
-	URL string `json:"url,omitempty"`
+	Payload   discordhook.WebhookPayload
 }
 
 // newMessage returns a new message from a feed item.
@@ -76,7 +46,7 @@ func newMessage(feedName string, feed *gofeed.Feed, item *gofeed.Item) (Message,
 	if truncated {
 		slog.Warn("title was truncated", "title", title)
 	}
-	em := Embed{
+	em := discordhook.Embed{
 		Description: desc,
 		Timestamp:   item.PublishedParsed.Format(time.RFC3339),
 		Title:       title,
@@ -93,8 +63,8 @@ func newMessage(feedName string, feed *gofeed.Feed, item *gofeed.Item) (Message,
 	if item.Image != nil {
 		em.Image.URL = item.Image.URL
 	}
-	wpl := WebhookPayload{
-		Embeds: []Embed{em},
+	wpl := discordhook.WebhookPayload{
+		Embeds: []discordhook.Embed{em},
 	}
 	m := Message{
 		Feed:      feedName,

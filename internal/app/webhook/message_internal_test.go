@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ErikKalkoken/feedforward/internal/discordhook"
 	"github.com/mmcdole/gofeed"
 	"github.com/stretchr/testify/assert"
 )
@@ -35,10 +36,10 @@ func TestMakeMessage(t *testing.T) {
 
 func TestSerialization(t *testing.T) {
 	t.Run("can serialize and de-serialize payload", func(t *testing.T) {
-		pl := WebhookPayload{
+		pl := discordhook.WebhookPayload{
 			Content: "content",
-			Embeds: []Embed{{
-				Author: EmbedAuthor{Name: "name", IconURL: "iconURL", URL: "url"},
+			Embeds: []discordhook.Embed{{
+				Author: discordhook.EmbedAuthor{Name: "name", IconURL: "iconURL", URL: "url"},
 				Title:  "In Fight for Congress, Democrats Run as ‘Team Normal,’ Casting G.O.P. as ‘Weird’",
 			}},
 		}
