@@ -23,7 +23,7 @@ func (rt faketime) Now() time.Time {
 	return rt.now
 }
 
-func TestApp(t *testing.T) {
+func TestService(t *testing.T) {
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	httpmock.RegisterResponder(
@@ -51,10 +51,10 @@ func TestApp(t *testing.T) {
 	if err := st.Init(); err != nil {
 		log.Fatalf("Failed to init: %s", err)
 	}
-	a := service.New(st, cfg, faketime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
-	a.Start()
+	s := service.NewService(st, cfg, faketime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
+	s.Start()
 	time.Sleep(2 * time.Second)
-	a.Close()
+	s.Close()
 	info := httpmock.GetCallCountInfo()
 	assert.Equal(t, 1, info["POST https://www.example.com/hook"])
 	assert.LessOrEqual(t, 1, info["GET https://www.example.com/feed"])

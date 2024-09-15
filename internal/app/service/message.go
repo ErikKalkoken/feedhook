@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/ErikKalkoken/feedforward/internal/discordhook"
+	md "github.com/JohannesKaufmann/html-to-markdown"
+	"github.com/PuerkitoBio/goquery"
 	"github.com/mmcdole/gofeed"
 )
 
@@ -16,6 +18,18 @@ const (
 	embedMaxFieldLength       = 256 // title, author name, field names
 	embedDescriptionMaxLength = 4096
 )
+
+var converter = md.NewConverter("", true, nil)
+
+func init() {
+	x := md.Rule{
+		Filter: []string{"img"},
+		Replacement: func(_ string, _ *goquery.Selection, _ *md.Options) *string {
+			return md.String("")
+		},
+	}
+	converter.AddRules(x)
+}
 
 // Message represents an item that can be queued and contains the payload to be sent and header information.
 type Message struct {

@@ -22,8 +22,8 @@ type Clock interface {
 	Now() time.Time
 }
 
-// App represents this application and holds it's global data.
-type App struct {
+// Service represents this core application logic and holds it's global data.
+type Service struct {
 	client *http.Client
 	st     *storage.Storage
 	cfg    app.MyConfig
@@ -33,14 +33,14 @@ type App struct {
 	quit   chan bool // closed to signal a shutdown
 }
 
-// New creates a new App instance and returns it.
-func New(st *storage.Storage, cfg app.MyConfig, clock Clock) *App {
+// NewService creates a new App instance and returns it.
+func NewService(st *storage.Storage, cfg app.MyConfig, clock Clock) *Service {
 	client := &http.Client{
 		Timeout: time.Duration(cfg.App.Timeout) * time.Second,
 	}
 	fp := gofeed.NewParser()
 	fp.Client = client
-	app := &App{
+	s := &Service{
 		client: client,
 		st:     st,
 		cfg:    cfg,
@@ -49,34 +49,34 @@ func New(st *storage.Storage, cfg app.MyConfig, clock Clock) *App {
 		done:   make(chan bool),
 		quit:   make(chan bool),
 	}
-	return app
+	return s
 }
 
 // Close conducts a graceful shutdown of the app.
-func (a *App) Close() {
-	close(a.quit)
-	<-a.done
+func (s *Service) Close() {
+	close(s.quit)
+	<-s.done
 	slog.Info("Graceful shutdown completed")
 }
 
 // Start starts the main loop of the application.
 // User should call Close() subsequently to shut down the loop gracefully and free resources.
-func (a *App) Start() {
+func (s *Service) Start() {
 	// Create and start webhooks
 	hooks := make(map[string]*WebhookClient)
-	for _, h := range a.cfg.Webhooks {
-		q, err := queue.New(a.st.DB(), h.Name)
+	for _, h := range s.cfg.Webhooks {
+		q, err := queue.New(s.st.DB(), h.Name)
 		if err != nil {
 			panic(err)
 		}
-		hooks[h.Name] = NewWebhookClient(a.client, q, h.Name, h.URL)
+		hooks[h.Name] = NewWebhookClient(s.client, q, h.Name, h.URL)
 		hooks[h.Name].Start()
 	}
 	// process feeds until aborted
 	var wg sync.WaitGroup
-	ticker := time.NewTicker(time.Duration(a.cfg.App.Ticker) * time.Second)
-	feeds := a.cfg.EnabledFeeds()
-	slog.Info("Started", "feeds", len(feeds), "webhooks", len(a.cfg.Webhooks))
+	ticker := time.NewTicker(time.Duration(s.cfg.App.Ticker) * time.Second)
+	feeds := s.cfg.EnabledFeeds()
+	slog.Info("Started", "feeds", len(feeds), "webhooks", len(s.cfg.Webhooks))
 	go func() {
 	main:
 		for {
@@ -84,7 +84,7 @@ func (a *App) Start() {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					if err := a.processFeed(cf, hooks[cf.Webhook]); err == errUserAborted {
+					if err := s.processFeed(cf, hooks[cf.Webhook]); err == errUserAborted {
 						slog.Debug("user aborted")
 						return
 					} else if err != nil {
@@ -97,7 +97,7 @@ func (a *App) Start() {
 		wait:
 			for {
 				select {
-				case <-a.quit:
+				case <-s.quit:
 					break main
 				case <-ticker.C:
 					break wait
@@ -106,45 +106,45 @@ func (a *App) Start() {
 		}
 		slog.Info("Stopped")
 		ticker.Stop()
-		a.done <- true
+		s.done <- true
 	}()
 }
 
 // processFeed processes a configured feed.
-func (a *App) processFeed(cf app.ConfigFeed, hook *WebhookClient) error {
-	feed, err := a.fp.ParseURL(cf.URL)
+func (s *Service) processFeed(cf app.ConfigFeed, hook *WebhookClient) error {
+	feed, err := s.fp.ParseURL(cf.URL)
 	if err != nil {
 		return fmt.Errorf("failed to parse URL for feed %s: %w ", cf.Name, err)
 	}
-	oldest := time.Duration(a.cfg.App.Oldest) * time.Second
+	oldest := time.Duration(s.cfg.App.Oldest) * time.Second
 	sort.Sort(feed)
 	for _, item := range feed.Items {
 		select {
-		case <-a.quit:
+		case <-s.quit:
 			return errUserAborted
 		default:
 		}
-		if oldest != 0 && item.PublishedParsed != nil && item.PublishedParsed.Before(a.clock.Now().Add(-oldest)) {
+		if oldest != 0 && item.PublishedParsed != nil && item.PublishedParsed.Before(s.clock.Now().Add(-oldest)) {
 			continue
 		}
-		if !a.st.IsItemNew(cf, item) {
+		if !s.st.IsItemNew(cf, item) {
 			continue
 		}
 		if err := hook.Add(cf.Name, feed, item); err != nil {
 			slog.Error("Failed to add item to send queue", "feed", cf.Name, "error", "err")
 			continue
 		}
-		if err := a.st.RecordItem(cf, item); err != nil {
+		if err := s.st.RecordItem(cf, item); err != nil {
 			return fmt.Errorf("failed to record item: %w", err)
 		}
-		if err := a.st.UpdateFeedStats(cf.Name); err != nil {
+		if err := s.st.UpdateFeedStats(cf.Name); err != nil {
 			slog.Error("failed to update feed stats", "name", cf.Name, "error", err)
 		}
-		if err := a.st.UpdateWebhookStats(cf.Webhook); err != nil {
+		if err := s.st.UpdateWebhookStats(cf.Webhook); err != nil {
 			slog.Error("failed to update webhook stats", "name", cf.Webhook, "error", err)
 		}
 		slog.Info("Received item", "feed", cf.Name, "webhook", cf.Webhook, "title", item.Title)
 	}
-	err = a.st.CullItems(cf, 1000)
+	err = s.st.CullItems(cf, 1000)
 	return err
 }

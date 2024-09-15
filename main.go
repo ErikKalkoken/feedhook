@@ -64,7 +64,7 @@ func main() {
 		printDBContent(st, cfg)
 		os.Exit(0)
 	}
-	a := service.New(st, cfg, realtime{})
+	a := service.NewService(st, cfg, realtime{})
 	a.Start()
 	defer a.Close()
 
