@@ -1,4 +1,4 @@
-package webhook
+package service
 
 import (
 	"log/slog"
@@ -29,26 +29,26 @@ func init() {
 	converter.AddRules(x)
 }
 
-// A WebhookService handles posting messages to webhooks.
-// It has a permanent queue so it does not forget messages after a restart
-// and automatically retries failed posts.
-type WebhookService struct {
+// A WebhookClient handles posting messages to webhooks.
+// Messages are kept in a permanent queue and do not disappear after a restart.
+// Failed messages are automatically retried and rate limits are respected.
+type WebhookClient struct {
 	name  string
 	queue *queue.Queue
 	wh    *discordhook.DiscordWebhook
 }
 
-func NewWebhookService(client *http.Client, queue *queue.Queue, name, url string) *WebhookService {
-	wh := &WebhookService{
+func NewWebhookClient(httpClient *http.Client, queue *queue.Queue, name, url string) *WebhookClient {
+	wh := &WebhookClient{
 		name:  name,
 		queue: queue,
-		wh:    discordhook.New(client, url),
+		wh:    discordhook.New(httpClient, url),
 	}
 	return wh
 }
 
 // Start starts the service.
-func (wh *WebhookService) Start() {
+func (wh *WebhookClient) Start() {
 	go func() {
 		slog.Info("Started webhook", "name", wh.name, "queued", wh.queue.Size())
 		for {
@@ -97,7 +97,7 @@ func (wh *WebhookService) Start() {
 }
 
 // Add adds a new message for being send to to webhook
-func (wh *WebhookService) Add(feedName string, feed *gofeed.Feed, item *gofeed.Item) error {
+func (wh *WebhookClient) Add(feedName string, feed *gofeed.Feed, item *gofeed.Item) error {
 	p, err := newMessage(feedName, feed, item)
 	if err != nil {
 		return err

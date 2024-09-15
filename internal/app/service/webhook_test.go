@@ -1,4 +1,4 @@
-package webhook_test
+package service_test
 
 import (
 	"net/http"
@@ -8,7 +8,7 @@ import (
 
 	bolt "go.etcd.io/bbolt"
 
-	"github.com/ErikKalkoken/feedforward/internal/app/webhook"
+	"github.com/ErikKalkoken/feedforward/internal/app/service"
 	"github.com/ErikKalkoken/feedforward/internal/queue"
 	"github.com/jarcoal/httpmock"
 	"github.com/mmcdole/gofeed"
@@ -33,7 +33,7 @@ func TestWebhook(t *testing.T) {
 		"https://www.example.com",
 		httpmock.NewStringResponder(204, ""),
 	)
-	wh := webhook.NewWebhookService(http.DefaultClient, q, "dummy", "https://www.example.com")
+	wh := service.NewWebhookClient(http.DefaultClient, q, "dummy", "https://www.example.com")
 	wh.Start()
 	feed := &gofeed.Feed{Title: "title"}
 	now := time.Now()

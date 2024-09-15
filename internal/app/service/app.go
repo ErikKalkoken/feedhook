@@ -13,7 +13,6 @@ import (
 
 	"github.com/ErikKalkoken/feedforward/internal/app"
 	"github.com/ErikKalkoken/feedforward/internal/app/storage"
-	"github.com/ErikKalkoken/feedforward/internal/app/webhook"
 	"github.com/ErikKalkoken/feedforward/internal/queue"
 )
 
@@ -64,13 +63,13 @@ func (a *App) Close() {
 // User should call Close() subsequently to shut down the loop gracefully and free resources.
 func (a *App) Start() {
 	// Create and start webhooks
-	hooks := make(map[string]*webhook.WebhookService)
+	hooks := make(map[string]*WebhookClient)
 	for _, h := range a.cfg.Webhooks {
 		q, err := queue.New(a.st.DB(), h.Name)
 		if err != nil {
 			panic(err)
 		}
-		hooks[h.Name] = webhook.NewWebhookService(a.client, q, h.Name, h.URL)
+		hooks[h.Name] = NewWebhookClient(a.client, q, h.Name, h.URL)
 		hooks[h.Name].Start()
 	}
 	// process feeds until aborted
@@ -112,7 +111,7 @@ func (a *App) Start() {
 }
 
 // processFeed processes a configured feed.
-func (a *App) processFeed(cf app.ConfigFeed, hook *webhook.WebhookService) error {
+func (a *App) processFeed(cf app.ConfigFeed, hook *WebhookClient) error {
 	feed, err := a.fp.ParseURL(cf.URL)
 	if err != nil {
 		return fmt.Errorf("failed to parse URL for feed %s: %w ", cf.Name, err)
