@@ -51,10 +51,10 @@ func (ca ConfigApp) LoggerLevel() slog.Level {
 }
 
 type ConfigFeed struct {
-	Name     string `toml:"name"`
-	URL      string `toml:"url"`
-	Webhook  string `toml:"webhook"`
-	Disabled bool   `toml:"disabled"`
+	Name     string   `toml:"name"`
+	URL      string   `toml:"url"`
+	Webhooks []string `toml:"webhooks"`
+	Disabled bool     `toml:"disabled"`
 }
 
 type ConfigWebhook struct {
@@ -114,10 +114,17 @@ func parseConfig(config *MyConfig) error {
 		if _, err := url.ParseRequestURI(x.URL); err != nil {
 			return fmt.Errorf("feed %s has invalid url: %w", x.Name, err)
 		}
-		if !webhookNames[x.Webhook] {
-			return fmt.Errorf("invalid webhook name \"%s\" for feed \"%s\"", x.Webhook, x.Name)
+		feedWebhooks := make(map[string]bool)
+		for _, wh := range x.Webhooks {
+			if !webhookNames[wh] {
+				return fmt.Errorf("feed \"%s\": invalid webhook \"%s\"", x.Name, wh)
+			}
+			webhooksUsed[wh] = true
+			if feedWebhooks[wh] {
+				return fmt.Errorf("feed \"%s\": webhook \"%s\" used more then once", x.Name, wh)
+			}
+			feedWebhooks[wh] = true
 		}
-		webhooksUsed[x.Webhook] = true
 	}
 	for k, v := range webhooksUsed {
 		if !v {

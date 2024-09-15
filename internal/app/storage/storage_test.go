@@ -21,7 +21,7 @@ func TestStorage(t *testing.T) {
 		log.Fatalf("Failed to open DB: %s", err)
 	}
 	defer db.Close()
-	cf := app.ConfigFeed{Name: "feed1", URL: "https://www.example.com/feed", Webhook: "hook1"}
+	cf := app.ConfigFeed{Name: "feed1", URL: "https://www.example.com/feed", Webhooks: []string{"hook1"}}
 	cfg := app.MyConfig{
 		Feeds: []app.ConfigFeed{cf},
 	}
@@ -103,7 +103,7 @@ func TestStats(t *testing.T) {
 		log.Fatalf("Failed to open DB: %s", err)
 	}
 	defer db.Close()
-	cf := app.ConfigFeed{Name: "feed1", URL: "https://www.example.com/feed", Webhook: "hook1"}
+	cf := app.ConfigFeed{Name: "feed1", URL: "https://www.example.com/feed", Webhooks: []string{"hook1"}}
 	cfg := app.MyConfig{
 		Feeds: []app.ConfigFeed{cf},
 	}

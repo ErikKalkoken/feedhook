@@ -44,7 +44,7 @@ func TestService(t *testing.T) {
 	cfg := app.MyConfig{
 		App:      app.ConfigApp{Oldest: 3600 * 24, Ticker: 1},
 		Webhooks: []app.ConfigWebhook{{Name: "hook1", URL: "https://www.example.com/hook"}},
-		Feeds:    []app.ConfigFeed{{Name: "feed1", URL: "https://www.example.com/feed", Webhook: "hook1"}},
+		Feeds:    []app.ConfigFeed{{Name: "feed1", URL: "https://www.example.com/feed", Webhooks: []string{"hook1"}}},
 	}
 	st := storage.New(db, cfg)
 	if err := st.Init(); err != nil {

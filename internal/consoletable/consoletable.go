@@ -95,6 +95,8 @@ func renderCell(v any) string {
 			return "-"
 		}
 		return humanize.Time(x)
+	case []string:
+		return strings.Join(x, ", ")
 	default:
 		return fmt.Sprint(v)
 	}

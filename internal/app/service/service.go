@@ -84,11 +84,15 @@ func (s *Service) Start() {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					if err := s.processFeed(cf, hooks[cf.Webhook]); err == errUserAborted {
+					usedHooks := make([]*Webhook, 0)
+					for _, x := range cf.Webhooks {
+						usedHooks = append(usedHooks, hooks[x])
+					}
+					if err := s.processFeed(cf, usedHooks); err == errUserAborted {
 						slog.Debug("user aborted")
 						return
 					} else if err != nil {
-						slog.Error("Failed to process feed", "name", cf.Name, "error", err)
+						slog.Error("Failed to process feed", "feed", cf.Name, "error", err)
 					}
 				}()
 			}
@@ -111,7 +115,8 @@ func (s *Service) Start() {
 }
 
 // processFeed processes a configured feed.
-func (s *Service) processFeed(cf app.ConfigFeed, hook *Webhook) error {
+func (s *Service) processFeed(cf app.ConfigFeed, hooks []*Webhook) error {
+	myLog := slog.With("feed", cf.Name)
 	feed, err := s.fp.ParseURL(cf.URL)
 	if err != nil {
 		return fmt.Errorf("failed to parse URL for feed %s: %w ", cf.Name, err)
@@ -130,15 +135,17 @@ func (s *Service) processFeed(cf app.ConfigFeed, hook *Webhook) error {
 		if !s.st.IsItemNew(cf, item) {
 			continue
 		}
-		if err := hook.Add(cf.Name, feed, item); err != nil {
-			slog.Error("Failed to add item to send queue", "feed", cf.Name, "error", "err")
-			if err := s.st.UpdateFeedStats(cf.Name, func(fs *app.FeedStats) error {
-				fs.ErrorCount++
-				return nil
-			}); err != nil {
-				slog.Error("failed to update feed stats", "name", cf.Name, "error", err)
+		for _, hook := range hooks {
+			if err := hook.Add(cf.Name, feed, item); err != nil {
+				myLog.Error("Failed to add item to webhook queue", "hook", hook.name, "error", "err")
+				if err := s.st.UpdateFeedStats(cf.Name, func(fs *app.FeedStats) error {
+					fs.ErrorCount++
+					return nil
+				}); err != nil {
+					myLog.Error("failed to update feed stats", "error", err)
+				}
+				continue
 			}
-			continue
 		}
 		if err := s.st.RecordItem(cf, item); err != nil {
 			return fmt.Errorf("failed to record item: %w", err)
@@ -148,9 +155,9 @@ func (s *Service) processFeed(cf app.ConfigFeed, hook *Webhook) error {
 			fs.ReceivedLast = time.Now().UTC()
 			return nil
 		}); err != nil {
-			slog.Error("failed to update feed stats", "name", cf.Name, "error", err)
+			myLog.Error("failed to update feed stats", "error", err)
 		}
-		slog.Info("Received item", "feed", cf.Name, "webhook", cf.Webhook, "title", item.Title)
+		myLog.Info("Received item", "title", item.Title)
 	}
 	err = s.st.CullItems(cf, 1000)
 	return err

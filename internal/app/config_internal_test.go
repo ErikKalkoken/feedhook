@@ -11,7 +11,7 @@ func TestParseConfig(t *testing.T) {
 	t.Run("should return no error when config is valid", func(t *testing.T) {
 		cf := MyConfig{
 			Webhooks: []ConfigWebhook{{Name: "hook1", URL: "https://www.example.com/url1"}},
-			Feeds:    []ConfigFeed{{Name: "feed1", URL: "https://www.example.com/url2", Webhook: "hook1"}},
+			Feeds:    []ConfigFeed{{Name: "feed1", URL: "https://www.example.com/url2", Webhooks: []string{"hook1"}}},
 		}
 		assert.NoError(t, parseConfig(&cf))
 	})
@@ -36,42 +36,49 @@ func TestParseConfig(t *testing.T) {
 	t.Run("should return error when feed has no name", func(t *testing.T) {
 		cf := MyConfig{
 			Webhooks: []ConfigWebhook{{Name: "hook", URL: "https://www.example.com/url1"}},
-			Feeds:    []ConfigFeed{{URL: "https://www.example.com/url2", Webhook: "hook"}},
+			Feeds:    []ConfigFeed{{URL: "https://www.example.com/url2", Webhooks: []string{"hook"}}},
 		}
 		assert.Error(t, parseConfig(&cf))
 	})
 	t.Run("should return error when feed has no https://www.example.com/url", func(t *testing.T) {
 		cf := MyConfig{
 			Webhooks: []ConfigWebhook{{Name: "hook", URL: "https://www.example.com/url1"}},
-			Feeds:    []ConfigFeed{{Name: "name", Webhook: "hook"}},
+			Feeds:    []ConfigFeed{{Name: "name", Webhooks: []string{"hook"}}},
 		}
 		assert.Error(t, parseConfig(&cf))
 	})
 	t.Run("should return error when feed defines unknown hook", func(t *testing.T) {
 		cf := MyConfig{
 			Webhooks: []ConfigWebhook{{Name: "name", URL: "https://www.example.com/url1"}},
-			Feeds:    []ConfigFeed{{Name: "dummy", URL: "https://www.example.com/url2", Webhook: "unknown"}},
+			Feeds:    []ConfigFeed{{Name: "dummy", URL: "https://www.example.com/url2", Webhooks: []string{"unknown"}}},
+		}
+		assert.Error(t, parseConfig(&cf))
+	})
+	t.Run("should return error when feed defines multiple hooks with same name", func(t *testing.T) {
+		cf := MyConfig{
+			Webhooks: []ConfigWebhook{{Name: "hook1", URL: "https://www.example.com/url1"}},
+			Feeds:    []ConfigFeed{{Name: "dummy", URL: "https://www.example.com/url2", Webhooks: []string{"hook1", "hook1"}}},
 		}
 		assert.Error(t, parseConfig(&cf))
 	})
 	t.Run("should return error when a webhook url is invalid", func(t *testing.T) {
 		cf := MyConfig{
 			Webhooks: []ConfigWebhook{{Name: "hook1", URL: "invalid"}},
-			Feeds:    []ConfigFeed{{Name: "feed1", URL: "https://www.example.com/url2", Webhook: "hook1"}},
+			Feeds:    []ConfigFeed{{Name: "feed1", URL: "https://www.example.com/url2", Webhooks: []string{"hook1"}}},
 		}
 		assert.Error(t, parseConfig(&cf))
 	})
 	t.Run("should return error when a feed url is invalid", func(t *testing.T) {
 		cf := MyConfig{
 			Webhooks: []ConfigWebhook{{Name: "hook1", URL: "https://www.example.com/url1"}},
-			Feeds:    []ConfigFeed{{Name: "feed1", URL: "invalid", Webhook: "hook1"}},
+			Feeds:    []ConfigFeed{{Name: "feed1", URL: "invalid", Webhooks: []string{"hook1"}}},
 		}
 		assert.Error(t, parseConfig(&cf))
 	})
 	t.Run("should set app defaults when missing", func(t *testing.T) {
 		cf := MyConfig{
 			Webhooks: []ConfigWebhook{{Name: "hook1", URL: "https://www.example.com/url1"}},
-			Feeds:    []ConfigFeed{{Name: "feed1", URL: "https://www.example.com/url2", Webhook: "hook1"}},
+			Feeds:    []ConfigFeed{{Name: "feed1", URL: "https://www.example.com/url2", Webhooks: []string{"hook1"}}},
 		}
 		err := parseConfig(&cf)
 		if assert.NoError(t, err) {
@@ -86,7 +93,7 @@ func TestParseConfig(t *testing.T) {
 				{Name: "hook1", URL: "https://www.example.com/url1"},
 				{Name: "hook1", URL: "https://www.example.com/url2"},
 			},
-			Feeds: []ConfigFeed{{Name: "feed1", URL: "https://www.example.com/url2", Webhook: "hook1"}},
+			Feeds: []ConfigFeed{{Name: "feed1", URL: "https://www.example.com/url2", Webhooks: []string{"hook1"}}},
 		}
 		assert.Error(t, parseConfig(&cf))
 	})
@@ -96,7 +103,7 @@ func TestParseConfig(t *testing.T) {
 				{Name: "hook1", URL: "https://www.example.com/url1"},
 				{Name: "hook2", URL: "https://www.example.com/url1"},
 			},
-			Feeds: []ConfigFeed{{Name: "feed1", URL: "https://www.example.com/url2", Webhook: "hook1"}},
+			Feeds: []ConfigFeed{{Name: "feed1", URL: "https://www.example.com/url2", Webhooks: []string{"hook1"}}},
 		}
 		assert.Error(t, parseConfig(&cf))
 	})
@@ -104,8 +111,8 @@ func TestParseConfig(t *testing.T) {
 		cf := MyConfig{
 			Webhooks: []ConfigWebhook{{Name: "hook1", URL: "https://www.example.com/url1"}},
 			Feeds: []ConfigFeed{
-				{Name: "feed1", URL: "https://www.example.com/url2", Webhook: "hook1"},
-				{Name: "feed1", URL: "https://www.example.com/url3", Webhook: "hook1"},
+				{Name: "feed1", URL: "https://www.example.com/url2", Webhooks: []string{"hook1"}},
+				{Name: "feed1", URL: "https://www.example.com/url3", Webhooks: []string{"hook1"}},
 			},
 		}
 		assert.Error(t, parseConfig(&cf))
@@ -133,8 +140,8 @@ func TestEnabledFeeds(t *testing.T) {
 	t.Run("should return enabled feeds only 1", func(t *testing.T) {
 		cf := MyConfig{
 			Feeds: []ConfigFeed{
-				{Name: "feed1", URL: "https://www.example.com/url1", Webhook: "hook1"},
-				{Name: "feed2", URL: "https://www.example.com/url2", Webhook: "hook1"},
+				{Name: "feed1", URL: "https://www.example.com/url1", Webhooks: []string{"hook1"}},
+				{Name: "feed2", URL: "https://www.example.com/url2", Webhooks: []string{"hook1"}},
 			},
 		}
 		f := cf.EnabledFeeds()
@@ -143,8 +150,8 @@ func TestEnabledFeeds(t *testing.T) {
 	t.Run("should return enabled feeds only 2", func(t *testing.T) {
 		cf := MyConfig{
 			Feeds: []ConfigFeed{
-				{Name: "feed1", URL: "https://www.example.com/url1", Webhook: "hook1", Disabled: true},
-				{Name: "feed2", URL: "https://www.example.com/url2", Webhook: "hook1"},
+				{Name: "feed1", URL: "https://www.example.com/url1", Webhooks: []string{"hook1"}, Disabled: true},
+				{Name: "feed2", URL: "https://www.example.com/url2", Webhooks: []string{"hook1"}},
 			},
 		}
 		f := cf.EnabledFeeds()

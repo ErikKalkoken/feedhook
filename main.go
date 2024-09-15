@@ -28,7 +28,7 @@ const (
 )
 
 // Overwritten with current tag when released
-var Version = "0.1.15"
+var Version = "0.2.0"
 
 type realtime struct{}
 
@@ -80,7 +80,7 @@ func main() {
 func printStatistics(st *storage.Storage, cfg app.MyConfig) {
 	// Feed stats
 	feedsTable := consoletable.New("Feeds", 6)
-	feedsTable.AddRow([]any{"Name", "Hook", "ReceivedCount", "ReceivedLast", "ErrorCount", "Enabled"})
+	feedsTable.AddRow([]any{"Name", "Received", "Last", "Errors", "Enabled", "Webhooks"})
 	slices.SortFunc(cfg.Feeds, func(a, b app.ConfigFeed) int {
 		return cmp.Compare(a.Name, b.Name)
 	})
@@ -91,13 +91,13 @@ func printStatistics(st *storage.Storage, cfg app.MyConfig) {
 		} else if err != nil {
 			log.Fatal(err)
 		}
-		feedsTable.AddRow([]any{o.Name, cf.Webhook, o.ReceivedCount, o.ReceivedLast, o.ErrorCount, !cf.Disabled})
+		feedsTable.AddRow([]any{o.Name, o.ReceivedCount, o.ReceivedLast, o.ErrorCount, !cf.Disabled, cf.Webhooks})
 	}
 	feedsTable.Print()
 	fmt.Println()
 	// Webhook stats
 	whTable := consoletable.New("Webhooks", 4)
-	whTable.AddRow([]any{"Name", "SentCount", "SendLast", "ErrorCount"})
+	whTable.AddRow([]any{"Name", "Count", "Last", "Errors"})
 	slices.SortFunc(cfg.Webhooks, func(a, b app.ConfigWebhook) int {
 		return cmp.Compare(a.Name, b.Name)
 	})

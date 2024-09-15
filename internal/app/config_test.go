@@ -25,7 +25,7 @@ url = "https://www.example.com/webhook"
 [[feeds]]
 name = "Feed 1"
 url = "https://www.example.com/feed.rss"
-webhook = "hook-1"
+webhooks = ["hook-1"]
 `
 
 func TestConfig(t *testing.T) {
@@ -44,6 +44,6 @@ func TestConfig(t *testing.T) {
 		assert.Equal(t, cf.Webhooks[0].URL, "https://www.example.com/webhook")
 		assert.Equal(t, cf.Feeds[0].Name, "Feed 1")
 		assert.Equal(t, cf.Feeds[0].URL, "https://www.example.com/feed.rss")
-		assert.Equal(t, cf.Feeds[0].Webhook, "hook-1")
+		assert.Equal(t, cf.Feeds[0].Webhooks, []string{"hook-1"})
 	}
 }
