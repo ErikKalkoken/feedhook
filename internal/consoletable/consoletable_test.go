@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ErikKalkoken/feedforward/internal/consoletable"
+	"github.com/ErikKalkoken/feedhook/internal/consoletable"
 	"github.com/stretchr/testify/assert"
 )
 

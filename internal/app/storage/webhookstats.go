@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 
-	"github.com/ErikKalkoken/feedforward/internal/app"
+	"github.com/ErikKalkoken/feedhook/internal/app"
 	bolt "go.etcd.io/bbolt"
 )
 

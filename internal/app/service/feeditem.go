@@ -8,7 +8,7 @@ import (
 	md "github.com/JohannesKaufmann/html-to-markdown"
 	"github.com/PuerkitoBio/goquery"
 
-	"github.com/ErikKalkoken/feedforward/internal/discordhook"
+	"github.com/ErikKalkoken/feedhook/internal/discordhook"
 )
 
 const (

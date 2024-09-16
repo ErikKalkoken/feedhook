@@ -11,9 +11,9 @@ import (
 
 	"github.com/mmcdole/gofeed"
 
-	"github.com/ErikKalkoken/feedforward/internal/app"
-	"github.com/ErikKalkoken/feedforward/internal/app/storage"
-	"github.com/ErikKalkoken/feedforward/internal/queue"
+	"github.com/ErikKalkoken/feedhook/internal/app"
+	"github.com/ErikKalkoken/feedhook/internal/app/storage"
+	"github.com/ErikKalkoken/feedhook/internal/queue"
 )
 
 var errUserAborted = errors.New("aborted by user")

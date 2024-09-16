@@ -1,4 +1,4 @@
-module github.com/ErikKalkoken/feedforward
+module github.com/ErikKalkoken/feedhook
 
 go 1.23.0
 

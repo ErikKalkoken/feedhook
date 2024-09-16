@@ -9,9 +9,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	bolt "go.etcd.io/bbolt"
 
-	"github.com/ErikKalkoken/feedforward/internal/app"
-	"github.com/ErikKalkoken/feedforward/internal/app/service"
-	"github.com/ErikKalkoken/feedforward/internal/app/storage"
+	"github.com/ErikKalkoken/feedhook/internal/app"
+	"github.com/ErikKalkoken/feedhook/internal/app/service"
+	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 )
 
 type faketime struct {

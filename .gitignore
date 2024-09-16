@@ -3,5 +3,5 @@
 *.db
 config.toml
 !config/*
-feedforward
-feedforward.log
+feedhook
+feedhook.log

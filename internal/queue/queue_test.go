@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ErikKalkoken/feedforward/internal/queue"
+	"github.com/ErikKalkoken/feedhook/internal/queue"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sync/errgroup"
 

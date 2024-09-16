@@ -16,21 +16,21 @@ import (
 
 	bolt "go.etcd.io/bbolt"
 
-	"github.com/ErikKalkoken/feedforward/internal/app"
-	"github.com/ErikKalkoken/feedforward/internal/app/service"
-	"github.com/ErikKalkoken/feedforward/internal/app/storage"
-	"github.com/ErikKalkoken/feedforward/internal/consoletable"
-	"github.com/ErikKalkoken/feedforward/internal/discordhook"
+	"github.com/ErikKalkoken/feedhook/internal/app"
+	"github.com/ErikKalkoken/feedhook/internal/app/service"
+	"github.com/ErikKalkoken/feedhook/internal/app/storage"
+	"github.com/ErikKalkoken/feedhook/internal/consoletable"
+	"github.com/ErikKalkoken/feedhook/internal/discordhook"
 )
 
 const (
 	configFilename  = "config.toml"
-	dbFileName      = "feedforward.db"
+	dbFileName      = "feedhook.db"
 	boltOpenTimeout = 5 * time.Second
 )
 
 // Overwritten with current tag when released
-var Version = "0.1.16"
+var Version = "0.2.0"
 
 type realtime struct{}
 
@@ -125,9 +125,9 @@ func printStatistics(st *storage.Storage, cfg app.MyConfig) {
 
 // myUsage writes a custom usage message to configured output stream.
 func myUsage() {
-	s := "Usage: feedforward [options]:\n\n" +
+	s := "Usage: feedhook [options]:\n\n" +
 		"A service for forwarding RSS and Atom feeds to Discord webhooks.\n" +
-		"For more information please see: https://github.com/ErikKalkoken/feedforward\n\n" +
+		"For more information please see: https://github.com/ErikKalkoken/feedhook\n\n" +
 		"Options:\n"
 	fmt.Fprint(flag.CommandLine.Output(), s)
 	flag.PrintDefaults()
@@ -145,6 +145,6 @@ func sendPing(name string, cfg app.MyConfig) error {
 		return fmt.Errorf("no webhook found with the name %s", name)
 	}
 	dh := discordhook.New(http.DefaultClient, wh.URL)
-	pl := discordhook.WebhookPayload{Content: "Ping from feedforward"}
+	pl := discordhook.WebhookPayload{Content: "Ping from feedhook"}
 	return dh.Send(pl)
 }

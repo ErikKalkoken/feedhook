@@ -6,7 +6,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/ErikKalkoken/feedforward/internal/app"
+	"github.com/ErikKalkoken/feedhook/internal/app"
 	"github.com/mmcdole/gofeed"
 	bolt "go.etcd.io/bbolt"
 )

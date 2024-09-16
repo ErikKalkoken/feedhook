@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ErikKalkoken/feedforward/internal/app"
+	"github.com/ErikKalkoken/feedhook/internal/app"
 
 	"github.com/stretchr/testify/assert"
 )

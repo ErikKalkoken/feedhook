@@ -4,7 +4,7 @@ name: CI/CD
 
 env:
   GOVERSION: "1.23"
-  NAME: "feedforward"
+  NAME: "feedhook"
   PREFIX: ""
 
 on: push
@@ -51,7 +51,7 @@ jobs:
         sudo apt-get install zip gzip tar
 
     - name: Build linux
-      run: GOOS=linux GOARCH=amd64 go build -ldflags "-X main.Version=${{  github.ref_name }}" -o ./build/linux/ .
+      run: GOOS=linux GOARCH=amd64 go build -ldflags "-X main.Version=${{  github.ref_name }}" -o ./build/linux/ ./cmd/fee
 
     - name: Package linux
       run: tar --directory=build/linux -czvf ${{ env.PREFIX }}-linux-amd64.tar.gz ${{ env.NAME }}
