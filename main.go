@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -19,6 +20,7 @@ import (
 	"github.com/ErikKalkoken/feedforward/internal/app/service"
 	"github.com/ErikKalkoken/feedforward/internal/app/storage"
 	"github.com/ErikKalkoken/feedforward/internal/consoletable"
+	"github.com/ErikKalkoken/feedforward/internal/discordhook"
 )
 
 const (
@@ -28,7 +30,7 @@ const (
 )
 
 // Overwritten with current tag when released
-var Version = "0.2.0"
+var Version = "0.1.16"
 
 type realtime struct{}
 
@@ -39,8 +41,9 @@ func (rt realtime) Now() time.Time {
 func main() {
 	cfgPathFlag := flag.String("config", ".", "path to configuration file")
 	dbPathFlag := flag.String("db", ".", "path to database file")
-	versionFlag := flag.Bool("v", false, "show version")
 	statsFlag := flag.Bool("statistics", false, "show current statistics (does not work while running)")
+	versionFlag := flag.Bool("v", false, "show version")
+	pingFlag := flag.String("ping", "", "send ping to a configured webhook")
 	flag.Usage = myUsage
 	flag.Parse()
 	if *versionFlag {
@@ -53,6 +56,13 @@ func main() {
 		log.Fatalf("Config error: %s", err)
 	}
 	slog.SetLogLoggerLevel(cfg.App.LoggerLevel())
+	if *pingFlag != "" {
+		if err := sendPing(*pingFlag, cfg); err != nil {
+			slog.Error("Failed to send ping", "webhook", *pingFlag, "error", err)
+			os.Exit(1)
+		}
+		os.Exit(1)
+	}
 	p = filepath.Join(*dbPathFlag, dbFileName)
 	db, err := bolt.Open(p, 0600, &bolt.Options{Timeout: boltOpenTimeout})
 	if err != nil {
@@ -121,4 +131,20 @@ func myUsage() {
 		"Options:\n"
 	fmt.Fprint(flag.CommandLine.Output(), s)
 	flag.PrintDefaults()
+}
+
+func sendPing(name string, cfg app.MyConfig) error {
+	var wh app.ConfigWebhook
+	for _, w := range cfg.Webhooks {
+		if w.Name == name {
+			wh = w
+			break
+		}
+	}
+	if wh.Name == "" {
+		return fmt.Errorf("no webhook found with the name %s", name)
+	}
+	dh := discordhook.New(http.DefaultClient, wh.URL)
+	pl := discordhook.WebhookPayload{Content: "Ping from feedforward"}
+	return dh.Send(pl)
 }
