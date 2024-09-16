@@ -3,5 +3,8 @@
 *.db
 config.toml
 !config/*
-feedhook
 feedhook.log
+feedhookcli
+!feedhookcli/*
+feedhooksrv
+!feedhooksrv/*

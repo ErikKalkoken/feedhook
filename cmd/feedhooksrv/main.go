@@ -1,16 +1,16 @@
 package main
 
 import (
-	"cmp"
 	"flag"
 	"fmt"
 	"log"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/rpc"
 	"os"
 	"os/signal"
 	"path/filepath"
-	"slices"
 	"syscall"
 	"time"
 
@@ -19,14 +19,14 @@ import (
 	"github.com/ErikKalkoken/feedhook/internal/app"
 	"github.com/ErikKalkoken/feedhook/internal/app/service"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
-	"github.com/ErikKalkoken/feedhook/internal/consoletable"
-	"github.com/ErikKalkoken/feedhook/internal/discordhook"
+	"github.com/ErikKalkoken/feedhook/internal/remoteservice"
 )
 
 const (
 	configFilename  = "config.toml"
 	dbFileName      = "feedhook.db"
 	boltOpenTimeout = 5 * time.Second
+	portRPC         = 2233
 )
 
 // Overwritten with current tag when released
@@ -41,9 +41,9 @@ func (rt realtime) Now() time.Time {
 func main() {
 	cfgPathFlag := flag.String("config", ".", "path to configuration file")
 	dbPathFlag := flag.String("db", ".", "path to database file")
-	statsFlag := flag.Bool("statistics", false, "show current statistics (does not work while running)")
+	portFlag := flag.Int("port", portRPC, "port for RPC service")
 	versionFlag := flag.Bool("v", false, "show version")
-	pingFlag := flag.String("ping", "", "send ping to a configured webhook")
+	disabledFlag := flag.Bool("disabled", false, "run RPC service, but not main service")
 	flag.Usage = myUsage
 	flag.Parse()
 	if *versionFlag {
@@ -56,13 +56,6 @@ func main() {
 		log.Fatalf("Config error: %s", err)
 	}
 	slog.SetLogLoggerLevel(cfg.App.LoggerLevel())
-	if *pingFlag != "" {
-		if err := sendPing(*pingFlag, cfg); err != nil {
-			slog.Error("Failed to send ping", "webhook", *pingFlag, "error", err)
-			os.Exit(1)
-		}
-		os.Exit(1)
-	}
 	p = filepath.Join(*dbPathFlag, dbFileName)
 	db, err := bolt.Open(p, 0600, &bolt.Options{Timeout: boltOpenTimeout})
 	if err != nil {
@@ -73,13 +66,20 @@ func main() {
 	if err := st.Init(); err != nil {
 		log.Fatalf("DB init failed: %s", err)
 	}
-	if *statsFlag {
-		printStatistics(st, cfg)
-		os.Exit(0)
+
+	// start main service
+	if !*disabledFlag {
+		a := service.NewService(st, cfg, realtime{})
+		a.Start()
+		defer a.Close()
+	} else {
+		slog.Info("Main service not started as requested")
 	}
-	a := service.NewService(st, cfg, realtime{})
-	a.Start()
-	defer a.Close()
+
+	// start RPC service
+	if err := startRPC(*portFlag, st, cfg); err != nil {
+		log.Fatalf("Failed to start RPC service on port %d: %s", portRPC, err)
+	}
 
 	// Ensure graceful shutdown
 	sc := make(chan os.Signal, 1)
@@ -87,40 +87,19 @@ func main() {
 	<-sc
 }
 
-func printStatistics(st *storage.Storage, cfg app.MyConfig) {
-	// Feed stats
-	feedsTable := consoletable.New("Feeds", 6)
-	feedsTable.AddRow([]any{"Name", "Received", "Last", "Errors", "Enabled", "Webhooks"})
-	slices.SortFunc(cfg.Feeds, func(a, b app.ConfigFeed) int {
-		return cmp.Compare(a.Name, b.Name)
-	})
-	for _, cf := range cfg.Feeds {
-		o, err := st.GetFeedStats(cf.Name)
-		if err == storage.ErrNotFound {
-			continue
-		} else if err != nil {
-			log.Fatal(err)
-		}
-		feedsTable.AddRow([]any{o.Name, o.ReceivedCount, o.ReceivedLast, o.ErrorCount, !cf.Disabled, cf.Webhooks})
+func startRPC(port int, st *storage.Storage, cfg app.MyConfig) error {
+	rpc.Register(remoteservice.New(st, cfg))
+	rpc.HandleHTTP()
+	l, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
+	if err != nil {
+		return err
 	}
-	feedsTable.Print()
-	fmt.Println()
-	// Webhook stats
-	whTable := consoletable.New("Webhooks", 4)
-	whTable.AddRow([]any{"Name", "Count", "Last", "Errors"})
-	slices.SortFunc(cfg.Webhooks, func(a, b app.ConfigWebhook) int {
-		return cmp.Compare(a.Name, b.Name)
-	})
-	for _, cw := range cfg.Webhooks {
-		o, err := st.GetWebhookStats(cw.Name)
-		if err == storage.ErrNotFound {
-			continue
-		} else if err != nil {
-			log.Fatal(err)
-		}
-		whTable.AddRow([]any{o.Name, o.SentCount, o.SentLast, o.ErrorCount})
-	}
-	whTable.Print()
+	go func() {
+		slog.Info("RPC service running", "port", port)
+		err := http.Serve(l, nil)
+		slog.Error("RPC service aborted", "error", err)
+	}()
+	return nil
 }
 
 // myUsage writes a custom usage message to configured output stream.
@@ -131,20 +110,4 @@ func myUsage() {
 		"Options:\n"
 	fmt.Fprint(flag.CommandLine.Output(), s)
 	flag.PrintDefaults()
-}
-
-func sendPing(name string, cfg app.MyConfig) error {
-	var wh app.ConfigWebhook
-	for _, w := range cfg.Webhooks {
-		if w.Name == name {
-			wh = w
-			break
-		}
-	}
-	if wh.Name == "" {
-		return fmt.Errorf("no webhook found with the name %s", name)
-	}
-	dh := discordhook.New(http.DefaultClient, wh.URL)
-	pl := discordhook.WebhookPayload{Content: "Ping from feedhook"}
-	return dh.Send(pl)
 }
