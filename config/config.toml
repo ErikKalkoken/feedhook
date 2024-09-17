@@ -4,6 +4,7 @@
 # oldest = 3600
 # ticker = 30
 # loglevel = "INFO"
+# branding_disabled = false
 
 # A Discord webhook
 [[webhooks]]

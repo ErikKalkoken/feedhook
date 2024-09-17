@@ -21,14 +21,16 @@ const (
 // Messages are kept in a permanent queue and do not disappear after a restart.
 // Failed messages are automatically retried and rate limits are respected.
 type Webhook struct {
+	cfg   app.MyConfig
 	dwh   *discordhook.DiscordWebhook
 	name  string
 	queue *queue.Queue
 	st    *storage.Storage
 }
 
-func NewWebhook(httpClient *http.Client, queue *queue.Queue, name, url string, st *storage.Storage) *Webhook {
+func NewWebhook(httpClient *http.Client, queue *queue.Queue, name, url string, st *storage.Storage, cfg app.MyConfig) *Webhook {
 	wh := &Webhook{
+		cfg:   cfg,
 		dwh:   discordhook.New(httpClient, url),
 		name:  name,
 		queue: queue,
@@ -53,7 +55,7 @@ func (wh *Webhook) Start() {
 				myLog.Error("Failed to de-serialize message", "error", err, "data", string(v))
 				continue
 			}
-			pl, err := m.Item.ToDiscordPayload()
+			pl, err := m.Item.ToDiscordPayload(wh.cfg.App.BrandingDisabled)
 			if err != nil {
 				myLog.Error("Failed to convert message to payload", "error", err, "data", string(v))
 			}

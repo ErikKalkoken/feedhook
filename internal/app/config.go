@@ -34,11 +34,12 @@ func (mc *MyConfig) EnabledFeeds() []ConfigFeed {
 }
 
 type ConfigApp struct {
-	DBPath   string `toml:"db_path"`
-	LogLevel string `toml:"loglevel"`
-	Oldest   int    `toml:"oldest"`
-	Ticker   int    `toml:"ticker"`
-	Timeout  int    `toml:"timeout"`
+	BrandingDisabled bool   `toml:"branding_disabled"`
+	DBPath           string `toml:"db_path"`
+	LogLevel         string `toml:"loglevel"`
+	Oldest           int    `toml:"oldest"`
+	Ticker           int    `toml:"ticker"`
+	Timeout          int    `toml:"timeout"`
 }
 
 func (ca ConfigApp) LoggerLevel() slog.Level {

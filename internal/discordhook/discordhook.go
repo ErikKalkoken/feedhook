@@ -57,11 +57,11 @@ func (e RateLimitedError) Error() string {
 
 // DiscordWebhook represents a Discord webhook which respects rate limits.
 type DiscordWebhook struct {
-	client *http.Client
 	arl    apiRateLimit
 	brl    breachedRateLimit
-	wrl    webhookRateLimit
+	client *http.Client
 	url    string
+	wrl    webhookRateLimit
 }
 
 // New returns a new webhook.

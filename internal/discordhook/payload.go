@@ -2,8 +2,11 @@ package discordhook
 
 // WebhookPayload represents a Discord post for a webhook.
 type WebhookPayload struct {
-	Content string  `json:"content,omitempty"`
-	Embeds  []Embed `json:"embeds,omitempty"`
+	AllowedMentions bool    `json:"allowed_mentions,omitempty"`
+	AvatarURL       string  `json:"avatar_url,omitempty"`
+	Content         string  `json:"content,omitempty"`
+	Embeds          []Embed `json:"embeds,omitempty"`
+	Username        string  `json:"username,omitempty"`
 }
 
 // Embed represents a Discord Embed.

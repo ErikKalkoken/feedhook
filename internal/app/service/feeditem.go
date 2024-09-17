@@ -16,6 +16,8 @@ const (
 	// contentMaxLength = 2000
 	embedMaxFieldLength       = 256 // title, author name, field names
 	embedDescriptionMaxLength = 4096
+	avatarURL                 = "https://cdn.imgpile.com/f/aQ1yR7t_xl.png"
+	username                  = "Feedhook"
 )
 
 var converter = md.NewConverter("", true, nil)
@@ -54,7 +56,7 @@ type FeedItem struct {
 	Title       string
 }
 
-func (fi FeedItem) ToDiscordPayload() (discordhook.WebhookPayload, error) {
+func (fi FeedItem) ToDiscordPayload(brandingDisabled bool) (discordhook.WebhookPayload, error) {
 	var wpl discordhook.WebhookPayload
 	description, err := converter.ConvertString(fi.Description)
 	if err != nil {
@@ -86,6 +88,10 @@ func (fi FeedItem) ToDiscordPayload() (discordhook.WebhookPayload, error) {
 	}
 	if fi.ImageURL != "" {
 		em.Image.URL = fi.ImageURL
+	}
+	if !brandingDisabled {
+		wpl.Username = username
+		wpl.AvatarURL = avatarURL
 	}
 	wpl.Embeds = []discordhook.Embed{em}
 	return wpl, nil

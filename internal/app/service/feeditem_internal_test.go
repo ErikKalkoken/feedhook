@@ -21,8 +21,10 @@ func TestFeedItem(t *testing.T) {
 			Published:   published,
 			Title:       "title",
 		}
-		x, err := fi.ToDiscordPayload()
+		x, err := fi.ToDiscordPayload(false)
 		if assert.NoError(t, err) {
+			assert.NotEqual(t, "", x.Username)
+			assert.NotEqual(t, "", x.AvatarURL)
 			em := x.Embeds[0]
 			assert.Equal(t, "description", em.Description)
 			assert.Equal(t, "feedTitle", em.Author.Name)
@@ -36,23 +38,31 @@ func TestFeedItem(t *testing.T) {
 	})
 	t.Run("can remove img tags from description", func(t *testing.T) {
 		fi := FeedItem{Description: `alpha <img src="abc">bravo</img> charlie`}
-		x, err := fi.ToDiscordPayload()
+		x, err := fi.ToDiscordPayload(false)
 		if assert.NoError(t, err) {
 			assert.Equal(t, "alpha bravo charlie", x.Embeds[0].Description)
 		}
 	})
 	t.Run("can sanitize invalid URLs in description", func(t *testing.T) {
 		fi := FeedItem{Description: `<a href="https://www.xgoogle.com">https://www.google.com</a>`}
-		x, err := fi.ToDiscordPayload()
+		x, err := fi.ToDiscordPayload(false)
 		if assert.NoError(t, err) {
 			assert.Equal(t, "[Link](https://www.xgoogle.com)", x.Embeds[0].Description)
 		}
 	})
 	t.Run("should not impact valid URLs", func(t *testing.T) {
 		fi := FeedItem{Description: `<a href="https://www.google.com">Google</a>`}
-		x, err := fi.ToDiscordPayload()
+		x, err := fi.ToDiscordPayload(false)
 		if assert.NoError(t, err) {
 			assert.Equal(t, "[Google](https://www.google.com)", x.Embeds[0].Description)
+		}
+	})
+	t.Run("can disable branding", func(t *testing.T) {
+		fi := FeedItem{Description: "description"}
+		x, err := fi.ToDiscordPayload(true)
+		if assert.NoError(t, err) {
+			assert.Equal(t, "", x.Username)
+			assert.Equal(t, "", x.AvatarURL)
 		}
 	})
 }

@@ -80,3 +80,7 @@ Restart feedhook to start feedhook.
 ```sh
 sudo supervisorctl restart feedhook
 ```
+
+## Attributions
+
+- [Rss icons created by riajulislam - Flaticon](https://www.flaticon.com/free-icons/rss)
