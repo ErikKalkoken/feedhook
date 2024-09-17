@@ -14,6 +14,7 @@ A service for forwarding RSS and Atom feeds to Discord webhooks.
 - Easy configuration
 - Single executable file
 - Restartable without data loss
+- Live statistics
 
 ## Example
 

@@ -41,6 +41,20 @@ func TestFeedItem(t *testing.T) {
 			assert.Equal(t, "alpha bravo charlie", x.Embeds[0].Description)
 		}
 	})
+	t.Run("can sanitize invalid URLs in description", func(t *testing.T) {
+		fi := FeedItem{Description: `<a href="https://www.xgoogle.com">https://www.google.com</a>`}
+		x, err := fi.ToDiscordPayload()
+		if assert.NoError(t, err) {
+			assert.Equal(t, "[Link](https://www.xgoogle.com)", x.Embeds[0].Description)
+		}
+	})
+	t.Run("should not impact valid URLs", func(t *testing.T) {
+		fi := FeedItem{Description: `<a href="https://www.google.com">Google</a>`}
+		x, err := fi.ToDiscordPayload()
+		if assert.NoError(t, err) {
+			assert.Equal(t, "[Google](https://www.google.com)", x.Embeds[0].Description)
+		}
+	})
 }
 
 func TestEllipsis(t *testing.T) {

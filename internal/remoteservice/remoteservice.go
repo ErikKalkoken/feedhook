@@ -21,12 +21,13 @@ type SendPingArgs struct {
 	Name string
 }
 
+// RemoteService represents a service, which can be accessed remotely via RPC.
 type RemoteService struct {
 	cfg app.MyConfig
 	st  *storage.Storage
 }
 
-func New(st *storage.Storage, cfg app.MyConfig) *RemoteService {
+func NewRemoteService(st *storage.Storage, cfg app.MyConfig) *RemoteService {
 	s := &RemoteService{cfg: cfg, st: st}
 	return s
 }

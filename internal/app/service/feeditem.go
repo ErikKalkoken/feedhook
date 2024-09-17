@@ -3,6 +3,7 @@ package service
 import (
 	"fmt"
 	"log/slog"
+	"net/url"
 	"time"
 
 	md "github.com/JohannesKaufmann/html-to-markdown"
@@ -20,13 +21,24 @@ const (
 var converter = md.NewConverter("", true, nil)
 
 func init() {
-	x := md.Rule{
+	removeIMGTags := md.Rule{
 		Filter: []string{"img"},
 		Replacement: func(_ string, _ *goquery.Selection, _ *md.Options) *string {
 			return md.String("")
 		},
 	}
-	converter.AddRules(x)
+	sanitizeInvalidLinks := md.Rule{
+		Filter: []string{"a"},
+		Replacement: func(content string, selec *goquery.Selection, options *md.Options) *string {
+			_, err := url.ParseRequestURI(content)
+			if err == nil {
+				href := selec.AttrOr("href", "#")
+				return md.String("[Link](" + href + ")")
+			}
+			return nil
+		},
+	}
+	converter.AddRules(removeIMGTags, sanitizeInvalidLinks)
 }
 
 // FeedItem represents a feed item to be posted to a webhook

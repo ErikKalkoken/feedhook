@@ -30,7 +30,7 @@ const (
 )
 
 // Overwritten with current tag when released
-var Version = "0.2.0"
+var Version = "0.2.2"
 
 type realtime struct{}
 
@@ -43,7 +43,7 @@ func main() {
 	dbPathFlag := flag.String("db", ".", "path to database file")
 	portFlag := flag.Int("port", portRPC, "port for RPC service")
 	versionFlag := flag.Bool("v", false, "show version")
-	disabledFlag := flag.Bool("disabled", false, "run RPC service, but not main service")
+	offlineFlag := flag.Bool("offline", false, "run RPC service only")
 	flag.Usage = myUsage
 	flag.Parse()
 	if *versionFlag {
@@ -68,7 +68,7 @@ func main() {
 	}
 
 	// start main service
-	if !*disabledFlag {
+	if !*offlineFlag {
 		a := service.NewService(st, cfg, realtime{})
 		a.Start()
 		defer a.Close()
@@ -88,7 +88,7 @@ func main() {
 }
 
 func startRPC(port int, st *storage.Storage, cfg app.MyConfig) error {
-	rpc.Register(remoteservice.New(st, cfg))
+	rpc.Register(remoteservice.NewRemoteService(st, cfg))
 	rpc.HandleHTTP()
 	l, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
 	if err != nil {

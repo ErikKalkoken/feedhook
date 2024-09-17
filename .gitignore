@@ -5,6 +5,6 @@ config.toml
 !config/*
 feedhook.log
 feedhookcli
-!feedhookcli/*
 feedhooksrv
-!feedhooksrv/*
+!cmd/*
+feedhook.zip
