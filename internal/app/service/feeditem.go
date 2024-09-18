@@ -98,6 +98,7 @@ func (fi FeedItem) ToDiscordPayload(brandingDisabled bool) (discordhook.WebhookP
 		wpl.Username = username
 		wpl.AvatarURL = avatarURL
 	}
+	em.Footer = discordhook.EmbedFooter{Text: fi.FeedName}
 	wpl.Embeds = []discordhook.Embed{em}
 	return wpl, nil
 }

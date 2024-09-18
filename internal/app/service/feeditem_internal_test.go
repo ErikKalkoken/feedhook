@@ -13,6 +13,7 @@ func TestFeedItem(t *testing.T) {
 		published := time.Now().UTC()
 		fi := FeedItem{
 			Description: "description",
+			FeedName:    "feedName",
 			FeedTitle:   "feedTitle",
 			FeedURL:     "feedURL",
 			ImageURL:    "imageURL",
@@ -34,6 +35,7 @@ func TestFeedItem(t *testing.T) {
 			assert.Equal(t, "itemURL", em.URL)
 			assert.Equal(t, published.Format(time.RFC3339), em.Timestamp)
 			assert.Equal(t, "title", em.Title)
+			assert.Equal(t, "feedName", em.Footer.Text)
 		}
 	})
 	t.Run("can add UPDATE tag to title", func(t *testing.T) {
