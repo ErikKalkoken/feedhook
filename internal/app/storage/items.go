@@ -3,7 +3,6 @@ package storage
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"slices"
 	"time"
 
@@ -17,24 +16,43 @@ func (st *Storage) RecordItem(cf app.ConfigFeed, item *gofeed.Item) error {
 		root := tx.Bucket([]byte(bucketFeeds))
 		b := root.Bucket([]byte(cf.Name))
 		i := processedItemFromFeed(item)
-		return b.Put(i.Key(), i.Value())
+		v, err := i.ToBytes()
+		if err != nil {
+			return err
+		}
+		return b.Put(i.Key(), v)
 	})
 	return err
 }
 
-// IsItemNew reports wether an item in a feed is new
-func (st *Storage) IsItemNew(cf app.ConfigFeed, item *gofeed.Item) bool {
-	var isNew bool
-	st.db.View(func(tx *bolt.Tx) error {
+// GetItemState return the state of an item.
+func (st *Storage) GetItemState(cf app.ConfigFeed, item *gofeed.Item) (app.ItemState, error) {
+	var s app.ItemState
+	err := st.db.View(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketFeeds))
 		b := root.Bucket([]byte(cf.Name))
-		v := b.Get(processedItemFromFeed(item).Key())
+		k := processedItemFromFeed(item).Key()
+		v := b.Get(k)
 		if v == nil {
-			isNew = true
+			s = app.StateNew
+			return nil
 		}
+		if item.PublishedParsed == nil {
+			s = app.StateProcessed
+			return nil
+		}
+		pi, err := app.NewProcessedItemFromBytes(v)
+		if err != nil {
+			return err
+		}
+		if pp := *item.PublishedParsed; pp.UTC() == pi.Published.UTC() {
+			s = app.StateProcessed
+			return nil
+		}
+		s = app.StateUpdated
 		return nil
 	})
-	return isNew
+	return s, err
 }
 
 // CullItems deletes the oldest items when there are more items then a limit
@@ -44,7 +62,7 @@ func (st *Storage) CullItems(cf app.ConfigFeed, limit int) error {
 		b := root.Bucket([]byte(cf.Name))
 		items := make([]*app.ProcessedItem, 0)
 		b.ForEach(func(k, v []byte) error {
-			i, err := processedItemFromDB(k, v)
+			i, err := app.NewProcessedItemFromBytes(v)
 			if err != nil {
 				return err
 			}
@@ -73,7 +91,7 @@ func (st *Storage) ListItems(feed string) ([]*app.ProcessedItem, error) {
 		root := tx.Bucket([]byte(bucketFeeds))
 		b := root.Bucket([]byte(feed))
 		b.ForEach(func(k, v []byte) error {
-			i, err := processedItemFromDB(k, v)
+			i, err := app.NewProcessedItemFromBytes(v)
 			if err != nil {
 				return err
 			}
@@ -99,13 +117,6 @@ func (st *Storage) ItemCount(cf app.ConfigFeed) int {
 	return c
 }
 
-func processedItemFromDB(k, v []byte) (*app.ProcessedItem, error) {
-	t, err := time.Parse(time.RFC3339, string(v))
-	if err != nil {
-		return nil, err
-	}
-	return &app.ProcessedItem{ID: string(k), Published: t}, nil
-}
 func processedItemFromFeed(item *gofeed.Item) *app.ProcessedItem {
 	var t time.Time
 	if item.PublishedParsed != nil {
@@ -116,14 +127,14 @@ func processedItemFromFeed(item *gofeed.Item) *app.ProcessedItem {
 	return &app.ProcessedItem{ID: itemUniqueID(item), Published: t}
 }
 
-// itemUniqueID returns a unique ID of an item.
+// itemUniqueID returns the unique ID for a feed item.
+// This is the GUID when provided or otherwise a hash of the item's content.
 func itemUniqueID(item *gofeed.Item) string {
-	id := item.GUID
-	if id == "" {
-		s := item.GUID + item.Title + item.Description + item.Content
-		id = makeHash(s)
+	if item.GUID != "" {
+		return item.GUID
 	}
-	return fmt.Sprintf("%s-%s", id, item.Published)
+	s := item.Title + item.Description + item.Content
+	return makeHash(s)
 }
 
 func makeHash(s string) string {

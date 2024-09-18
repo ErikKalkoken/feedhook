@@ -29,46 +29,58 @@ func TestItems(t *testing.T) {
 	if err := st.Init(); err != nil {
 		log.Fatalf("Failed to init: %s", err)
 	}
-	t.Run("should report true when item has GUI and does not exit", func(t *testing.T) {
+	t.Run("should report unknown item with GUID as new", func(t *testing.T) {
 		if err := st.ClearFeeds(); err != nil {
 			t.Fatal(err)
 		}
 		i := &gofeed.Item{GUID: "abc1"}
-		assert.True(t, st.IsItemNew(cf, i))
+		s, err := st.GetItemState(cf, i)
+		if assert.NoError(t, err) {
+			assert.Equal(t, app.StateNew, s)
+		}
 	})
-	t.Run("should report false when item has GUI and exists", func(t *testing.T) {
+	t.Run("should report known item item with GUID and same publish date as processed", func(t *testing.T) {
 		if err := st.ClearFeeds(); err != nil {
 			t.Fatal(err)
 		}
-		t1 := time.Now().Format(time.RFC3339)
-		i1 := &gofeed.Item{GUID: "abc2", Published: t1}
+		t1 := time.Now()
+		i1 := &gofeed.Item{GUID: "abc2", PublishedParsed: &t1}
 		if err := st.RecordItem(cf, i1); err != nil {
 			t.Fatal(err)
 		}
-		i2 := &gofeed.Item{GUID: "abc2", Published: t1}
-		assert.False(t, st.IsItemNew(cf, i2))
+		i2 := &gofeed.Item{GUID: "abc2", PublishedParsed: &t1}
+		s, err := st.GetItemState(cf, i2)
+		if assert.NoError(t, err) {
+			assert.Equal(t, app.StateProcessed, s)
+		}
 	})
-	t.Run("should report true when new item has some GUI as existing and different publish data", func(t *testing.T) {
+	t.Run("should report known item with GUID and different publish data as updated", func(t *testing.T) {
 		if err := st.ClearFeeds(); err != nil {
 			t.Fatal(err)
 		}
-		t1 := time.Now().Add(-5 * time.Second).Format(time.RFC3339)
-		i1 := &gofeed.Item{GUID: "abc2", Published: t1}
+		t1 := time.Now().Add(-5 * time.Second)
+		i1 := &gofeed.Item{GUID: "abc2", PublishedParsed: &t1}
 		if err := st.RecordItem(cf, i1); err != nil {
 			t.Fatal(err)
 		}
-		t2 := time.Now().Format(time.RFC3339)
-		i2 := &gofeed.Item{GUID: "abc2", Published: t2}
-		assert.True(t, st.IsItemNew(cf, i2))
+		t2 := time.Now()
+		i2 := &gofeed.Item{GUID: "abc2", PublishedParsed: &t2}
+		s, err := st.GetItemState(cf, i2)
+		if assert.NoError(t, err) {
+			assert.Equal(t, app.StateUpdated, s)
+		}
 	})
-	t.Run("should report true when item has no GUI and does not exit", func(t *testing.T) {
+	t.Run("should report unknown item without GUID as new", func(t *testing.T) {
 		if err := st.ClearFeeds(); err != nil {
 			t.Fatal(err)
 		}
 		i := &gofeed.Item{Title: "title", Description: "description"}
-		assert.True(t, st.IsItemNew(cf, i))
+		s, err := st.GetItemState(cf, i)
+		if assert.NoError(t, err) {
+			assert.Equal(t, app.StateNew, s)
+		}
 	})
-	t.Run("should report false when item has no GUI and exists", func(t *testing.T) {
+	t.Run("should report known item without GUID as processed", func(t *testing.T) {
 		if err := st.ClearFeeds(); err != nil {
 			t.Fatal(err)
 		}
@@ -76,7 +88,10 @@ func TestItems(t *testing.T) {
 		if err := st.RecordItem(cf, i); err != nil {
 			t.Fatal(err)
 		}
-		assert.False(t, st.IsItemNew(cf, i))
+		s, err := st.GetItemState(cf, i)
+		if assert.NoError(t, err) {
+			assert.Equal(t, app.StateProcessed, s)
+		}
 	})
 	t.Run("should delete oldest items", func(t *testing.T) {
 		if err := st.ClearFeeds(); err != nil {
@@ -104,8 +119,8 @@ func TestItems(t *testing.T) {
 				for _, i := range ii {
 					ids = append(ids, string(i.ID))
 				}
-				assert.Contains(t, ids, "1-")
-				assert.Contains(t, ids, "3-")
+				assert.Contains(t, ids, "1")
+				assert.Contains(t, ids, "3")
 			}
 		}
 	})

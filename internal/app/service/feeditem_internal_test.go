@@ -36,6 +36,19 @@ func TestFeedItem(t *testing.T) {
 			assert.Equal(t, "title", em.Title)
 		}
 	})
+	t.Run("can add UPDATE tag to title", func(t *testing.T) {
+		published := time.Now().UTC()
+		fi := FeedItem{
+			IsUpdated: true,
+			Published: published,
+			Title:     "title",
+		}
+		x, err := fi.ToDiscordPayload(false)
+		if assert.NoError(t, err) {
+			em := x.Embeds[0]
+			assert.Equal(t, "UPDATED: title", em.Title)
+		}
+	})
 	t.Run("can remove img tags from description", func(t *testing.T) {
 		fi := FeedItem{Description: `alpha <img src="abc">bravo</img> charlie`}
 		x, err := fi.ToDiscordPayload(false)

@@ -14,7 +14,7 @@ func TestMessage(t *testing.T) {
 		feed := &gofeed.Feed{Title: "title"}
 		now := time.Now()
 		item := &gofeed.Item{Content: "content", PublishedParsed: &now}
-		x, err := newMessage("dummy", feed, item)
+		x, err := newMessage("dummy", feed, item, false)
 		if assert.NoError(t, err) {
 			assert.Equal(t, "content", x.Item.Description)
 		}

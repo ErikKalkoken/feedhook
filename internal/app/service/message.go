@@ -16,7 +16,7 @@ type Message struct {
 }
 
 // newMessage returns a new message from a feed item.
-func newMessage(feedName string, feed *gofeed.Feed, item *gofeed.Item) (Message, error) {
+func newMessage(feedName string, feed *gofeed.Feed, item *gofeed.Item, isUpdated bool) (Message, error) {
 	var description string
 	if item.Content != "" {
 		description = item.Content
@@ -28,6 +28,7 @@ func newMessage(feedName string, feed *gofeed.Feed, item *gofeed.Item) (Message,
 		FeedName:    feedName,
 		FeedTitle:   feed.Title,
 		FeedURL:     feed.Link,
+		IsUpdated:   isUpdated,
 		ItemURL:     item.Link,
 		Title:       item.Title,
 	}
@@ -41,8 +42,8 @@ func newMessage(feedName string, feed *gofeed.Feed, item *gofeed.Item) (Message,
 		fi.ImageURL = item.Image.URL
 	}
 	m := Message{
-		Timestamp: time.Now().UTC(),
 		Item:      fi,
+		Timestamp: time.Now().UTC(),
 	}
 	return m, nil
 }

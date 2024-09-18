@@ -51,6 +51,7 @@ type FeedItem struct {
 	FeedURL     string
 	IconURL     string
 	ImageURL    string
+	IsUpdated   bool
 	ItemURL     string
 	Published   time.Time
 	Title       string
@@ -66,7 +67,11 @@ func (fi FeedItem) ToDiscordPayload(brandingDisabled bool) (discordhook.WebhookP
 	if truncated {
 		slog.Warn("description was truncated", "description", description)
 	}
-	title, truncated := truncateString(fi.Title, embedMaxFieldLength)
+	t := fi.Title
+	if fi.IsUpdated {
+		t = fmt.Sprintf("UPDATED: %s", t)
+	}
+	title, truncated := truncateString(t, embedMaxFieldLength)
 	if truncated {
 		slog.Warn("title was truncated", "title", fi.Title)
 	}

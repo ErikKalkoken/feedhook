@@ -133,11 +133,15 @@ func (s *Service) processFeed(cf app.ConfigFeed, hooks []*Webhook) error {
 		if oldest != 0 && item.PublishedParsed != nil && item.PublishedParsed.Before(s.clock.Now().Add(-oldest)) {
 			continue
 		}
-		if !s.st.IsItemNew(cf, item) {
+		state, err := s.st.GetItemState(cf, item)
+		if err != nil {
+			slog.Warn("Failed to read item state from DB. Assuming item is new.", "title", item.Title)
+			state = app.StateNew
+		} else if state == app.StateProcessed {
 			continue
 		}
 		for _, hook := range hooks {
-			if err := hook.Add(cf.Name, feed, item); err != nil {
+			if err := hook.Add(cf.Name, feed, item, state == app.StateUpdated); err != nil {
 				myLog.Error("Failed to add item to webhook queue", "hook", hook.name, "error", "err")
 				if err := s.st.UpdateFeedStats(cf.Name, func(fs *app.FeedStats) error {
 					fs.ErrorCount++
