@@ -14,7 +14,7 @@ import (
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 )
 
-func TestStorage(t *testing.T) {
+func TestItems(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "test.db")
 	db, err := bolt.Open(p, 0600, nil)
 	if err != nil {
@@ -40,11 +40,26 @@ func TestStorage(t *testing.T) {
 		if err := st.ClearFeeds(); err != nil {
 			t.Fatal(err)
 		}
-		i := &gofeed.Item{GUID: "abc2"}
-		if err := st.RecordItem(cf, i); err != nil {
+		t1 := time.Now().Format(time.RFC3339)
+		i1 := &gofeed.Item{GUID: "abc2", Published: t1}
+		if err := st.RecordItem(cf, i1); err != nil {
 			t.Fatal(err)
 		}
-		assert.False(t, st.IsItemNew(cf, i))
+		i2 := &gofeed.Item{GUID: "abc2", Published: t1}
+		assert.False(t, st.IsItemNew(cf, i2))
+	})
+	t.Run("should report true when new item has some GUI as existing and different publish data", func(t *testing.T) {
+		if err := st.ClearFeeds(); err != nil {
+			t.Fatal(err)
+		}
+		t1 := time.Now().Add(-5 * time.Second).Format(time.RFC3339)
+		i1 := &gofeed.Item{GUID: "abc2", Published: t1}
+		if err := st.RecordItem(cf, i1); err != nil {
+			t.Fatal(err)
+		}
+		t2 := time.Now().Format(time.RFC3339)
+		i2 := &gofeed.Item{GUID: "abc2", Published: t2}
+		assert.True(t, st.IsItemNew(cf, i2))
 	})
 	t.Run("should report true when item has no GUI and does not exit", func(t *testing.T) {
 		if err := st.ClearFeeds(); err != nil {
@@ -89,57 +104,8 @@ func TestStorage(t *testing.T) {
 				for _, i := range ii {
 					ids = append(ids, string(i.ID))
 				}
-				assert.Contains(t, ids, "1")
-				assert.Contains(t, ids, "3")
-			}
-		}
-	})
-}
-
-func TestStats(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "test.db")
-	db, err := bolt.Open(p, 0600, nil)
-	if err != nil {
-		log.Fatalf("Failed to open DB: %s", err)
-	}
-	defer db.Close()
-	cf := app.ConfigFeed{Name: "feed1", URL: "https://www.example.com/feed", Webhooks: []string{"hook1"}}
-	cfg := app.MyConfig{
-		Feeds: []app.ConfigFeed{cf},
-	}
-	st := storage.New(db, cfg)
-	if err := st.Init(); err != nil {
-		t.Fatalf("Failed to init: %s", err)
-	}
-	t.Run("can update and read feed stats", func(t *testing.T) {
-		if err := st.ClearFeeds(); err != nil {
-			t.Fatal(err)
-		}
-		err := st.UpdateFeedStats("feed1", func(fs *app.FeedStats) error {
-			fs.ReceivedCount++
-			return nil
-		})
-		if assert.NoError(t, err) {
-			got, err := st.GetFeedStats("feed1")
-			if assert.NoError(t, err) {
-				assert.Equal(t, "feed1", got.Name)
-				assert.Equal(t, 1, got.ReceivedCount)
-			}
-		}
-	})
-	t.Run("can update and read webhook stats", func(t *testing.T) {
-		if err := st.ClearFeeds(); err != nil {
-			t.Fatal(err)
-		}
-		err := st.UpdateWebhookStats("hook1", func(fs *app.WebhookStats) error {
-			fs.SentCount++
-			return nil
-		})
-		if assert.NoError(t, err) {
-			got, err := st.GetWebhookStats("hook1")
-			if assert.NoError(t, err) {
-				assert.Equal(t, "hook1", got.Name)
-				assert.Equal(t, 1, got.SentCount)
+				assert.Contains(t, ids, "1-")
+				assert.Contains(t, ids, "3-")
 			}
 		}
 	})
