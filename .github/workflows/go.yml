@@ -50,11 +50,14 @@ jobs:
         sudo apt-get update
         sudo apt-get install zip gzip tar
 
-    - name: Build linux
-      run: GOOS=linux GOARCH=amd64 go build -ldflags "-X main.Version=${{  github.ref_name }}" -o ./build/linux/ ./cmd/fee
+    - name: Build 1/2
+      run: GOOS=linux GOARCH=amd64 go build -ldflags "-X main.Version=${{  github.ref_name }}" -o ./build ./cmd/feedhooksrv
+
+    - name: Build 2/2
+      run: GOOS=linux GOARCH=amd64 go build -ldflags "-X main.Version=${{  github.ref_name }}" -o ./build ./cmd/feedhookcli
 
     - name: Package linux
-      run: tar --directory=build/linux -czvf ${{ env.PREFIX }}-linux-amd64.tar.gz ${{ env.NAME }}
+      run: tar -C=build -czvf ${{ env.PREFIX }}-linux-amd64.tar.gz feedhooksrv feedhookcli
 
     - name: Create release
       uses: softprops/action-gh-release@v2
