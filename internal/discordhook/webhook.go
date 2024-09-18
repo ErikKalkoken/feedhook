@@ -53,24 +53,26 @@ func (rt realtime) Now() time.Time {
 
 // Send sends a payload to the webhook.
 //
-// When a rate limit is exceeded or breached a RateLimitedError error is returned.
-// HTTP errors are returns as HTTPError errors.
+// If a rate limit is exceeded the method will wait until the reset.
+// HTTP errors are returns as HTTPError errors. Except for 429s, which have a special error type.
 func (wh *Webhook) Send(payload WebhookPayload) error {
 	slog.Debug("Breached rate limit", "info", wh.brl)
 	if retryAfter := wh.brl.retryAfter(); retryAfter > 0 {
-		return RateLimitedError{RetryAfter: retryAfter, Type: BreachedRateLimit}
+		return TooManyRequestsError{RetryAfter: retryAfter}
 	}
 	if wh.arl.isSet() {
 		slog.Debug("API rate limit", "info", wh.arl)
 		if wh.arl.limitExceeded(time.Now()) {
 			retryAfter := roundUpDuration(time.Until(wh.arl.resetAt), time.Second)
-			return RateLimitedError{RetryAfter: retryAfter, Type: APIRateLimit}
+			slog.Warn("Rate limit exhausted. Waiting for reset", "retryAfter", retryAfter, "type", APIRateLimit)
+			time.Sleep(retryAfter)
 		}
 	}
 	remaining, retryAfter := wh.wrl.calc()
 	slog.Debug("Webhook rate limit", "remaining", remaining, "reset", retryAfter)
 	if remaining == 0 {
-		return RateLimitedError{RetryAfter: retryAfter, Type: WebhookRateLimit}
+		slog.Warn("Rate limit exhausted. Waiting for reset", "retryAfter", retryAfter, "type", WebhookRateLimit)
+		time.Sleep(retryAfter)
 	}
 	dat, err := json.Marshal(payload)
 	if err != nil {
@@ -106,7 +108,7 @@ func (wh *Webhook) Send(payload WebhookPayload) error {
 		} else {
 			retryAfter = time.Duration(x) * time.Second
 		}
-		return RateLimitedError{RetryAfter: retryAfter, Type: BreachedRateLimit}
+		return TooManyRequestsError{RetryAfter: retryAfter}
 	}
 	if resp.StatusCode >= 400 {
 		err := HTTPError{

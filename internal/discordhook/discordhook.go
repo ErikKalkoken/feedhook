@@ -1,7 +1,6 @@
 package discordhook
 
 import (
-	"fmt"
 	"net/http"
 	"time"
 )
@@ -27,13 +26,12 @@ const (
 	WebhookRateLimit
 )
 
-type RateLimitedError struct {
+type TooManyRequestsError struct {
 	RetryAfter time.Duration
-	Type       RateLimitType
 }
 
-func (e RateLimitedError) Error() string {
-	return fmt.Sprintf("%s rate limited. Retry After %v", e.Type, e.RetryAfter)
+func (e TooManyRequestsError) Error() string {
+	return "too many requests"
 }
 
 // Client represents a shared client used by each webhook to access the Discord API.

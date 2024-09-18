@@ -63,12 +63,12 @@ func (wh *Webhook) Start() {
 				if err == nil {
 					break
 				}
-				errRateLimit, ok := err.(discordhook.RateLimitedError)
+				err429, ok := err.(discordhook.TooManyRequestsError)
 				if !ok {
 					break
 				}
-				myLog.Warn("rate limited", "type", errRateLimit.Type, "retryAfter", errRateLimit.RetryAfter)
-				time.Sleep(errRateLimit.RetryAfter)
+				myLog.Warn("API rate limited breached", "retryAfter", err429.RetryAfter)
+				time.Sleep(err429.RetryAfter)
 			}
 			if err != nil {
 				m.Attempt++
