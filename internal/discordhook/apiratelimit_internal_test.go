@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRateLimit(t *testing.T) {
+func TestAPIRateLimit(t *testing.T) {
 	t.Run("should extract rate limit from header", func(t *testing.T) {
 		header := http.Header{}
 		header.Set("X-RateLimit-Limit", "5")

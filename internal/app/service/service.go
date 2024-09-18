@@ -13,6 +13,7 @@ import (
 
 	"github.com/ErikKalkoken/feedhook/internal/app"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
+	"github.com/ErikKalkoken/feedhook/internal/discordhook"
 	"github.com/ErikKalkoken/feedhook/internal/queue"
 )
 
@@ -24,7 +25,7 @@ type Clock interface {
 
 // Service represents this core application logic and holds it's global data.
 type Service struct {
-	client *http.Client
+	client *discordhook.Client
 	st     *storage.Storage
 	cfg    app.MyConfig
 	fp     *gofeed.Parser
@@ -35,13 +36,13 @@ type Service struct {
 
 // NewService creates a new App instance and returns it.
 func NewService(st *storage.Storage, cfg app.MyConfig, clock Clock) *Service {
-	client := &http.Client{
+	httpClient := &http.Client{
 		Timeout: time.Duration(cfg.App.Timeout) * time.Second,
 	}
 	fp := gofeed.NewParser()
-	fp.Client = client
+	fp.Client = httpClient
 	s := &Service{
-		client: client,
+		client: discordhook.NewClient(httpClient),
 		st:     st,
 		cfg:    cfg,
 		clock:  clock,

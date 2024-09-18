@@ -23,12 +23,14 @@ type SendPingArgs struct {
 
 // RemoteService represents a service, which can be accessed remotely via RPC.
 type RemoteService struct {
-	cfg app.MyConfig
-	st  *storage.Storage
+	cfg    app.MyConfig
+	st     *storage.Storage
+	client *discordhook.Client
 }
 
 func NewRemoteService(st *storage.Storage, cfg app.MyConfig) *RemoteService {
-	s := &RemoteService{cfg: cfg, st: st}
+	client := discordhook.NewClient(http.DefaultClient)
+	s := &RemoteService{cfg: cfg, st: st, client: client}
 	return s
 }
 
@@ -84,7 +86,7 @@ func (s *RemoteService) SendPing(args *SendPingArgs, reply *bool) error {
 	if wh.Name == "" {
 		return fmt.Errorf("no webhook found with the name %s", args.Name)
 	}
-	dh := discordhook.New(http.DefaultClient, wh.URL)
+	dh := discordhook.NewWebhook(s.client, wh.URL)
 	pl := discordhook.WebhookPayload{Content: "Ping from feedhook"}
 	return dh.Send(pl)
 }

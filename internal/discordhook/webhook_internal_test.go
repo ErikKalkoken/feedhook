@@ -7,15 +7,15 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestWebhookUpdateRateLimit(t *testing.T) {
+func TestUpdateAPIRateLimit(t *testing.T) {
 	t.Run("should always decrease remaining", func(t *testing.T) {
-		wh := DiscordWebhook{}
+		wh := Webhook{}
 		wh.arl.remaining = 1
 		wh.updateAPIRateLimit(http.Header{})
 		assert.Equal(t, 0, wh.arl.remaining)
 	})
 	t.Run("should not update when header is about same period", func(t *testing.T) {
-		wh := DiscordWebhook{}
+		wh := Webhook{}
 		header := http.Header{}
 		header.Set("X-RateLimit-Limit", "5")
 		header.Set("X-RateLimit-Remaining", "3")
@@ -27,7 +27,7 @@ func TestWebhookUpdateRateLimit(t *testing.T) {
 		assert.Equal(t, 2, wh.arl.remaining)
 	})
 	t.Run("should update when header is about new period", func(t *testing.T) {
-		wh := DiscordWebhook{}
+		wh := Webhook{}
 		header := http.Header{}
 		header.Set("X-RateLimit-Limit", "5")
 		header.Set("X-RateLimit-Remaining", "3")

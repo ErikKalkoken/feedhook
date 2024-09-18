@@ -11,6 +11,7 @@ import (
 	"github.com/ErikKalkoken/feedhook/internal/app"
 	"github.com/ErikKalkoken/feedhook/internal/app/service"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
+	"github.com/ErikKalkoken/feedhook/internal/discordhook"
 	"github.com/ErikKalkoken/feedhook/internal/queue"
 	"github.com/jarcoal/httpmock"
 	"github.com/mmcdole/gofeed"
@@ -39,7 +40,8 @@ func TestWebhook(t *testing.T) {
 		"https://www.example.com",
 		httpmock.NewStringResponder(204, ""),
 	)
-	wh := service.NewWebhook(http.DefaultClient, q, "dummy", "https://www.example.com", st, app.MyConfig{})
+	c := discordhook.NewClient(http.DefaultClient)
+	wh := service.NewWebhook(c, q, "dummy", "https://www.example.com", st, app.MyConfig{})
 	wh.Start()
 	feed := &gofeed.Feed{Title: "title"}
 	now := time.Now()

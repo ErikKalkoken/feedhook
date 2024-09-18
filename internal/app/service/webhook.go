@@ -2,7 +2,6 @@ package service
 
 import (
 	"log/slog"
-	"net/http"
 	"time"
 
 	"github.com/mmcdole/gofeed"
@@ -22,16 +21,16 @@ const (
 // Failed messages are automatically retried and rate limits are respected.
 type Webhook struct {
 	cfg   app.MyConfig
-	dwh   *discordhook.DiscordWebhook
+	dwh   *discordhook.Webhook
 	name  string
 	queue *queue.Queue
 	st    *storage.Storage
 }
 
-func NewWebhook(httpClient *http.Client, queue *queue.Queue, name, url string, st *storage.Storage, cfg app.MyConfig) *Webhook {
+func NewWebhook(client *discordhook.Client, queue *queue.Queue, name, url string, st *storage.Storage, cfg app.MyConfig) *Webhook {
 	wh := &Webhook{
 		cfg:   cfg,
-		dwh:   discordhook.New(httpClient, url),
+		dwh:   discordhook.NewWebhook(client, url),
 		name:  name,
 		queue: queue,
 		st:    st,

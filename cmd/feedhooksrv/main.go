@@ -68,6 +68,7 @@ func main() {
 	}
 
 	// start main service
+
 	if !*offlineFlag {
 		a := service.NewService(st, cfg, realtime{})
 		a.Start()
