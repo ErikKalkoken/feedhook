@@ -12,10 +12,6 @@ import (
 	"time"
 )
 
-const (
-	retryAfterTooManyRequestDefault = 60 * time.Second
-)
-
 // HTTPError represents a HTTP error, e.g. 400 Bad Request
 type HTTPError struct {
 	status  int
@@ -28,51 +24,30 @@ func (e HTTPError) Error() string {
 
 // Webhook represents a Discord webhook which respects rate limits.
 type Webhook struct {
-	arl    apiRateLimit
-	brl    breachedRateLimit
-	client *Client
-	url    string
-	wrl    rateLimit
+	limiterAPI     limiterAPI
+	brl            breachedRateLimit
+	client         *Client
+	url            string
+	limiterWebhook *limiter
 }
 
 // NewWebhook returns a new webhook.
 func NewWebhook(client *Client, url string) *Webhook {
 	wh := &Webhook{
-		client: client,
-		url:    url,
-		wrl:    newRateLimit(WebhookRateLimit, realtime{}),
+		client:         client,
+		url:            url,
+		limiterWebhook: newLimiter(webhookRateLimitPeriod, webhookRateLimitRequests, "webhook"),
 	}
 	return wh
-}
-
-type realtime struct{}
-
-func (rt realtime) Now() time.Time {
-	return time.Now()
 }
 
 // Send sends a payload to the webhook.
 //
 // If a rate limit is exceeded the method will wait until the reset.
-// HTTP errors are returns as HTTPError errors. Except for 429s, which have a special error type.
+// HTTP errors are returns as HTTPError. 429s are returns as TooManyRequestsError.
 func (wh *Webhook) Send(payload WebhookPayload) error {
-	slog.Debug("Breached rate limit", "info", wh.brl)
 	if retryAfter := wh.brl.retryAfter(); retryAfter > 0 {
 		return TooManyRequestsError{RetryAfter: retryAfter}
-	}
-	if wh.arl.isSet() {
-		slog.Debug("API rate limit", "info", wh.arl)
-		if wh.arl.limitExceeded(time.Now()) {
-			retryAfter := roundUpDuration(time.Until(wh.arl.resetAt), time.Second)
-			slog.Warn("Rate limit exhausted. Waiting for reset", "retryAfter", retryAfter, "type", APIRateLimit)
-			time.Sleep(retryAfter)
-		}
-	}
-	remaining, retryAfter := wh.wrl.calc()
-	slog.Debug("Webhook rate limit", "remaining", remaining, "reset", retryAfter)
-	if remaining == 0 {
-		slog.Warn("Rate limit exhausted. Waiting for reset", "retryAfter", retryAfter, "type", WebhookRateLimit)
-		time.Sleep(retryAfter)
 	}
 	dat, err := json.Marshal(payload)
 	if err != nil {
@@ -81,6 +56,9 @@ func (wh *Webhook) Send(payload WebhookPayload) error {
 	v := url.Values{}
 	v.Set("wait", "true")
 	u := fmt.Sprintf("%s?%s", wh.url, v.Encode())
+	wh.client.limiterGlobal.wait()
+	wh.limiterAPI.wait()
+	wh.limiterWebhook.wait()
 	slog.Debug("request", "url", wh.url, "body", string(dat))
 	resp, err := wh.client.httpClient.Post(u, "application/json", bytes.NewBuffer(dat))
 	if err != nil {
@@ -88,7 +66,6 @@ func (wh *Webhook) Send(payload WebhookPayload) error {
 	}
 	defer resp.Body.Close()
 	wh.updateAPIRateLimit(resp.Header)
-	wh.wrl.recordRequest()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
@@ -108,6 +85,7 @@ func (wh *Webhook) Send(payload WebhookPayload) error {
 		} else {
 			retryAfter = time.Duration(x) * time.Second
 		}
+		wh.brl.resetAt = time.Now().Add(retryAfter)
 		return TooManyRequestsError{RetryAfter: retryAfter}
 	}
 	if resp.StatusCode >= 400 {
@@ -120,17 +98,25 @@ func (wh *Webhook) Send(payload WebhookPayload) error {
 	return nil
 }
 
+func roundUpDuration(d time.Duration, m time.Duration) time.Duration {
+	x := d.Round(m)
+	if x < d {
+		return x + m
+	}
+	return x
+}
+
 func (wh *Webhook) updateAPIRateLimit(h http.Header) {
-	if wh.arl.remaining > 0 {
-		wh.arl.remaining--
+	if wh.limiterAPI.remaining > 0 {
+		wh.limiterAPI.remaining--
 	}
 	rl, err := rateLimitFromHeader(h)
 	if err != nil {
 		slog.Warn("failed to parse rate limit header", "error", err)
 		return
 	}
-	if !rl.isSet() || rl.resetAt == wh.arl.resetAt {
+	if !rl.isSet() || rl.resetAt == wh.limiterAPI.resetAt {
 		return
 	}
-	wh.arl = rl
+	wh.limiterAPI = rl
 }

@@ -5,6 +5,14 @@ import (
 	"time"
 )
 
+const (
+	retryAfterTooManyRequestDefault = 60 * time.Second
+	globalRateLimitPeriod           = 1 * time.Second
+	globalRateLimitRequests         = 50
+	webhookRateLimitPeriod          = 60 * time.Second
+	webhookRateLimitRequests        = 30
+)
+
 type RateLimitType uint
 
 func (rlt RateLimitType) String() string {
@@ -37,14 +45,14 @@ func (e TooManyRequestsError) Error() string {
 // Client represents a shared client used by each webhook to access the Discord API.
 // A shared client enables dealing with the global rate limit and ensures a shared http client is used.
 type Client struct {
-	httpClient *http.Client
-	grl        rateLimit
+	httpClient    *http.Client
+	limiterGlobal *limiter
 }
 
 func NewClient(httpClient *http.Client) *Client {
 	s := &Client{
-		httpClient: httpClient,
-		grl:        newRateLimit(GlobalRateLimit, realtime{}),
+		httpClient:    httpClient,
+		limiterGlobal: newLimiter(globalRateLimitPeriod, globalRateLimitRequests, "global"),
 	}
 	return s
 }

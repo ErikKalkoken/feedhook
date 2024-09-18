@@ -37,13 +37,13 @@ func TestAPIRateLimit(t *testing.T) {
 func TestRateLimitWait(t *testing.T) {
 	now := time.Now().UTC()
 	cases := []struct {
-		rl   apiRateLimit
+		rl   limiterAPI
 		want bool
 	}{
-		{apiRateLimit{}, false},
-		{apiRateLimit{timestamp: now, remaining: 1}, false},
-		{apiRateLimit{timestamp: now, remaining: 0, resetAt: now.Add(-5 * time.Second)}, false},
-		{apiRateLimit{timestamp: now, remaining: 0, resetAt: now.Add(5 * time.Second)}, true},
+		{limiterAPI{}, false},
+		{limiterAPI{timestamp: now, remaining: 1}, false},
+		{limiterAPI{timestamp: now, remaining: 0, resetAt: now.Add(-5 * time.Second)}, false},
+		{limiterAPI{timestamp: now, remaining: 0, resetAt: now.Add(5 * time.Second)}, true},
 	}
 	for i, tc := range cases {
 		t.Run(fmt.Sprintf("case %d", i+1), func(t *testing.T) {

@@ -2,14 +2,15 @@ package discordhook
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
 )
 
-// apiRateLimit represents the official API rate limit
+// limiterAPI implements a limiter from the API rate limit
 // as communicated by "X-RateLimit-" response headers.
-type apiRateLimit struct {
+type limiterAPI struct {
 	limit      int
 	remaining  int
 	resetAt    time.Time
@@ -18,7 +19,7 @@ type apiRateLimit struct {
 	timestamp  time.Time
 }
 
-func (rl apiRateLimit) String() string {
+func (rl limiterAPI) String() string {
 	return fmt.Sprintf(
 		"limit:%d remaining:%d reset:%s resetAfter:%f",
 		rl.limit,
@@ -27,11 +28,22 @@ func (rl apiRateLimit) String() string {
 	)
 }
 
-func (rl apiRateLimit) isSet() bool {
+func (rl limiterAPI) wait() {
+	if rl.isSet() {
+		slog.Debug("API rate limit", "info", rl)
+		if rl.limitExceeded(time.Now()) {
+			retryAfter := roundUpDuration(time.Until(rl.resetAt), time.Second)
+			slog.Warn("API rate limit exhausted. Waiting for reset", "retryAfter", retryAfter)
+			time.Sleep(retryAfter)
+		}
+	}
+}
+
+func (rl limiterAPI) isSet() bool {
 	return !rl.timestamp.IsZero()
 }
 
-func (rl apiRateLimit) limitExceeded(now time.Time) bool {
+func (rl limiterAPI) limitExceeded(now time.Time) bool {
 	if !rl.isSet() {
 		return false
 	}
@@ -44,8 +56,8 @@ func (rl apiRateLimit) limitExceeded(now time.Time) bool {
 	return true
 }
 
-func rateLimitFromHeader(h http.Header) (apiRateLimit, error) {
-	var r apiRateLimit
+func rateLimitFromHeader(h http.Header) (limiterAPI, error) {
+	var r limiterAPI
 	var err error
 	limit := h.Get("X-RateLimit-Limit")
 	if limit == "" {

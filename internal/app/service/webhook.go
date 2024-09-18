@@ -67,7 +67,7 @@ func (wh *Webhook) Start() {
 				if !ok {
 					break
 				}
-				myLog.Warn("API rate limited breached", "retryAfter", err429.RetryAfter)
+				myLog.Error("API rate limited exceeded", "retryAfter", err429.RetryAfter)
 				time.Sleep(err429.RetryAfter)
 			}
 			if err != nil {
