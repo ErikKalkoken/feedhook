@@ -12,8 +12,10 @@ type WebhookPayload struct {
 // Embed represents a Discord Embed.
 type Embed struct {
 	Author      EmbedAuthor    `json:"author,omitempty"`
-	Footer      EmbedFooter    `json:"footer,omitempty"`
+	Color       int            `json:"color,omitempty"`
 	Description string         `json:"description,omitempty"`
+	Fields      []EmbedField   `json:"fields,omitempty"`
+	Footer      EmbedFooter    `json:"footer,omitempty"`
 	Image       EmbedImage     `json:"image,omitempty"`
 	Timestamp   string         `json:"timestamp,omitempty"`
 	Title       string         `json:"title,omitempty"`
@@ -25,6 +27,12 @@ type EmbedAuthor struct {
 	Name    string `json:"name,omitempty"`
 	IconURL string `json:"icon_url,omitempty"`
 	URL     string `json:"url,omitempty"`
+}
+
+type EmbedField struct {
+	Name   string `json:"name,omitempty"`
+	Value  string `json:"value,omitempty"`
+	Inline bool   `json:"inline,omitempty"`
 }
 
 type EmbedFooter struct {
