@@ -28,12 +28,12 @@ func (e TooManyRequestsError) Error() string {
 
 // HTTPError represents a HTTP error, e.g. 400 Bad Request
 type HTTPError struct {
-	status  int
-	message string
+	Status  int
+	Message string
 }
 
 func (e HTTPError) Error() string {
-	return e.message
+	return e.Message
 }
 
 // Webhook represents a Discord webhook which respects rate limits.
@@ -102,21 +102,23 @@ func (wh *Webhook) Execute(m Message) error {
 		slog.Info("response", "url", wh.url, "status", resp.Status)
 	}
 	if resp.StatusCode == http.StatusTooManyRequests {
-		var retryAfter time.Duration
-		x, err := strconv.Atoi(resp.Header.Get("Retry-After"))
-		if err != nil {
-			slog.Warn("Failed to parse retry after. Assuming default", "error", err)
-			retryAfter = retryAfterTooManyRequestDefault
-		} else {
-			retryAfter = time.Duration(x) * time.Second
+		retryAfter := retryAfterTooManyRequestDefault
+		s := resp.Header.Get("Retry-After")
+		if s != "" {
+			x, err := strconv.Atoi(s)
+			if err != nil {
+				slog.Warn("Failed to parse retry after. Assuming default", "error", err)
+			} else {
+				retryAfter = time.Duration(x) * time.Second
+			}
 		}
 		wh.brl.resetAt = time.Now().Add(retryAfter)
 		return TooManyRequestsError{RetryAfter: retryAfter}
 	}
 	if resp.StatusCode >= 400 {
 		err := HTTPError{
-			status:  resp.StatusCode,
-			message: resp.Status,
+			Status:  resp.StatusCode,
+			Message: resp.Status,
 		}
 		return err
 	}
