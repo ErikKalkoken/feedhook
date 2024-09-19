@@ -20,6 +20,8 @@ const (
 // TooManyRequestsError represents a HTTP status code 429 error.
 type TooManyRequestsError struct {
 	RetryAfter time.Duration
+	Message    string
+	Global     bool
 }
 
 func (e TooManyRequestsError) Error() string {
@@ -102,6 +104,10 @@ func (wh *Webhook) Execute(m Message) error {
 		slog.Info("response", "url", wh.url, "status", resp.Status)
 	}
 	if resp.StatusCode == http.StatusTooManyRequests {
+		var m tooManyRequestsResponse
+		if err := json.Unmarshal(body, &m); err != nil {
+			slog.Warn("Failed to parse 429 response body", "error", err)
+		}
 		retryAfter := retryAfterTooManyRequestDefault
 		s := resp.Header.Get("Retry-After")
 		if s != "" {
@@ -113,7 +119,11 @@ func (wh *Webhook) Execute(m Message) error {
 			}
 		}
 		wh.brl.resetAt = time.Now().Add(retryAfter)
-		return TooManyRequestsError{RetryAfter: retryAfter}
+		return TooManyRequestsError{
+			RetryAfter: retryAfter, // Value from header is more reliable
+			Message:    m.Message,
+			Global:     m.Global,
+		}
 	}
 	if resp.StatusCode >= 400 {
 		err := HTTPError{
@@ -123,4 +133,10 @@ func (wh *Webhook) Execute(m Message) error {
 		return err
 	}
 	return nil
+}
+
+type tooManyRequestsResponse struct {
+	Message    string  `json:"message,omitempty"`
+	RetryAfter float64 `json:"retry_after,omitempty"`
+	Global     bool    `json:"global,omitempty"`
 }

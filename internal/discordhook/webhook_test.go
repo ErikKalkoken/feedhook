@@ -46,13 +46,19 @@ func TestWebhook(t *testing.T) {
 		httpmock.RegisterResponder(
 			"POST",
 			url,
-			httpmock.NewStringResponder(429, "").HeaderSet(http.Header{"Retry-After": []string{"3"}}),
+			httpmock.NewJsonResponderOrPanic(429,
+				map[string]any{
+					"message":     "You are being rate limited.",
+					"retry_after": 64.57,
+					"global":      true,
+				}).HeaderSet(http.Header{"Retry-After": []string{"3"}}),
 		)
 		c := discordhook.NewClient(http.DefaultClient)
 		wh := discordhook.NewWebhook(c, url)
 		err := wh.Execute(discordhook.Message{Content: "content"})
-		httpErr, _ := err.(discordhook.TooManyRequestsError)
-		assert.Equal(t, 3*time.Second, httpErr.RetryAfter)
+		err2, _ := err.(discordhook.TooManyRequestsError)
+		assert.Equal(t, 3*time.Second, err2.RetryAfter)
+		assert.True(t, err2.Global)
 	})
 	t.Run("should return http 429 as TooManyRequestsError and use default retry duration", func(t *testing.T) {
 		httpmock.Reset()
