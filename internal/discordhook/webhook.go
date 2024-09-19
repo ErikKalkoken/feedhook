@@ -11,6 +11,21 @@ import (
 	"time"
 )
 
+const (
+	retryAfterTooManyRequestDefault = 60 * time.Second
+	webhookRateLimitPeriod          = 60 * time.Second
+	webhookRateLimitRequests        = 30
+)
+
+// TooManyRequestsError represents a HTTP status code 429 error.
+type TooManyRequestsError struct {
+	RetryAfter time.Duration
+}
+
+func (e TooManyRequestsError) Error() string {
+	return "too many requests"
+}
+
 // HTTPError represents a HTTP error, e.g. 400 Bad Request
 type HTTPError struct {
 	status  int
@@ -23,12 +38,13 @@ func (e HTTPError) Error() string {
 
 // Webhook represents a Discord webhook which respects rate limits.
 type Webhook struct {
-	limiterAPI     limiterAPI
-	brl            breachedRateLimit
-	client         *Client
-	url            string
-	limiterWebhook *limiter
+	client *Client
+	url    string
+
 	mu             sync.Mutex
+	brl            breachedRateLimit
+	limiterAPI     limiterAPI
+	limiterWebhook *limiter
 }
 
 // NewWebhook returns a new webhook.
