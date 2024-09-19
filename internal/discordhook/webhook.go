@@ -57,7 +57,7 @@ func (wh *Webhook) Send(payload WebhookPayload) error {
 	v.Set("wait", "true")
 	u := fmt.Sprintf("%s?%s", wh.url, v.Encode())
 	wh.client.limiterGlobal.wait()
-	wh.limiterAPI.wait()
+	wh.limiterAPI.Wait()
 	wh.limiterWebhook.wait()
 	slog.Debug("request", "url", wh.url, "body", string(dat))
 	resp, err := wh.client.httpClient.Post(u, "application/json", bytes.NewBuffer(dat))
@@ -65,7 +65,7 @@ func (wh *Webhook) Send(payload WebhookPayload) error {
 		return err
 	}
 	defer resp.Body.Close()
-	if err := wh.limiterAPI.updateFromHeader(resp.Header); err != nil {
+	if err := wh.limiterAPI.UpdateFromHeader(resp.Header); err != nil {
 		slog.Error("Failed to update API limiter from header", "error", err)
 	}
 	body, err := io.ReadAll(resp.Body)

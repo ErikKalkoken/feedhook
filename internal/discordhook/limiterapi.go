@@ -11,6 +11,39 @@ import (
 // limiterAPI implements a limiter from the API rate limit
 // as communicated by "X-RateLimit-" response headers.
 type limiterAPI struct {
+	rl rateLimit
+}
+
+func (l *limiterAPI) Wait() {
+	slog.Debug("API rate limit", "info", l)
+	if l.rl.limitExceeded(time.Now()) {
+		retryAfter := roundUpDuration(time.Until(l.rl.resetAt), time.Second)
+		slog.Warn("API rate limit exhausted. Waiting for reset", "retryAfter", retryAfter)
+		time.Sleep(retryAfter)
+	}
+}
+
+// UpdateFromHeader updates the limiter from a header.
+func (l *limiterAPI) UpdateFromHeader(h http.Header) error {
+	if l.rl.remaining > 0 {
+		l.rl.remaining--
+	}
+	rl2, err := newRateLimitFromHeader(h)
+	if err != nil {
+		return err
+	}
+	if !rl2.isSet() {
+		return nil
+	}
+	if rl2.bucket == l.rl.bucket && rl2.resetAt == l.rl.resetAt {
+		return nil
+	}
+	l.rl = rl2
+	return nil
+}
+
+// rateLimit represents the rate limit information as returned from the Discord API
+type rateLimit struct {
 	limit      int
 	remaining  int
 	resetAt    time.Time
@@ -19,62 +52,8 @@ type limiterAPI struct {
 	timestamp  time.Time
 }
 
-func (l limiterAPI) String() string {
-	return fmt.Sprintf(
-		"limit:%d remaining:%d reset:%s resetAfter:%f",
-		l.limit,
-		l.remaining,
-		l.resetAt, time.Until(l.resetAt).Seconds(),
-	)
-}
-
-func (l limiterAPI) wait() {
-	slog.Debug("API rate limit", "info", l)
-	if l.limitExceeded(time.Now()) {
-		retryAfter := roundUpDuration(time.Until(l.resetAt), time.Second)
-		slog.Warn("API rate limit exhausted. Waiting for reset", "retryAfter", retryAfter)
-		time.Sleep(retryAfter)
-	}
-}
-
-func (l limiterAPI) isSet() bool {
-	return !l.timestamp.IsZero()
-}
-
-func (l limiterAPI) limitExceeded(now time.Time) bool {
-	if !l.isSet() {
-		return false
-	}
-	if l.remaining > 0 {
-		return false
-	}
-	if l.resetAt.Before(now) {
-		return false
-	}
-	return true
-}
-
-// updateFromHeader updates the limiter from a header.
-func (l *limiterAPI) updateFromHeader(h http.Header) error {
-	if l.remaining > 0 {
-		l.remaining--
-	}
-	l2, err := newLimiterAPIFromHeader(h)
-	if err != nil {
-		return err
-	}
-	if !l2.isSet() {
-		return nil
-	}
-	if l2.bucket == l.bucket && l2.resetAt == l.resetAt {
-		return nil
-	}
-	*l = l2
-	return nil
-}
-
-func newLimiterAPIFromHeader(h http.Header) (limiterAPI, error) {
-	var r limiterAPI
+func newRateLimitFromHeader(h http.Header) (rateLimit, error) {
+	var r rateLimit
 	var err error
 	limit := h.Get("X-RateLimit-Limit")
 	if limit == "" {
@@ -116,4 +95,30 @@ func newLimiterAPIFromHeader(h http.Header) (limiterAPI, error) {
 	r.bucket = bucket
 	r.timestamp = time.Now().UTC()
 	return r, nil
+}
+
+func (rl rateLimit) String() string {
+	return fmt.Sprintf(
+		"limit:%d remaining:%d reset:%s resetAfter:%f",
+		rl.limit,
+		rl.remaining,
+		rl.resetAt, time.Until(rl.resetAt).Seconds(),
+	)
+}
+
+func (l rateLimit) isSet() bool {
+	return !l.timestamp.IsZero()
+}
+
+func (l rateLimit) limitExceeded(now time.Time) bool {
+	if !l.isSet() {
+		return false
+	}
+	if l.remaining > 0 {
+		return false
+	}
+	if l.resetAt.Before(now) {
+		return false
+	}
+	return true
 }
