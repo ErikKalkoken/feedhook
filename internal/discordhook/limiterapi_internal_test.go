@@ -17,7 +17,7 @@ func TestAPIRateLimit(t *testing.T) {
 		header.Set("X-RateLimit-Reset", "1470173023")
 		header.Set("X-RateLimit-Reset-After", "1.2")
 		header.Set("X-RateLimit-Bucket", "abcd1234")
-		rl, err := rateLimitFromHeader(header)
+		rl, err := newLimiterAPIFromHeader(header)
 		if assert.NoError(t, err) {
 			assert.Equal(t, 5, rl.limit)
 			assert.Equal(t, 1, rl.remaining)
@@ -28,7 +28,7 @@ func TestAPIRateLimit(t *testing.T) {
 	})
 	t.Run("should return empty rate limit if header is incomplete", func(t *testing.T) {
 		header := http.Header{}
-		rl, err := rateLimitFromHeader(header)
+		rl, err := newLimiterAPIFromHeader(header)
 		if assert.NoError(t, err) {
 			assert.True(t, rl.resetAt.IsZero())
 		}
@@ -50,4 +50,40 @@ func TestRateLimitWait(t *testing.T) {
 			assert.Equal(t, tc.want, tc.rl.limitExceeded(now))
 		})
 	}
+}
+
+func TestUpdateFromHeader(t *testing.T) {
+	t.Run("should decrease remaining if header is about same period and bucket", func(t *testing.T) {
+		l := limiterAPI{remaining: 2, resetAt: time.Unix(1470173023, 0).UTC(), bucket: "abcd1234"}
+		header := http.Header{}
+		header.Set("X-RateLimit-Limit", "5")
+		header.Set("X-RateLimit-Remaining", "3")
+		header.Set("X-RateLimit-Reset", "1470173023")
+		header.Set("X-RateLimit-Reset-After", "1.2")
+		header.Set("X-RateLimit-Bucket", "abcd1234")
+		l.updateFromHeader(header)
+		assert.Equal(t, 1, l.remaining)
+	})
+	t.Run("should update when header is about new period and same bucket", func(t *testing.T) {
+		l := limiterAPI{remaining: 2, resetAt: time.Unix(1470173022, 0).UTC(), bucket: "abcd1234"}
+		header := http.Header{}
+		header.Set("X-RateLimit-Limit", "5")
+		header.Set("X-RateLimit-Remaining", "4")
+		header.Set("X-RateLimit-Reset", "1470173023")
+		header.Set("X-RateLimit-Reset-After", "1.2")
+		header.Set("X-RateLimit-Bucket", "abcd1234")
+		l.updateFromHeader(header)
+		assert.Equal(t, 4, l.remaining)
+	})
+	t.Run("should update when header is about same period and different bucket", func(t *testing.T) {
+		l := limiterAPI{remaining: 2, resetAt: time.Unix(1470173022, 0).UTC(), bucket: "abcd1234"}
+		header := http.Header{}
+		header.Set("X-RateLimit-Limit", "5")
+		header.Set("X-RateLimit-Remaining", "4")
+		header.Set("X-RateLimit-Reset", "1470173022")
+		header.Set("X-RateLimit-Reset-After", "1.2")
+		header.Set("X-RateLimit-Bucket", "abcd9234")
+		l.updateFromHeader(header)
+		assert.Equal(t, 4, l.remaining)
+	})
 }

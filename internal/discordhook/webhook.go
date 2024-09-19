@@ -65,7 +65,9 @@ func (wh *Webhook) Send(payload WebhookPayload) error {
 		return err
 	}
 	defer resp.Body.Close()
-	wh.updateAPIRateLimit(resp.Header)
+	if err := wh.limiterAPI.updateFromHeader(resp.Header); err != nil {
+		slog.Error("Failed to update API limiter from header", "error", err)
+	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
@@ -96,27 +98,4 @@ func (wh *Webhook) Send(payload WebhookPayload) error {
 		return err
 	}
 	return nil
-}
-
-func roundUpDuration(d time.Duration, m time.Duration) time.Duration {
-	x := d.Round(m)
-	if x < d {
-		return x + m
-	}
-	return x
-}
-
-func (wh *Webhook) updateAPIRateLimit(h http.Header) {
-	if wh.limiterAPI.remaining > 0 {
-		wh.limiterAPI.remaining--
-	}
-	rl, err := rateLimitFromHeader(h)
-	if err != nil {
-		slog.Warn("failed to parse rate limit header", "error", err)
-		return
-	}
-	if !rl.isSet() || rl.resetAt == wh.limiterAPI.resetAt {
-		return
-	}
-	wh.limiterAPI = rl
 }

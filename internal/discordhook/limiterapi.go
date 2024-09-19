@@ -19,44 +19,61 @@ type limiterAPI struct {
 	timestamp  time.Time
 }
 
-func (rl limiterAPI) String() string {
+func (l limiterAPI) String() string {
 	return fmt.Sprintf(
 		"limit:%d remaining:%d reset:%s resetAfter:%f",
-		rl.limit,
-		rl.remaining,
-		rl.resetAt, time.Until(rl.resetAt).Seconds(),
+		l.limit,
+		l.remaining,
+		l.resetAt, time.Until(l.resetAt).Seconds(),
 	)
 }
 
-func (rl limiterAPI) wait() {
-	if rl.isSet() {
-		slog.Debug("API rate limit", "info", rl)
-		if rl.limitExceeded(time.Now()) {
-			retryAfter := roundUpDuration(time.Until(rl.resetAt), time.Second)
-			slog.Warn("API rate limit exhausted. Waiting for reset", "retryAfter", retryAfter)
-			time.Sleep(retryAfter)
-		}
+func (l limiterAPI) wait() {
+	slog.Debug("API rate limit", "info", l)
+	if l.limitExceeded(time.Now()) {
+		retryAfter := roundUpDuration(time.Until(l.resetAt), time.Second)
+		slog.Warn("API rate limit exhausted. Waiting for reset", "retryAfter", retryAfter)
+		time.Sleep(retryAfter)
 	}
 }
 
-func (rl limiterAPI) isSet() bool {
-	return !rl.timestamp.IsZero()
+func (l limiterAPI) isSet() bool {
+	return !l.timestamp.IsZero()
 }
 
-func (rl limiterAPI) limitExceeded(now time.Time) bool {
-	if !rl.isSet() {
+func (l limiterAPI) limitExceeded(now time.Time) bool {
+	if !l.isSet() {
 		return false
 	}
-	if rl.remaining > 0 {
+	if l.remaining > 0 {
 		return false
 	}
-	if rl.resetAt.Before(now) {
+	if l.resetAt.Before(now) {
 		return false
 	}
 	return true
 }
 
-func rateLimitFromHeader(h http.Header) (limiterAPI, error) {
+// updateFromHeader updates the limiter from a header.
+func (l *limiterAPI) updateFromHeader(h http.Header) error {
+	if l.remaining > 0 {
+		l.remaining--
+	}
+	l2, err := newLimiterAPIFromHeader(h)
+	if err != nil {
+		return err
+	}
+	if !l2.isSet() {
+		return nil
+	}
+	if l2.bucket == l.bucket && l2.resetAt == l.resetAt {
+		return nil
+	}
+	*l = l2
+	return nil
+}
+
+func newLimiterAPIFromHeader(h http.Header) (limiterAPI, error) {
 	var r limiterAPI
 	var err error
 	limit := h.Get("X-RateLimit-Limit")
