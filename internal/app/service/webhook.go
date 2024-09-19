@@ -54,12 +54,12 @@ func (wh *Webhook) Start() {
 				myLog.Error("Failed to de-serialize message", "error", err, "data", string(v))
 				continue
 			}
-			pl, err := m.Item.ToDiscordPayload(wh.cfg.App.BrandingDisabled)
+			pl, err := m.Item.ToDiscordMessage(wh.cfg.App.BrandingDisabled)
 			if err != nil {
 				myLog.Error("Failed to convert message to payload", "error", err, "data", string(v))
 			}
 			for {
-				err = wh.dwh.Send(pl)
+				err = wh.dwh.Execute(pl)
 				if err == nil {
 					break
 				}

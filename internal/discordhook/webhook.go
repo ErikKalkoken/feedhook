@@ -41,13 +41,14 @@ func NewWebhook(client *Client, url string) *Webhook {
 	return wh
 }
 
-// Send sends a payload to the webhook.
+// Execute posts a message to the configured webhook.
 //
-// If a rate limit is exhausted Send will wait until the reset.
-// HTTP errors are returns as HTTPError, except for 429s, which are returns as TooManyRequestsError.
+// Execute respects Discord's rate limits and will wait until there is a free slot to post the message.
+// Execute can is thread safe.
 //
-// Send can be used concurrently.
-func (wh *Webhook) Send(payload WebhookPayload) error {
+// HTTP status codes of 400 or above are returns as [HTTPError],
+// except for 429s, which are returns as [TooManyRequestsError].
+func (wh *Webhook) Execute(payload Message) error {
 	wh.mu.Lock()
 	defer wh.mu.Unlock()
 	if retryAfter := wh.brl.retryAfter(); retryAfter > 0 {

@@ -57,15 +57,16 @@ type FeedItem struct {
 	Title       string
 }
 
-func (fi FeedItem) ToDiscordPayload(brandingDisabled bool) (discordhook.WebhookPayload, error) {
-	var wpl discordhook.WebhookPayload
+// ToDiscordMessage generates a DiscordMessage from a FeedItem.
+func (fi FeedItem) ToDiscordMessage(brandingDisabled bool) (discordhook.Message, error) {
+	var dm discordhook.Message
 	description, err := converter.ConvertString(fi.Description)
 	if err != nil {
-		return wpl, fmt.Errorf("failed to parse description to markdown: %w", err)
+		return dm, fmt.Errorf("failed to parse description to markdown: %w", err)
 	}
 	desc, truncated := truncateString(description, embedDescriptionMaxLength)
 	if truncated {
-		slog.Warn("description was truncated", "description", description)
+		slog.Warn("description was truncated", "title", fi.Title)
 	}
 	t := fi.Title
 	if fi.IsUpdated {
@@ -95,12 +96,12 @@ func (fi FeedItem) ToDiscordPayload(brandingDisabled bool) (discordhook.WebhookP
 		em.Image.URL = fi.ImageURL
 	}
 	if !brandingDisabled {
-		wpl.Username = username
-		wpl.AvatarURL = avatarURL
+		dm.Username = username
+		dm.AvatarURL = avatarURL
 	}
 	em.Footer = discordhook.EmbedFooter{Text: fi.FeedName}
-	wpl.Embeds = []discordhook.Embed{em}
-	return wpl, nil
+	dm.Embeds = []discordhook.Embed{em}
+	return dm, nil
 }
 
 // truncateString truncates a given string if it longer then a limit

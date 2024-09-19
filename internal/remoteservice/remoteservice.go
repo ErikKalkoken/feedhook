@@ -87,6 +87,6 @@ func (s *RemoteService) SendPing(args *SendPingArgs, reply *bool) error {
 		return fmt.Errorf("no webhook found with the name %s", args.Name)
 	}
 	dh := discordhook.NewWebhook(s.client, wh.URL)
-	pl := discordhook.WebhookPayload{Content: "Ping from feedhook"}
-	return dh.Send(pl)
+	pl := discordhook.Message{Content: "Ping from feedhook"}
+	return dh.Execute(pl)
 }

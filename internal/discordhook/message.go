@@ -1,7 +1,7 @@
 package discordhook
 
-// WebhookPayload represents a Discord post for a webhook.
-type WebhookPayload struct {
+// Message represents a message that can be send to a Discord webhook.
+type Message struct {
 	AllowedMentions bool    `json:"allowed_mentions,omitempty"`
 	AvatarURL       string  `json:"avatar_url,omitempty"`
 	Content         string  `json:"content,omitempty"`
