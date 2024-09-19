@@ -3,12 +3,11 @@ package discordhook
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -29,6 +28,7 @@ type Webhook struct {
 	client         *Client
 	url            string
 	limiterWebhook *limiter
+	mu             sync.Mutex
 }
 
 // NewWebhook returns a new webhook.
@@ -43,9 +43,13 @@ func NewWebhook(client *Client, url string) *Webhook {
 
 // Send sends a payload to the webhook.
 //
-// If a rate limit is exceeded the method will wait until the reset.
-// HTTP errors are returns as HTTPError. 429s are returns as TooManyRequestsError.
+// If a rate limit is exhausted Send will wait until the reset.
+// HTTP errors are returns as HTTPError, except for 429s, which are returns as TooManyRequestsError.
+//
+// Send can be used concurrently.
 func (wh *Webhook) Send(payload WebhookPayload) error {
+	wh.mu.Lock()
+	defer wh.mu.Unlock()
 	if retryAfter := wh.brl.retryAfter(); retryAfter > 0 {
 		return TooManyRequestsError{RetryAfter: retryAfter}
 	}
@@ -53,14 +57,11 @@ func (wh *Webhook) Send(payload WebhookPayload) error {
 	if err != nil {
 		return err
 	}
-	v := url.Values{}
-	v.Set("wait", "true")
-	u := fmt.Sprintf("%s?%s", wh.url, v.Encode())
 	wh.client.limiterGlobal.wait()
 	wh.limiterAPI.Wait()
 	wh.limiterWebhook.wait()
 	slog.Debug("request", "url", wh.url, "body", string(dat))
-	resp, err := wh.client.httpClient.Post(u, "application/json", bytes.NewBuffer(dat))
+	resp, err := wh.client.httpClient.Post(wh.url, "application/json", bytes.NewBuffer(dat))
 	if err != nil {
 		return err
 	}

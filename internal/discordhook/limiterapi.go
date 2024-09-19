@@ -15,7 +15,7 @@ type limiterAPI struct {
 }
 
 func (l *limiterAPI) Wait() {
-	slog.Debug("API rate limit", "info", l)
+	slog.Debug("API rate limit", "info", l.rl)
 	if l.rl.limitExceeded(time.Now()) {
 		retryAfter := roundUpDuration(time.Until(l.rl.resetAt), time.Second)
 		slog.Warn("API rate limit exhausted. Waiting for reset", "retryAfter", retryAfter)
