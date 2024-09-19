@@ -20,12 +20,14 @@ const (
 // TooManyRequestsError represents a HTTP status code 429 error.
 type TooManyRequestsError struct {
 	RetryAfter time.Duration
-	Message    string
 	Global     bool
 }
 
 func (e TooManyRequestsError) Error() string {
-	return "too many requests"
+	if e.Global {
+		return "global rate limit exceeded"
+	}
+	return "rate limit exceeded"
 }
 
 // HTTPError represents a HTTP error, e.g. 400 Bad Request
@@ -44,7 +46,7 @@ type Webhook struct {
 	url    string
 
 	mu             sync.Mutex
-	brl            breachedRateLimit
+	rle            rateLimitExceeded
 	limiterAPI     limiterAPI
 	limiterWebhook *limiter
 }
@@ -76,9 +78,12 @@ func (wh *Webhook) Execute(m Message) error {
 	if err != nil {
 		return err
 	}
+	if ok, retryAfter := wh.client.rle.isActive(); ok {
+		return TooManyRequestsError{RetryAfter: retryAfter, Global: true}
+	}
 	wh.mu.Lock()
 	defer wh.mu.Unlock()
-	if retryAfter := wh.brl.retryAfter(); retryAfter > 0 {
+	if ok, retryAfter := wh.rle.isActive(); ok {
 		return TooManyRequestsError{RetryAfter: retryAfter}
 	}
 	wh.client.limiterGlobal.wait()
@@ -118,10 +123,12 @@ func (wh *Webhook) Execute(m Message) error {
 				retryAfter = time.Duration(x) * time.Second
 			}
 		}
-		wh.brl.resetAt = time.Now().Add(retryAfter)
+		wh.rle.resetAt = time.Now().Add(retryAfter)
+		if m.Global {
+			wh.client.SetRateLimitExceeded(wh.rle.resetAt)
+		}
 		return TooManyRequestsError{
 			RetryAfter: retryAfter, // Value from header is more reliable
-			Message:    m.Message,
 			Global:     m.Global,
 		}
 	}

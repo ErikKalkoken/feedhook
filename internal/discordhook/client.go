@@ -3,6 +3,7 @@ package discordhook
 
 import (
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -17,6 +18,9 @@ const (
 type Client struct {
 	httpClient    *http.Client
 	limiterGlobal *limiter
+
+	mu  sync.Mutex
+	rle rateLimitExceeded
 }
 
 // NewClient returns a new client for webhook. All webhook share the provided HTTP client.
@@ -26,4 +30,16 @@ func NewClient(httpClient *http.Client) *Client {
 		limiterGlobal: newLimiter(globalRateLimitPeriod, globalRateLimitRequests, "global"),
 	}
 	return s
+}
+
+func (c *Client) SetRateLimitExceeded(resetAt time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.rle = rateLimitExceeded{resetAt: resetAt}
+}
+
+func (c *Client) IsRateLimitExceeded() (bool, time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.rle.isActive()
 }

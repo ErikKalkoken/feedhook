@@ -5,21 +5,22 @@ import (
 	"time"
 )
 
-type breachedRateLimit struct {
+type rateLimitExceeded struct {
 	resetAt time.Time
 }
 
-func (brl breachedRateLimit) String() string {
+func (brl *rateLimitExceeded) String() string {
 	return fmt.Sprintf("resetAt: %v", brl.resetAt)
 }
 
-func (brl *breachedRateLimit) retryAfter() time.Duration {
+func (brl *rateLimitExceeded) isActive() (bool, time.Duration) {
 	if brl.resetAt.IsZero() {
-		return 0
+		return false, 0
 	}
 	d := time.Until(brl.resetAt)
 	if d < 0 {
 		brl.resetAt = time.Time{}
+		return false, 0
 	}
-	return d
+	return true, d
 }
