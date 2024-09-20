@@ -13,6 +13,7 @@ import (
 
 	"github.com/ErikKalkoken/feedhook/internal/app"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
+	"github.com/ErikKalkoken/feedhook/internal/app/webhook"
 	"github.com/ErikKalkoken/feedhook/internal/discordhook"
 	"github.com/ErikKalkoken/feedhook/internal/queue"
 	"github.com/ErikKalkoken/feedhook/internal/syncx"
@@ -31,13 +32,13 @@ type Service struct {
 	clock  Clock
 	done   chan bool // signals that the shutdown is complete
 	fp     *gofeed.Parser
-	hooks  *syncx.Map[string, *Webhook]
+	hooks  *syncx.Map[string, *webhook.Webhook]
 	quit   chan bool // closed to signal a shutdown
 	st     *storage.Storage
 }
 
-// NewService creates a new App instance and returns it.
-func NewService(st *storage.Storage, cfg app.MyConfig, clock Clock) *Service {
+// New creates a new App instance and returns it.
+func New(st *storage.Storage, cfg app.MyConfig, clock Clock) *Service {
 	httpClient := &http.Client{
 		Timeout: time.Duration(cfg.App.Timeout) * time.Second,
 	}
@@ -49,7 +50,7 @@ func NewService(st *storage.Storage, cfg app.MyConfig, clock Clock) *Service {
 		clock:  clock,
 		done:   make(chan bool),
 		fp:     fp,
-		hooks:  syncx.NewMap[string, *Webhook](),
+		hooks:  syncx.NewMap[string, *webhook.Webhook](),
 		quit:   make(chan bool),
 		st:     st,
 	}
@@ -72,7 +73,7 @@ func (s *Service) Start() {
 		if err != nil {
 			panic(err)
 		}
-		wh := NewWebhook(s.client, q, h.Name, h.URL, s.st, s.cfg)
+		wh := webhook.New(s.client, q, h.Name, h.URL, s.st, s.cfg)
 		wh.Start()
 		s.hooks.Store(h.Name, wh)
 	}
@@ -88,7 +89,7 @@ func (s *Service) Start() {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					usedHooks := make([]*Webhook, 0)
+					usedHooks := make([]*webhook.Webhook, 0)
 					for _, name := range cf.Webhooks {
 						wh, ok := s.hooks.Load(name)
 						if !ok {
@@ -123,7 +124,7 @@ func (s *Service) Start() {
 }
 
 // processFeed processes a configured feed.
-func (s *Service) processFeed(cf app.ConfigFeed, hooks []*Webhook) error {
+func (s *Service) processFeed(cf app.ConfigFeed, hooks []*webhook.Webhook) error {
 	myLog := slog.With("feed", cf.Name)
 	feed, err := s.fp.ParseURL(cf.URL)
 	if err != nil {
@@ -149,7 +150,7 @@ func (s *Service) processFeed(cf app.ConfigFeed, hooks []*Webhook) error {
 		}
 		for _, hook := range hooks {
 			if err := hook.EnqueueMessage(cf.Name, feed, item, state == app.StateUpdated); err != nil {
-				myLog.Error("Failed to add item to webhook queue", "hook", hook.name, "error", "err")
+				myLog.Error("Failed to add item to webhook queue", "hook", hook.Name(), "error", "err")
 				if err := s.st.UpdateFeedStats(cf.Name, func(fs *app.FeedStats) error {
 					fs.ErrorCount++
 					return nil

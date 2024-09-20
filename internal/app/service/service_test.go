@@ -50,7 +50,7 @@ func TestService(t *testing.T) {
 	if err := st.Init(); err != nil {
 		t.Fatalf("Failed to init: %s", err)
 	}
-	s := service.NewService(st, cfg, faketime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
+	s := service.New(st, cfg, faketime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
 	s.Start()
 	time.Sleep(2 * time.Second)
 	s.Close()

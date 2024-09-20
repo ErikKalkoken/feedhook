@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/ErikKalkoken/feedhook/internal/app/remoteservice"
+	"github.com/ErikKalkoken/feedhook/internal/app/remote"
 )
 
 const (
@@ -26,7 +26,7 @@ func main() {
 		fmt.Println(Version)
 		os.Exit(0)
 	}
-	client := remoteservice.NewClient(*portFlag)
+	client := remote.NewClient(*portFlag)
 	if *statsFlag {
 		text, err := client.Statistics()
 		if err != nil {

@@ -17,7 +17,7 @@ import (
 	bolt "go.etcd.io/bbolt"
 
 	"github.com/ErikKalkoken/feedhook/internal/app"
-	"github.com/ErikKalkoken/feedhook/internal/app/remoteservice"
+	"github.com/ErikKalkoken/feedhook/internal/app/remote"
 	"github.com/ErikKalkoken/feedhook/internal/app/service"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 )
@@ -69,7 +69,7 @@ func main() {
 
 	// start main service
 
-	s := service.NewService(st, cfg, realtime{})
+	s := service.New(st, cfg, realtime{})
 	if !*offlineFlag {
 		s.Start()
 		defer s.Close()
@@ -89,7 +89,7 @@ func main() {
 }
 
 func startRPC(port int, s *service.Service, st *storage.Storage, cfg app.MyConfig) error {
-	rpc.Register(remoteservice.NewRemoteService(s, st, cfg))
+	rpc.Register(remote.NewRemoteService(s, st, cfg))
 	rpc.HandleHTTP()
 	l, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
 	if err != nil {

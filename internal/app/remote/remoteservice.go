@@ -1,5 +1,5 @@
 // Package remoteservice contains the logic for communicating between cli and server process
-package remoteservice
+package remote
 
 import (
 	"cmp"
@@ -23,7 +23,7 @@ type SendPingArgs struct {
 	Name string
 }
 
-// RemoteService represents a service, which can be accessed remotely via RPC.
+// RemoteService is a service for providing remote access to the app via RPC.
 type RemoteService struct {
 	cfg    app.MyConfig
 	client *discordhook.Client

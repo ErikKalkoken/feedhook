@@ -1,4 +1,4 @@
-package service
+package webhook
 
 import (
 	"log/slog"
@@ -27,7 +27,7 @@ type Webhook struct {
 	st    *storage.Storage
 }
 
-func NewWebhook(client *discordhook.Client, queue *queue.Queue, name, url string, st *storage.Storage, cfg app.MyConfig) *Webhook {
+func New(client *discordhook.Client, queue *queue.Queue, name, url string, st *storage.Storage, cfg app.MyConfig) *Webhook {
 	wh := &Webhook{
 		cfg:   cfg,
 		dwh:   discordhook.NewWebhook(client, url),
@@ -36,6 +36,10 @@ func NewWebhook(client *discordhook.Client, queue *queue.Queue, name, url string
 		st:    st,
 	}
 	return wh
+}
+
+func (wh *Webhook) Name() string {
+	return wh.name
 }
 
 // Start starts the service.

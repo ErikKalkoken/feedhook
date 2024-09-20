@@ -1,4 +1,4 @@
-package service_test
+package webhook_test
 
 import (
 	"net/http"
@@ -9,8 +9,8 @@ import (
 	bolt "go.etcd.io/bbolt"
 
 	"github.com/ErikKalkoken/feedhook/internal/app"
-	"github.com/ErikKalkoken/feedhook/internal/app/service"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
+	"github.com/ErikKalkoken/feedhook/internal/app/webhook"
 	"github.com/ErikKalkoken/feedhook/internal/discordhook"
 	"github.com/ErikKalkoken/feedhook/internal/queue"
 	"github.com/jarcoal/httpmock"
@@ -41,7 +41,7 @@ func TestWebhook(t *testing.T) {
 		httpmock.NewStringResponder(204, ""),
 	)
 	c := discordhook.NewClient(http.DefaultClient)
-	wh := service.NewWebhook(c, q, "dummy", "https://www.example.com", st, app.MyConfig{})
+	wh := webhook.New(c, q, "dummy", "https://www.example.com", st, app.MyConfig{})
 	wh.Start()
 	feed := &gofeed.Feed{Title: "title"}
 	now := time.Now()
