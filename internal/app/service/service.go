@@ -15,6 +15,7 @@ import (
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 	"github.com/ErikKalkoken/feedhook/internal/discordhook"
 	"github.com/ErikKalkoken/feedhook/internal/queue"
+	"github.com/ErikKalkoken/feedhook/internal/syncx"
 )
 
 var errUserAborted = errors.New("aborted by user")
@@ -25,13 +26,14 @@ type Clock interface {
 
 // Service represents this core application logic and holds it's global data.
 type Service struct {
-	client *discordhook.Client
-	st     *storage.Storage
 	cfg    app.MyConfig
-	fp     *gofeed.Parser
+	client *discordhook.Client
 	clock  Clock
 	done   chan bool // signals that the shutdown is complete
+	fp     *gofeed.Parser
+	hooks  *syncx.Map[string, *Webhook]
 	quit   chan bool // closed to signal a shutdown
+	st     *storage.Storage
 }
 
 // NewService creates a new App instance and returns it.
@@ -43,12 +45,13 @@ func NewService(st *storage.Storage, cfg app.MyConfig, clock Clock) *Service {
 	fp.Client = httpClient
 	s := &Service{
 		client: discordhook.NewClient(httpClient),
-		st:     st,
 		cfg:    cfg,
 		clock:  clock,
-		fp:     fp,
 		done:   make(chan bool),
+		fp:     fp,
+		hooks:  syncx.NewMap[string, *Webhook](),
 		quit:   make(chan bool),
+		st:     st,
 	}
 	return s
 }
@@ -64,14 +67,14 @@ func (s *Service) Close() {
 // User should call Close() subsequently to shut down the loop gracefully and free resources.
 func (s *Service) Start() {
 	// Create and start webhooks
-	hooks := make(map[string]*Webhook)
 	for _, h := range s.cfg.Webhooks {
 		q, err := queue.New(s.st.DB(), h.Name)
 		if err != nil {
 			panic(err)
 		}
-		hooks[h.Name] = NewWebhook(s.client, q, h.Name, h.URL, s.st, s.cfg)
-		hooks[h.Name].Start()
+		wh := NewWebhook(s.client, q, h.Name, h.URL, s.st, s.cfg)
+		wh.Start()
+		s.hooks.Store(h.Name, wh)
 	}
 	// process feeds until aborted
 	var wg sync.WaitGroup
@@ -86,8 +89,12 @@ func (s *Service) Start() {
 				go func() {
 					defer wg.Done()
 					usedHooks := make([]*Webhook, 0)
-					for _, x := range cf.Webhooks {
-						usedHooks = append(usedHooks, hooks[x])
+					for _, name := range cf.Webhooks {
+						wh, ok := s.hooks.Load(name)
+						if !ok {
+							panic("expected webhook not found: " + name)
+						}
+						usedHooks = append(usedHooks, wh)
 					}
 					if err := s.processFeed(cf, usedHooks); err == errUserAborted {
 						slog.Debug("user aborted")
@@ -141,7 +148,7 @@ func (s *Service) processFeed(cf app.ConfigFeed, hooks []*Webhook) error {
 			continue
 		}
 		for _, hook := range hooks {
-			if err := hook.Add(cf.Name, feed, item, state == app.StateUpdated); err != nil {
+			if err := hook.EnqueueMessage(cf.Name, feed, item, state == app.StateUpdated); err != nil {
 				myLog.Error("Failed to add item to webhook queue", "hook", hook.name, "error", "err")
 				if err := s.st.UpdateFeedStats(cf.Name, func(fs *app.FeedStats) error {
 					fs.ErrorCount++

@@ -105,8 +105,8 @@ func (wh *Webhook) Start() {
 	}()
 }
 
-// Add adds a new message for being send to to webhook
-func (wh *Webhook) Add(feedName string, feed *gofeed.Feed, item *gofeed.Item, isUpdated bool) error {
+// EnqueueMessage adds a new message for being send to to webhook
+func (wh *Webhook) EnqueueMessage(feedName string, feed *gofeed.Feed, item *gofeed.Item, isUpdated bool) error {
 	p, err := newMessage(feedName, feed, item, isUpdated)
 	if err != nil {
 		return err
