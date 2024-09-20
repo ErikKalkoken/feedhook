@@ -8,10 +8,10 @@ import (
 	"time"
 )
 
-// limiterAPI implements a limiter from the API rate limit
+// limiterAPI implements a limiter from the Discord API rate limit
 // as communicated by "X-RateLimit-" response headers.
 type limiterAPI struct {
-	rl rateLimit
+	rl rateLimitInfo
 }
 
 func (l *limiterAPI) Wait() {
@@ -23,12 +23,20 @@ func (l *limiterAPI) Wait() {
 	}
 }
 
+func roundUpDuration(d time.Duration, m time.Duration) time.Duration {
+	x := d.Round(m)
+	if x < d {
+		return x + m
+	}
+	return x
+}
+
 // UpdateFromHeader updates the limiter from a header.
 func (l *limiterAPI) UpdateFromHeader(h http.Header) error {
 	if l.rl.remaining > 0 {
 		l.rl.remaining--
 	}
-	rl2, err := newRateLimitFromHeader(h)
+	rl2, err := newRateLimitInfo(h)
 	if err != nil {
 		return err
 	}
@@ -42,8 +50,8 @@ func (l *limiterAPI) UpdateFromHeader(h http.Header) error {
 	return nil
 }
 
-// rateLimit represents the rate limit information as returned from the Discord API
-type rateLimit struct {
+// rateLimitInfo represents the rate limit information as returned from the Discord API
+type rateLimitInfo struct {
 	limit      int
 	remaining  int
 	resetAt    time.Time
@@ -52,8 +60,8 @@ type rateLimit struct {
 	timestamp  time.Time
 }
 
-func newRateLimitFromHeader(h http.Header) (rateLimit, error) {
-	var r rateLimit
+func newRateLimitInfo(h http.Header) (rateLimitInfo, error) {
+	var r rateLimitInfo
 	var err error
 	limit := h.Get("X-RateLimit-Limit")
 	if limit == "" {
@@ -97,7 +105,7 @@ func newRateLimitFromHeader(h http.Header) (rateLimit, error) {
 	return r, nil
 }
 
-func (rl rateLimit) String() string {
+func (rl rateLimitInfo) String() string {
 	return fmt.Sprintf(
 		"limit:%d remaining:%d reset:%s resetAfter:%f",
 		rl.limit,
@@ -106,11 +114,11 @@ func (rl rateLimit) String() string {
 	)
 }
 
-func (l rateLimit) isSet() bool {
+func (l rateLimitInfo) isSet() bool {
 	return !l.timestamp.IsZero()
 }
 
-func (l rateLimit) limitExceeded(now time.Time) bool {
+func (l rateLimitInfo) limitExceeded(now time.Time) bool {
 	if !l.isSet() {
 		return false
 	}

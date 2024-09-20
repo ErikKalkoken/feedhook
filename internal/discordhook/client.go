@@ -4,6 +4,8 @@ package discordhook
 import (
 	"net/http"
 	"time"
+
+	"github.com/ErikKalkoken/feedhook/internal/rate"
 )
 
 const (
@@ -16,16 +18,16 @@ const (
 // The shared client enabled dealing with the global rate limit and ensures a shared http client is used.
 type Client struct {
 	httpClient    *http.Client
-	limiterGlobal *limiter
+	limiterGlobal *rate.Limiter
 
-	rl rateLimited
+	rl rate.RateLimited
 }
 
 // NewClient returns a new client for webhook. All webhook share the provided HTTP client.
 func NewClient(httpClient *http.Client) *Client {
 	s := &Client{
 		httpClient:    httpClient,
-		limiterGlobal: newLimiter(globalRateLimitPeriod, globalRateLimitRequests, "global"),
+		limiterGlobal: rate.NewLimiter(globalRateLimitPeriod, globalRateLimitRequests, "global"),
 	}
 	return s
 }

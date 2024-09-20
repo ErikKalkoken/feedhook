@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/ErikKalkoken/feedhook/internal/rate"
 )
 
 const (
@@ -46,9 +48,9 @@ type Webhook struct {
 	url    string
 
 	mu             sync.Mutex
-	rl             rateLimited
+	rl             rate.RateLimited
 	limiterAPI     limiterAPI
-	limiterWebhook *limiter
+	limiterWebhook *rate.Limiter
 }
 
 // NewWebhook returns a new webhook.
@@ -56,7 +58,7 @@ func NewWebhook(client *Client, url string) *Webhook {
 	wh := &Webhook{
 		client:         client,
 		url:            url,
-		limiterWebhook: newLimiter(webhookRateLimitPeriod, webhookRateLimitRequests, "webhook"),
+		limiterWebhook: rate.NewLimiter(webhookRateLimitPeriod, webhookRateLimitRequests, "webhook"),
 	}
 	return wh
 }
@@ -78,17 +80,17 @@ func (wh *Webhook) Execute(m Message) error {
 	if err != nil {
 		return err
 	}
-	if isActive, retryAfter := wh.client.rl.getOrReset(); isActive {
+	if isActive, retryAfter := wh.client.rl.GetOrReset(); isActive {
 		return TooManyRequestsError{RetryAfter: retryAfter, Global: true}
 	}
 	wh.mu.Lock()
 	defer wh.mu.Unlock()
-	if isActive, retryAfter := wh.rl.getOrReset(); isActive {
+	if isActive, retryAfter := wh.rl.GetOrReset(); isActive {
 		return TooManyRequestsError{RetryAfter: retryAfter}
 	}
-	wh.client.limiterGlobal.wait()
+	wh.client.limiterGlobal.Wait()
 	wh.limiterAPI.Wait()
-	wh.limiterWebhook.wait()
+	wh.limiterWebhook.Wait()
 	slog.Debug("request", "url", wh.url, "body", string(dat))
 	resp, err := wh.client.httpClient.Post(wh.url, "application/json", bytes.NewBuffer(dat))
 	if err != nil {
@@ -123,9 +125,9 @@ func (wh *Webhook) Execute(m Message) error {
 				retryAfter = time.Duration(x) * time.Second
 			}
 		}
-		wh.rl.set(retryAfter)
+		wh.rl.Set(retryAfter)
 		if m.Global {
-			wh.client.rl.set(retryAfter)
+			wh.client.rl.Set(retryAfter)
 		}
 		return TooManyRequestsError{
 			RetryAfter: retryAfter, // Value from header is more reliable

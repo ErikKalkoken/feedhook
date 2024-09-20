@@ -1,20 +1,20 @@
-package discordhook
+package rate
 
 import (
 	"sync"
 	"time"
 )
 
-// rateLimited holds information wether a client is being rate limited.
+// RateLimited holds information wether a client is being rate limited.
 // This type is safe to use concurrently.
-type rateLimited struct {
+type RateLimited struct {
 	mu      sync.Mutex
 	resetAt time.Time
 }
 
-// getOrReset reports wether the rate limit is active and also return the duration until reset.
+// GetOrReset reports wether the rate limit is active and also return the duration until reset.
 // Or resets the rate limit if it is expired.
-func (rl *rateLimited) getOrReset() (bool, time.Duration) {
+func (rl *RateLimited) GetOrReset() (bool, time.Duration) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 	if rl.resetAt.IsZero() {
@@ -28,7 +28,7 @@ func (rl *rateLimited) getOrReset() (bool, time.Duration) {
 	return true, d
 }
 
-func (rl *rateLimited) set(retryAfter time.Duration) {
+func (rl *RateLimited) Set(retryAfter time.Duration) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 	rl.resetAt = time.Now().UTC().Add(retryAfter)

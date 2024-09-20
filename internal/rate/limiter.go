@@ -1,4 +1,5 @@
-package discordhook
+// Package rate provides types for dealing with rate limits.
+package rate
 
 import (
 	"log/slog"
@@ -6,9 +7,9 @@ import (
 	"time"
 )
 
-// limiter represents a rate limiter implementing the sliding log algorithm.
+// Limiter represents a rate Limiter implementing the sliding log algorithm.
 // This type is safe to use concurrently.
-type limiter struct {
+type Limiter struct {
 	max    int
 	name   string
 	period time.Duration
@@ -18,9 +19,9 @@ type limiter struct {
 	index   int
 }
 
-// newLimiter returns a new Limiter object.
-func newLimiter(period time.Duration, max int, name string) *limiter {
-	l := limiter{
+// NewLimiter returns a new Limiter object.
+func NewLimiter(period time.Duration, max int, name string) *Limiter {
+	l := Limiter{
 		index:  0,
 		max:    max,
 		name:   name,
@@ -34,10 +35,10 @@ func newLimiter(period time.Duration, max int, name string) *limiter {
 	return &l
 }
 
-// wait will register a new event.
+// Wait will register a new event.
 // In case the current tick is exhausted it will block until the tick is reset.
-// The wait duration will be rounded up to the next rate tick (e.g. 100ms if the rate is 10/sec)
-func (l *limiter) wait() {
+// The Wait duration will be rounded up to the next rate tick (e.g. 100ms if the rate is 10/sec)
+func (l *Limiter) Wait() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	last := l.entries[l.index]
@@ -52,4 +53,12 @@ func (l *limiter) wait() {
 	if l.index == l.max {
 		l.index = 0
 	}
+}
+
+func roundUpDuration(d time.Duration, m time.Duration) time.Duration {
+	x := d.Round(m)
+	if x < d {
+		return x + m
+	}
+	return x
 }
