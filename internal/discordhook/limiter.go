@@ -7,6 +7,7 @@ import (
 )
 
 // limiter represents a rate limiter implementing the sliding log algorithm.
+// This type is safe to use concurrently.
 type limiter struct {
 	max    int
 	name   string

@@ -46,7 +46,7 @@ type Webhook struct {
 	url    string
 
 	mu             sync.Mutex
-	rle            rateLimitExceeded
+	rl             rateLimited
 	limiterAPI     limiterAPI
 	limiterWebhook *limiter
 }
@@ -78,12 +78,12 @@ func (wh *Webhook) Execute(m Message) error {
 	if err != nil {
 		return err
 	}
-	if ok, retryAfter := wh.client.rle.isActive(); ok {
+	if isActive, retryAfter := wh.client.rl.getOrReset(); isActive {
 		return TooManyRequestsError{RetryAfter: retryAfter, Global: true}
 	}
 	wh.mu.Lock()
 	defer wh.mu.Unlock()
-	if ok, retryAfter := wh.rle.isActive(); ok {
+	if isActive, retryAfter := wh.rl.getOrReset(); isActive {
 		return TooManyRequestsError{RetryAfter: retryAfter}
 	}
 	wh.client.limiterGlobal.wait()
@@ -123,9 +123,9 @@ func (wh *Webhook) Execute(m Message) error {
 				retryAfter = time.Duration(x) * time.Second
 			}
 		}
-		wh.rle.resetAt = time.Now().Add(retryAfter)
+		wh.rl.set(retryAfter)
 		if m.Global {
-			wh.client.SetRateLimitExceeded(wh.rle.resetAt)
+			wh.client.rl.set(retryAfter)
 		}
 		return TooManyRequestsError{
 			RetryAfter: retryAfter, // Value from header is more reliable
