@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/ErikKalkoken/feedhook/internal/remoteservice"
+	"github.com/ErikKalkoken/feedhook/internal/app/remoteservice"
 )
 
 const (
