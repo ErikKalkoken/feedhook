@@ -1,4 +1,5 @@
-package service
+// Package dispatcher contains the dispatcher service.
+package dispatcher
 
 import (
 	"errors"
@@ -25,8 +26,8 @@ type Clock interface {
 	Now() time.Time
 }
 
-// Service represents this core application logic and holds it's global data.
-type Service struct {
+// Dispatcher is a service that fetches items from feeds and forwards them to webhooks.
+type Dispatcher struct {
 	cfg    app.MyConfig
 	client *discordhook.Client
 	clock  Clock
@@ -38,13 +39,13 @@ type Service struct {
 }
 
 // New creates a new App instance and returns it.
-func New(st *storage.Storage, cfg app.MyConfig, clock Clock) *Service {
+func New(st *storage.Storage, cfg app.MyConfig, clock Clock) *Dispatcher {
 	httpClient := &http.Client{
 		Timeout: time.Duration(cfg.App.Timeout) * time.Second,
 	}
 	fp := gofeed.NewParser()
 	fp.Client = httpClient
-	s := &Service{
+	d := &Dispatcher{
 		client: discordhook.NewClient(httpClient),
 		cfg:    cfg,
 		clock:  clock,
@@ -54,34 +55,35 @@ func New(st *storage.Storage, cfg app.MyConfig, clock Clock) *Service {
 		quit:   make(chan bool),
 		st:     st,
 	}
-	return s
+	return d
 }
 
-// Close conducts a graceful shutdown of the app.
-func (s *Service) Close() {
-	close(s.quit)
-	<-s.done
+// Close conducts a graceful shutdown of the dispatcher.
+func (d *Dispatcher) Close() {
+	close(d.quit)
+	<-d.done
 	slog.Info("Graceful shutdown completed")
 }
 
-// Start starts the main loop of the application.
-// User should call Close() subsequently to shut down the loop gracefully and free resources.
-func (s *Service) Start() {
+// Start starts the dispatcher
+// User should call Close() subsequently to shut down dispatcher gracefully
+// and prevent any potential data loss.
+func (d *Dispatcher) Start() {
 	// Create and start webhooks
-	for _, h := range s.cfg.Webhooks {
-		q, err := queue.New(s.st.DB(), h.Name)
+	for _, h := range d.cfg.Webhooks {
+		q, err := queue.New(d.st.DB(), h.Name)
 		if err != nil {
 			panic(err)
 		}
-		wh := webhook.New(s.client, q, h.Name, h.URL, s.st, s.cfg)
+		wh := webhook.New(d.client, q, h.Name, h.URL, d.st, d.cfg)
 		wh.Start()
-		s.hooks.Store(h.Name, wh)
+		d.hooks.Store(h.Name, wh)
 	}
 	// process feeds until aborted
 	var wg sync.WaitGroup
-	ticker := time.NewTicker(time.Duration(s.cfg.App.Ticker) * time.Second)
-	feeds := s.cfg.EnabledFeeds()
-	slog.Info("Started", "feeds", len(feeds), "webhooks", len(s.cfg.Webhooks))
+	ticker := time.NewTicker(time.Duration(d.cfg.App.Ticker) * time.Second)
+	feeds := d.cfg.EnabledFeeds()
+	slog.Info("Started", "feeds", len(feeds), "webhooks", len(d.cfg.Webhooks))
 	go func() {
 	main:
 		for {
@@ -91,13 +93,13 @@ func (s *Service) Start() {
 					defer wg.Done()
 					usedHooks := make([]*webhook.Webhook, 0)
 					for _, name := range cf.Webhooks {
-						wh, ok := s.hooks.Load(name)
+						wh, ok := d.hooks.Load(name)
 						if !ok {
 							panic("expected webhook not found: " + name)
 						}
 						usedHooks = append(usedHooks, wh)
 					}
-					if err := s.processFeed(cf, usedHooks); err == errUserAborted {
+					if err := d.processFeed(cf, usedHooks); err == errUserAborted {
 						slog.Debug("user aborted")
 						return
 					} else if err != nil {
@@ -110,7 +112,7 @@ func (s *Service) Start() {
 		wait:
 			for {
 				select {
-				case <-s.quit:
+				case <-d.quit:
 					break main
 				case <-ticker.C:
 					break wait
@@ -119,12 +121,12 @@ func (s *Service) Start() {
 		}
 		slog.Info("Stopped")
 		ticker.Stop()
-		s.done <- true
+		d.done <- true
 	}()
 }
 
 // processFeed processes a configured feed.
-func (s *Service) processFeed(cf app.ConfigFeed, hooks []*webhook.Webhook) error {
+func (s *Dispatcher) processFeed(cf app.ConfigFeed, hooks []*webhook.Webhook) error {
 	myLog := slog.With("feed", cf.Name)
 	feed, err := s.fp.ParseURL(cf.URL)
 	if err != nil {
@@ -176,8 +178,9 @@ func (s *Service) processFeed(cf app.ConfigFeed, hooks []*webhook.Webhook) error
 	return err
 }
 
-func (s *Service) WebhookQueueSize(name string) (int, error) {
-	wh, ok := s.hooks.Load(name)
+// WebhookQueueSize returns the current size of a webhook queue.
+func (d *Dispatcher) WebhookQueueSize(name string) (int, error) {
+	wh, ok := d.hooks.Load(name)
 	if !ok {
 		return 0, fmt.Errorf("webhook not found")
 	}

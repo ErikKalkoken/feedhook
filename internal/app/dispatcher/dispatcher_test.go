@@ -1,4 +1,4 @@
-package service_test
+package dispatcher_test
 
 import (
 	"path/filepath"
@@ -10,7 +10,7 @@ import (
 	bolt "go.etcd.io/bbolt"
 
 	"github.com/ErikKalkoken/feedhook/internal/app"
-	"github.com/ErikKalkoken/feedhook/internal/app/service"
+	"github.com/ErikKalkoken/feedhook/internal/app/dispatcher"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 )
 
@@ -50,7 +50,7 @@ func TestService(t *testing.T) {
 	if err := st.Init(); err != nil {
 		t.Fatalf("Failed to init: %s", err)
 	}
-	s := service.New(st, cfg, faketime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
+	s := dispatcher.New(st, cfg, faketime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
 	s.Start()
 	time.Sleep(2 * time.Second)
 	s.Close()

@@ -17,8 +17,8 @@ import (
 	bolt "go.etcd.io/bbolt"
 
 	"github.com/ErikKalkoken/feedhook/internal/app"
+	"github.com/ErikKalkoken/feedhook/internal/app/dispatcher"
 	"github.com/ErikKalkoken/feedhook/internal/app/remote"
-	"github.com/ErikKalkoken/feedhook/internal/app/service"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 )
 
@@ -30,7 +30,7 @@ const (
 )
 
 // Overwritten with current tag when released
-var Version = "0.2.2"
+var Version = "0.3.0"
 
 type realtime struct{}
 
@@ -67,18 +67,17 @@ func main() {
 		log.Fatalf("DB init failed: %s", err)
 	}
 
-	// start main service
-
-	s := service.New(st, cfg, realtime{})
+	// start the dispatcher
+	d := dispatcher.New(st, cfg, realtime{})
 	if !*offlineFlag {
-		s.Start()
-		defer s.Close()
+		d.Start()
+		defer d.Close()
 	} else {
 		slog.Info("Main service not started as requested")
 	}
 
 	// start RPC service
-	if err := startRPC(*portFlag, s, st, cfg); err != nil {
+	if err := startRPC(*portFlag, d, st, cfg); err != nil {
 		log.Fatalf("Failed to start RPC service on port %d: %s", portRPC, err)
 	}
 
@@ -88,8 +87,8 @@ func main() {
 	<-sc
 }
 
-func startRPC(port int, s *service.Service, st *storage.Storage, cfg app.MyConfig) error {
-	rpc.Register(remote.NewRemoteService(s, st, cfg))
+func startRPC(port int, d *dispatcher.Dispatcher, st *storage.Storage, cfg app.MyConfig) error {
+	rpc.Register(remote.NewRemoteService(d, st, cfg))
 	rpc.HandleHTTP()
 	l, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
 	if err != nil {

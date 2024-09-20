@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/ErikKalkoken/feedhook/internal/app"
-	"github.com/ErikKalkoken/feedhook/internal/app/service"
+	"github.com/ErikKalkoken/feedhook/internal/app/dispatcher"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 	"github.com/ErikKalkoken/feedhook/internal/consoletable"
 	"github.com/ErikKalkoken/feedhook/internal/discordhook"
@@ -27,11 +27,11 @@ type SendPingArgs struct {
 type RemoteService struct {
 	cfg    app.MyConfig
 	client *discordhook.Client
-	s      *service.Service
+	s      *dispatcher.Dispatcher
 	st     *storage.Storage
 }
 
-func NewRemoteService(s *service.Service, st *storage.Storage, cfg app.MyConfig) *RemoteService {
+func NewRemoteService(s *dispatcher.Dispatcher, st *storage.Storage, cfg app.MyConfig) *RemoteService {
 	client := discordhook.NewClient(http.DefaultClient)
 	x := &RemoteService{
 		cfg:    cfg,
