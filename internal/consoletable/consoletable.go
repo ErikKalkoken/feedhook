@@ -97,6 +97,11 @@ func renderCell(v any) string {
 		return humanize.Time(x)
 	case []string:
 		return strings.Join(x, ", ")
+	case bool:
+		if x {
+			return "yes"
+		}
+		return "no"
 	default:
 		return fmt.Sprint(v)
 	}

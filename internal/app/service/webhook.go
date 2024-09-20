@@ -117,3 +117,7 @@ func (wh *Webhook) EnqueueMessage(feedName string, feed *gofeed.Feed, item *gofe
 	}
 	return wh.queue.Put(v)
 }
+
+func (wh *Webhook) QueueSize() int {
+	return wh.queue.Size()
+}

@@ -174,3 +174,11 @@ func (s *Service) processFeed(cf app.ConfigFeed, hooks []*Webhook) error {
 	err = s.st.CullItems(cf, 1000)
 	return err
 }
+
+func (s *Service) WebhookQueueSize(name string) (int, error) {
+	wh, ok := s.hooks.Load(name)
+	if !ok {
+		return 0, fmt.Errorf("webhook not found")
+	}
+	return wh.QueueSize(), nil
+}

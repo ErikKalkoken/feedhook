@@ -5,11 +5,13 @@ import (
 	"cmp"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"slices"
 	"strings"
 
 	"github.com/ErikKalkoken/feedhook/internal/app"
+	"github.com/ErikKalkoken/feedhook/internal/app/service"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 	"github.com/ErikKalkoken/feedhook/internal/consoletable"
 	"github.com/ErikKalkoken/feedhook/internal/discordhook"
@@ -24,14 +26,20 @@ type SendPingArgs struct {
 // RemoteService represents a service, which can be accessed remotely via RPC.
 type RemoteService struct {
 	cfg    app.MyConfig
-	st     *storage.Storage
 	client *discordhook.Client
+	s      *service.Service
+	st     *storage.Storage
 }
 
-func NewRemoteService(st *storage.Storage, cfg app.MyConfig) *RemoteService {
+func NewRemoteService(s *service.Service, st *storage.Storage, cfg app.MyConfig) *RemoteService {
 	client := discordhook.NewClient(http.DefaultClient)
-	s := &RemoteService{cfg: cfg, st: st, client: client}
-	return s
+	x := &RemoteService{
+		cfg:    cfg,
+		client: client,
+		s:      s,
+		st:     st,
+	}
+	return x
 }
 
 func (s *RemoteService) Statistics(args *EmptyArgs, reply *string) error {
@@ -39,7 +47,7 @@ func (s *RemoteService) Statistics(args *EmptyArgs, reply *string) error {
 	// Feed stats
 	feedsTable := consoletable.New("Feeds", 6)
 	feedsTable.Target = out
-	feedsTable.AddRow([]any{"Name", "Received", "Last", "Errors", "Enabled", "Webhooks"})
+	feedsTable.AddRow([]any{"Name", "Enabled", "Webhooks", "Received", "Last", "Errors"})
 	slices.SortFunc(s.cfg.Feeds, func(a, b app.ConfigFeed) int {
 		return cmp.Compare(a.Name, b.Name)
 	})
@@ -50,14 +58,14 @@ func (s *RemoteService) Statistics(args *EmptyArgs, reply *string) error {
 		} else if err != nil {
 			log.Fatal(err)
 		}
-		feedsTable.AddRow([]any{o.Name, o.ReceivedCount, o.ReceivedLast, o.ErrorCount, !cf.Disabled, cf.Webhooks})
+		feedsTable.AddRow([]any{o.Name, !cf.Disabled, cf.Webhooks, o.ReceivedCount, o.ReceivedLast, o.ErrorCount})
 	}
 	feedsTable.Print()
 	fmt.Fprintln(out)
 	// Webhook stats
-	whTable := consoletable.New("Webhooks", 4)
+	whTable := consoletable.New("Webhooks", 5)
 	whTable.Target = out
-	whTable.AddRow([]any{"Name", "Count", "Last", "Errors"})
+	whTable.AddRow([]any{"Name", "Queued", "Sent", "Last", "Errors"})
 	slices.SortFunc(s.cfg.Webhooks, func(a, b app.ConfigWebhook) int {
 		return cmp.Compare(a.Name, b.Name)
 	})
@@ -68,7 +76,11 @@ func (s *RemoteService) Statistics(args *EmptyArgs, reply *string) error {
 		} else if err != nil {
 			log.Fatal(err)
 		}
-		whTable.AddRow([]any{o.Name, o.SentCount, o.SentLast, o.ErrorCount})
+		q, err := s.s.WebhookQueueSize(cw.Name)
+		if err != nil {
+			slog.Error("Failed to fetch queue size for webhook", "webhook", cw.Name)
+		}
+		whTable.AddRow([]any{o.Name, q, o.SentCount, o.SentLast, o.ErrorCount})
 	}
 	whTable.Print()
 	*reply = out.String()

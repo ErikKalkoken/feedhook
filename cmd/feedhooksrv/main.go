@@ -69,16 +69,16 @@ func main() {
 
 	// start main service
 
+	s := service.NewService(st, cfg, realtime{})
 	if !*offlineFlag {
-		a := service.NewService(st, cfg, realtime{})
-		a.Start()
-		defer a.Close()
+		s.Start()
+		defer s.Close()
 	} else {
 		slog.Info("Main service not started as requested")
 	}
 
 	// start RPC service
-	if err := startRPC(*portFlag, st, cfg); err != nil {
+	if err := startRPC(*portFlag, s, st, cfg); err != nil {
 		log.Fatalf("Failed to start RPC service on port %d: %s", portRPC, err)
 	}
 
@@ -88,8 +88,8 @@ func main() {
 	<-sc
 }
 
-func startRPC(port int, st *storage.Storage, cfg app.MyConfig) error {
-	rpc.Register(remoteservice.NewRemoteService(st, cfg))
+func startRPC(port int, s *service.Service, st *storage.Storage, cfg app.MyConfig) error {
+	rpc.Register(remoteservice.NewRemoteService(s, st, cfg))
 	rpc.HandleHTTP()
 	l, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
 	if err != nil {
