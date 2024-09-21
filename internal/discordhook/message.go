@@ -32,9 +32,9 @@ type Message struct {
 	Username        string  `json:"username,omitempty"`
 }
 
-// validate checks the message against known Discord limits
-// and return an [ErrInvalidMessage] error in case a limit is violated.
-func (m Message) validate() error {
+// Validate checks the message against known Discord limits.
+// Returns an [ErrInvalidMessage] error in case a limit is violated.
+func (m Message) Validate() error {
 	if len(m.Content) == 0 && len(m.Embeds) == 0 {
 		return fmt.Errorf("need to contain content or embeds: %w", ErrInvalidMessage)
 	}

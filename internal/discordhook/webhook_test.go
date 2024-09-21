@@ -86,16 +86,4 @@ func TestWebhook(t *testing.T) {
 		httpErr, _ := err.(discordhook.TooManyRequestsError)
 		assert.Equal(t, 60*time.Second, httpErr.RetryAfter)
 	})
-	t.Run("should return error when message is invalid", func(t *testing.T) {
-		httpmock.Reset()
-		httpmock.RegisterResponder(
-			"POST",
-			url,
-			httpmock.NewStringResponder(400, ""),
-		)
-		c := discordhook.NewClient(http.DefaultClient)
-		wh := discordhook.NewWebhook(c, url)
-		err := wh.Execute(discordhook.Message{})
-		assert.ErrorIs(t, err, discordhook.ErrInvalidMessage)
-	})
 }

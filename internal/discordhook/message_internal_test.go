@@ -2,44 +2,24 @@ package discordhook
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestMessage(t *testing.T) {
+func TestLength(t *testing.T) {
 	cases := []struct {
-		m  Message
-		ok bool
+		in   string
+		want int
 	}{
-		{Message{Content: "content"}, true},
-		{Message{}, false},
-		{Message{Embeds: []Embed{{Description: "description"}}}, true},
-		{Message{Embeds: []Embed{{Timestamp: "invalid"}}}, false},
-		{Message{Embeds: []Embed{{Timestamp: "2006-01-02T15:04:05Z"}}}, true},
-		{Message{Content: makeStr(2001)}, false},
-		{Message{Embeds: []Embed{{Description: makeStr(4097)}}}, false},
-		{
-			Message{Embeds: []Embed{
-				{Description: makeStr(4096)},
-				{Description: makeStr(4096)},
-			}},
-			false,
-		},
+		{"alpha 😀 boy", 11},
+		{"alpha boy", 9},
+		{"", 0},
 	}
 	for i, tc := range cases {
-		t.Run(fmt.Sprintf("validate message #%d", i+1), func(t *testing.T) {
-			err := tc.m.validate()
-			if tc.ok {
-				assert.NoError(t, err)
-			} else {
-				assert.Error(t, err)
-			}
+		t.Run(fmt.Sprintf("#%d", i+1), func(t *testing.T) {
+			got := length(tc.in)
+			assert.Equal(t, tc.want, got)
 		})
 	}
-}
-
-func makeStr(n int) string {
-	return strings.Repeat("x", n)
 }

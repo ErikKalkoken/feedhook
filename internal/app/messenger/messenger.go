@@ -1,7 +1,6 @@
 package messenger
 
 import (
-	"errors"
 	"log/slog"
 	"math"
 	"math/rand/v2"
@@ -65,6 +64,10 @@ func (mg *Messenger) Start() {
 				myLog.Error("Failed to convert message for Discord. Discarding", "error", err, "message", m)
 				continue
 			}
+			if err := dm.Validate(); err != nil {
+				myLog.Error("Discord Message not valid. Discarding", "error", err, "message", dm)
+				continue
+			}
 			var attempt int
 			for {
 				attempt++
@@ -73,10 +76,6 @@ func (mg *Messenger) Start() {
 					break
 				}
 				mg.errCount.Add(1)
-				if errors.Is(err, discordhook.ErrInvalidMessage) {
-					myLog.Error("Discord Message not valid. Discarding", "error", err, "message", dm)
-					break
-				}
 				errHTTP, ok := err.(discordhook.HTTPError)
 				if ok && errHTTP.Status == http.StatusBadRequest {
 					myLog.Error("Bad request. Discarding", "error", err, "message", dm)

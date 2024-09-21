@@ -68,14 +68,9 @@ func NewWebhook(client *Client, url string) *Webhook {
 // Execute respects Discord's rate limits and will wait until there is a free slot to post the message.
 // Execute is thread safe.
 //
-// May return an [ErrInvalidMessage] if the message does not conform with Discord limits.
-//
 // HTTP status codes of 400 or above are returns as [HTTPError],
-// except for 429s, which are returns as [TooManyRequestsError].
+// except for 429s, which are returned as [TooManyRequestsError].
 func (wh *Webhook) Execute(m Message) error {
-	if err := m.validate(); err != nil {
-		return err
-	}
 	dat, err := json.Marshal(m)
 	if err != nil {
 		return err
