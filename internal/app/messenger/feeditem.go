@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"strings"
 	"time"
 
 	md "github.com/JohannesKaufmann/html-to-markdown"
@@ -29,6 +30,16 @@ func init() {
 			return md.String("")
 		},
 	}
+	sanitizeMailToLinks := md.Rule{
+		Filter: []string{"a"},
+		Replacement: func(content string, selec *goquery.Selection, options *md.Options) *string {
+			href := selec.AttrOr("href", "#")
+			if strings.HasPrefix(href, "mailto:") {
+				return md.String(content)
+			}
+			return nil
+		},
+	}
 	sanitizeInvalidLinks := md.Rule{
 		Filter: []string{"a"},
 		Replacement: func(content string, selec *goquery.Selection, options *md.Options) *string {
@@ -40,7 +51,7 @@ func init() {
 			return nil
 		},
 	}
-	converter.AddRules(removeIMGTags, sanitizeInvalidLinks)
+	converter.AddRules(removeIMGTags, sanitizeMailToLinks, sanitizeInvalidLinks)
 }
 
 // FeedItem represents a feed item to be posted to a webhook

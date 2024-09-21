@@ -58,6 +58,13 @@ func TestFeedItem(t *testing.T) {
 			assert.Equal(t, "alpha bravo charlie", x.Embeds[0].Description)
 		}
 	})
+	t.Run("can sanitize mailto links from description", func(t *testing.T) {
+		fi := FeedItem{Description: `<a href="mailto:info@example.com">info</a>`}
+		x, err := fi.ToDiscordMessage(false)
+		if assert.NoError(t, err) {
+			assert.Equal(t, "info", x.Embeds[0].Description)
+		}
+	})
 	t.Run("can sanitize invalid URLs in description", func(t *testing.T) {
 		fi := FeedItem{Description: `<a href="https://www.xgoogle.com">https://www.google.com</a>`}
 		x, err := fi.ToDiscordMessage(false)
