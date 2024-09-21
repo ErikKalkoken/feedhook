@@ -24,8 +24,14 @@ const (
 var converter = md.NewConverter("", true, nil)
 
 func init() {
-	removeIMGTags := md.Rule{
+	removeImgTags := md.Rule{
 		Filter: []string{"img"},
+		Replacement: func(_ string, _ *goquery.Selection, _ *md.Options) *string {
+			return md.String("")
+		},
+	}
+	removeFigureTags := md.Rule{
+		Filter: []string{"figure"},
 		Replacement: func(_ string, _ *goquery.Selection, _ *md.Options) *string {
 			return md.String("")
 		},
@@ -51,7 +57,7 @@ func init() {
 			return nil
 		},
 	}
-	converter.AddRules(removeIMGTags, sanitizeMailToLinks, sanitizeInvalidLinks)
+	converter.AddRules(removeImgTags, removeFigureTags, sanitizeMailToLinks, sanitizeInvalidLinks)
 }
 
 // FeedItem represents a feed item to be posted to a webhook
