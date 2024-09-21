@@ -12,7 +12,7 @@ import (
 
 	"github.com/ErikKalkoken/feedhook/internal/app"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
-	"github.com/ErikKalkoken/feedhook/internal/discordhook"
+	"github.com/ErikKalkoken/feedhook/internal/dhook"
 	"github.com/ErikKalkoken/feedhook/internal/queue"
 )
 
@@ -22,16 +22,16 @@ import (
 type Messenger struct {
 	cfg      app.MyConfig
 	errCount atomic.Int64
-	dwh      *discordhook.Webhook
+	dwh      *dhook.Webhook
 	name     string
 	queue    *queue.Queue
 	st       *storage.Storage
 }
 
-func New(client *discordhook.Client, queue *queue.Queue, name, url string, st *storage.Storage, cfg app.MyConfig) *Messenger {
+func New(client *dhook.Client, queue *queue.Queue, name, url string, st *storage.Storage, cfg app.MyConfig) *Messenger {
 	mg := &Messenger{
 		cfg:   cfg,
-		dwh:   discordhook.NewWebhook(client, url),
+		dwh:   dhook.NewWebhook(client, url),
 		name:  name,
 		queue: queue,
 		st:    st,
@@ -76,12 +76,12 @@ func (mg *Messenger) Start() {
 					break
 				}
 				mg.errCount.Add(1)
-				errHTTP, ok := err.(discordhook.HTTPError)
+				errHTTP, ok := err.(dhook.HTTPError)
 				if ok && errHTTP.Status == http.StatusBadRequest {
 					myLog.Error("Bad request. Discarding", "error", err, "message", dm)
 					break
 				}
-				err429, ok := err.(discordhook.TooManyRequestsError)
+				err429, ok := err.(dhook.TooManyRequestsError)
 				if ok {
 					myLog.Error("API rate limited exceeded", "retryAfter", err429.RetryAfter)
 					time.Sleep(err429.RetryAfter)

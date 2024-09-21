@@ -11,7 +11,7 @@ import (
 	"github.com/ErikKalkoken/feedhook/internal/app"
 	"github.com/ErikKalkoken/feedhook/internal/app/messenger"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
-	"github.com/ErikKalkoken/feedhook/internal/discordhook"
+	"github.com/ErikKalkoken/feedhook/internal/dhook"
 	"github.com/ErikKalkoken/feedhook/internal/queue"
 	"github.com/jarcoal/httpmock"
 	"github.com/mmcdole/gofeed"
@@ -40,7 +40,7 @@ func TestMessenger(t *testing.T) {
 		"https://www.example.com",
 		httpmock.NewStringResponder(204, ""),
 	)
-	c := discordhook.NewClient(http.DefaultClient)
+	c := dhook.NewClient(http.DefaultClient)
 	wh := messenger.New(c, q, "dummy", "https://www.example.com", st, app.MyConfig{})
 	wh.Start()
 	feed := &gofeed.Feed{Title: "title"}

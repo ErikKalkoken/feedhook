@@ -15,7 +15,7 @@ import (
 	"github.com/ErikKalkoken/feedhook/internal/app"
 	"github.com/ErikKalkoken/feedhook/internal/app/messenger"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
-	"github.com/ErikKalkoken/feedhook/internal/discordhook"
+	"github.com/ErikKalkoken/feedhook/internal/dhook"
 	"github.com/ErikKalkoken/feedhook/internal/queue"
 	"github.com/ErikKalkoken/feedhook/internal/syncx"
 )
@@ -29,7 +29,7 @@ type Clock interface {
 // Dispatcher is a service that fetches items from feeds and forwards them to webhooks.
 type Dispatcher struct {
 	cfg    app.MyConfig
-	client *discordhook.Client
+	client *dhook.Client
 	clock  Clock
 	done   chan bool // signals that the shutdown is complete
 	fp     *gofeed.Parser
@@ -46,7 +46,7 @@ func New(st *storage.Storage, cfg app.MyConfig, clock Clock) *Dispatcher {
 	fp := gofeed.NewParser()
 	fp.Client = httpClient
 	d := &Dispatcher{
-		client: discordhook.NewClient(httpClient),
+		client: dhook.NewClient(httpClient),
 		cfg:    cfg,
 		clock:  clock,
 		done:   make(chan bool),

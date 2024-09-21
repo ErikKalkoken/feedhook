@@ -1,4 +1,4 @@
-package discordhook
+package dhook
 
 import (
 	"net/http"
