@@ -109,11 +109,12 @@ func (fi FeedItem) ToDiscordMessage(brandingDisabled bool) (discordhook.Message,
 // It returns the new string.
 func truncateString(s string, maxLen int) (string, bool) {
 	if maxLen < 3 {
-		panic("Length can not be below 3")
+		panic("max length can not be below 3")
 	}
 	runes := []rune(s)
 	if len(runes) <= maxLen {
 		return s, false
 	}
-	return string(runes[0:maxLen-3]) + "...", true
+	x := string(runes[0 : maxLen-3])
+	return x + "...", true
 }

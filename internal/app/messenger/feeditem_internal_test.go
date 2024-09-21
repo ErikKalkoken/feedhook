@@ -82,7 +82,7 @@ func TestFeedItem(t *testing.T) {
 	})
 }
 
-func TestEllipsis(t *testing.T) {
+func TestTruncateString(t *testing.T) {
 	cases := []struct {
 		in        string
 		max       int
@@ -100,6 +100,7 @@ func TestEllipsis(t *testing.T) {
 			got, truncated := truncateString(tc.in, tc.max)
 			assert.Equal(t, tc.want, got)
 			assert.Equal(t, tc.truncated, truncated)
+			assert.GreaterOrEqual(t, tc.max, len([]rune(got)))
 		})
 	}
 

@@ -38,10 +38,10 @@ func (m Message) validate() error {
 	if len(m.Content) == 0 && len(m.Embeds) == 0 {
 		return fmt.Errorf("need to contain content or embeds: %w", ErrInvalidMessage)
 	}
-	if len(m.Content) > contentLength {
+	if length(m.Content) > contentLength {
 		return fmt.Errorf("content too long: %w", ErrInvalidMessage)
 	}
-	if len(m.Username) > usernameLength {
+	if length(m.Username) > usernameLength {
 		return fmt.Errorf("username too long: %w", ErrInvalidMessage)
 	}
 	if len(m.Embeds) > embedsQuantity {
@@ -75,7 +75,7 @@ type Embed struct {
 }
 
 func (em Embed) size() int {
-	x := len(em.Title) + len(em.Description) + len(em.Author.Name) + len(em.Footer.Text)
+	x := length(em.Title) + length(em.Description) + length(em.Author.Name) + length(em.Footer.Text)
 	for _, f := range em.Fields {
 		x += f.size()
 	}
@@ -84,7 +84,7 @@ func (em Embed) size() int {
 
 func (em Embed) validate() error {
 	em.Author.validate()
-	if len(em.Description) > descriptionLength {
+	if length(em.Description) > descriptionLength {
 		return fmt.Errorf("embed description too long: %w", ErrInvalidMessage)
 	}
 	em.Footer.validate()
@@ -96,7 +96,7 @@ func (em Embed) validate() error {
 			return err
 		}
 	}
-	if len(em.Title) > titleLength {
+	if length(em.Title) > titleLength {
 		return fmt.Errorf("embed title too long: %w", ErrInvalidMessage)
 	}
 	if em.Timestamp != "" {
@@ -115,7 +115,7 @@ type EmbedAuthor struct {
 }
 
 func (ea EmbedAuthor) validate() error {
-	if len(ea.Name) > authorNameLength {
+	if length(ea.Name) > authorNameLength {
 		return fmt.Errorf("embed author name too long: %w", ErrInvalidMessage)
 	}
 	return nil
@@ -128,14 +128,14 @@ type EmbedField struct {
 }
 
 func (ef EmbedField) size() int {
-	return len(ef.Name) + len(ef.Value)
+	return length(ef.Name) + length(ef.Value)
 }
 
 func (ef EmbedField) validate() error {
-	if len(ef.Name) > fieldNameLength {
+	if length(ef.Name) > fieldNameLength {
 		return fmt.Errorf("embed field name too long: %w", ErrInvalidMessage)
 	}
-	if len(ef.Value) > fieldNameLength {
+	if length(ef.Value) > fieldNameLength {
 		return fmt.Errorf("embed field value too long: %w", ErrInvalidMessage)
 	}
 	return nil
@@ -147,7 +147,7 @@ type EmbedFooter struct {
 }
 
 func (ef EmbedFooter) validate() error {
-	if len(ef.Text) > footerTextLength {
+	if length(ef.Text) > footerTextLength {
 		return fmt.Errorf("embed footer text too long: %w", ErrInvalidMessage)
 	}
 	return nil
@@ -159,4 +159,9 @@ type EmbedImage struct {
 
 type EmbedThumbnail struct {
 	URL string `json:"url,omitempty"`
+}
+
+// length returns the number of runes in a string.
+func length(s string) int {
+	return len([]rune(s))
 }
