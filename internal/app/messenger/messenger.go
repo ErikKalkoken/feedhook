@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/mmcdole/gofeed"
@@ -20,35 +21,36 @@ import (
 // Failed messages are automatically retried and rate limits are respected.
 // Messages are kept in a permanent queue, which can survive process restarts.
 type Messenger struct {
-	cfg   app.MyConfig
-	dwh   *discordhook.Webhook
-	name  string
-	queue *queue.Queue
-	st    *storage.Storage
+	cfg      app.MyConfig
+	errCount atomic.Int64
+	dwh      *discordhook.Webhook
+	name     string
+	queue    *queue.Queue
+	st       *storage.Storage
 }
 
 func New(client *discordhook.Client, queue *queue.Queue, name, url string, st *storage.Storage, cfg app.MyConfig) *Messenger {
-	wh := &Messenger{
+	mg := &Messenger{
 		cfg:   cfg,
 		dwh:   discordhook.NewWebhook(client, url),
 		name:  name,
 		queue: queue,
 		st:    st,
 	}
-	return wh
+	return mg
 }
 
-func (wh *Messenger) Name() string {
-	return wh.name
+func (mg *Messenger) Name() string {
+	return mg.name
 }
 
 // Start starts the service.
-func (wh *Messenger) Start() {
+func (mg *Messenger) Start() {
 	go func() {
-		myLog := slog.With("webhook", wh.name)
-		myLog.Info("Started webhook", "queued", wh.queue.Size())
+		myLog := slog.With("webhook", mg.name)
+		myLog.Info("Started webhook", "queued", mg.queue.Size())
 		for {
-			v, err := wh.queue.Get()
+			v, err := mg.queue.Get()
 			if err != nil {
 				myLog.Error("Failed to read from queue", "error", err)
 				continue
@@ -58,7 +60,7 @@ func (wh *Messenger) Start() {
 				myLog.Error("Failed to de-serialize message. Discarding", "error", err, "data", string(v))
 				continue
 			}
-			dm, err := m.Item.ToDiscordMessage(wh.cfg.App.BrandingDisabled)
+			dm, err := m.Item.ToDiscordMessage(mg.cfg.App.BrandingDisabled)
 			if err != nil {
 				myLog.Error("Failed to convert message for Discord. Discarding", "error", err, "message", m)
 				continue
@@ -66,16 +68,11 @@ func (wh *Messenger) Start() {
 			var attempt int
 			for {
 				attempt++
-				err = wh.dwh.Execute(dm)
+				err = mg.dwh.Execute(dm)
 				if err == nil {
 					break
 				}
-				if err := wh.st.UpdateWebhookStats(wh.name, func(ws *app.WebhookStats) error {
-					ws.ErrorCount++
-					return nil
-				}); err != nil {
-					myLog.Error("failed to update webhook stats", "error", err)
-				}
+				mg.errCount.Add(1)
 				if errors.Is(err, discordhook.ErrInvalidMessage) {
 					myLog.Error("Discord Message not valid. Discarding", "error", err, "message", dm)
 					break
@@ -95,14 +92,14 @@ func (wh *Messenger) Start() {
 				myLog.Error("Failed to send to webhook. Retrying.", "error", err, "attempt", attempt, "wait", d, "message", dm)
 				time.Sleep(d)
 			}
-			if err := wh.st.UpdateWebhookStats(wh.name, func(ws *app.WebhookStats) error {
+			if err := mg.st.UpdateWebhookStats(mg.name, func(ws *app.WebhookStats) error {
 				ws.SentCount++
 				ws.SentLast = time.Now().UTC()
 				return nil
 			}); err != nil {
 				myLog.Error("failed to update webhook stats", "error", err)
 			}
-			myLog.Info("Posted item", "feed", m.Item.FeedName, "title", m.Item.Title, "queued", wh.queue.Size())
+			myLog.Info("Posted item", "feed", m.Item.FeedName, "title", m.Item.Title, "queued", mg.queue.Size())
 		}
 	}()
 }
@@ -120,8 +117,17 @@ func (wh *Messenger) AddMessage(feedName string, feed *gofeed.Feed, item *gofeed
 	return wh.queue.Put(v)
 }
 
-func (wh *Messenger) QueueSize() int {
-	return wh.queue.Size()
+type Status struct {
+	QueueSize  int
+	ErrorCount int
+}
+
+func (mg *Messenger) Status() Status {
+	x := Status{
+		QueueSize:  mg.queue.Size(),
+		ErrorCount: int(mg.errCount.Load()),
+	}
+	return x
 }
 
 func maxBackoffJitter(attempt int) time.Duration {

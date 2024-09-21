@@ -29,7 +29,7 @@ func TestMessage(t *testing.T) {
 		},
 	}
 	for i, tc := range cases {
-		t.Run(fmt.Sprint(i+1), func(t *testing.T) {
+		t.Run(fmt.Sprintf("validate message #%d", i+1), func(t *testing.T) {
 			err := tc.m.validate()
 			if tc.ok {
 				assert.NoError(t, err)

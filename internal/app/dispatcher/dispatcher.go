@@ -178,11 +178,11 @@ func (s *Dispatcher) processFeed(cf app.ConfigFeed, hooks []*messenger.Messenger
 	return err
 }
 
-// WebhookQueueSize returns the current size of a webhook queue.
-func (d *Dispatcher) WebhookQueueSize(name string) (int, error) {
-	wh, ok := d.hooks.Load(name)
+// MessengerStatus returns the current status of a messenger.
+func (d *Dispatcher) MessengerStatus(webhookName string) (messenger.Status, error) {
+	wh, ok := d.hooks.Load(webhookName)
 	if !ok {
-		return 0, fmt.Errorf("webhook not found")
+		return messenger.Status{}, fmt.Errorf("webhook not found: %s", webhookName)
 	}
-	return wh.QueueSize(), nil
+	return wh.Status(), nil
 }

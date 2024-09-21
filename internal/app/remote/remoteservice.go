@@ -27,16 +27,16 @@ type SendPingArgs struct {
 type RemoteService struct {
 	cfg    app.MyConfig
 	client *discordhook.Client
-	s      *dispatcher.Dispatcher
+	d      *dispatcher.Dispatcher
 	st     *storage.Storage
 }
 
-func NewRemoteService(s *dispatcher.Dispatcher, st *storage.Storage, cfg app.MyConfig) *RemoteService {
+func NewRemoteService(d *dispatcher.Dispatcher, st *storage.Storage, cfg app.MyConfig) *RemoteService {
 	client := discordhook.NewClient(http.DefaultClient)
 	x := &RemoteService{
 		cfg:    cfg,
 		client: client,
-		s:      s,
+		d:      d,
 		st:     st,
 	}
 	return x
@@ -76,11 +76,11 @@ func (s *RemoteService) Statistics(args *EmptyArgs, reply *string) error {
 		} else if err != nil {
 			log.Fatal(err)
 		}
-		q, err := s.s.WebhookQueueSize(cw.Name)
+		ms, err := s.d.MessengerStatus(cw.Name)
 		if err != nil {
 			slog.Error("Failed to fetch queue size for webhook", "webhook", cw.Name)
 		}
-		whTable.AddRow([]any{o.Name, q, o.SentCount, o.SentLast, o.ErrorCount})
+		whTable.AddRow([]any{o.Name, ms.QueueSize, o.SentCount, o.SentLast, ms.ErrorCount})
 	}
 	whTable.Print()
 	*reply = out.String()

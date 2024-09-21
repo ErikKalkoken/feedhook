@@ -10,8 +10,7 @@ type FeedStats struct {
 }
 
 type WebhookStats struct {
-	Name       string
-	ErrorCount int
-	SentCount  int
-	SentLast   time.Time
+	Name      string
+	SentCount int
+	SentLast  time.Time
 }
