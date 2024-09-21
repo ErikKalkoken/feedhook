@@ -1,4 +1,4 @@
-package webhook_test
+package messenger_test
 
 import (
 	"net/http"
@@ -9,8 +9,8 @@ import (
 	bolt "go.etcd.io/bbolt"
 
 	"github.com/ErikKalkoken/feedhook/internal/app"
+	"github.com/ErikKalkoken/feedhook/internal/app/messenger"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
-	"github.com/ErikKalkoken/feedhook/internal/app/webhook"
 	"github.com/ErikKalkoken/feedhook/internal/discordhook"
 	"github.com/ErikKalkoken/feedhook/internal/queue"
 	"github.com/jarcoal/httpmock"
@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestWebhook(t *testing.T) {
+func TestMessenger(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "test.db")
 	db, err := bolt.Open(p, 0600, nil)
 	if err != nil {
@@ -41,12 +41,12 @@ func TestWebhook(t *testing.T) {
 		httpmock.NewStringResponder(204, ""),
 	)
 	c := discordhook.NewClient(http.DefaultClient)
-	wh := webhook.New(c, q, "dummy", "https://www.example.com", st, app.MyConfig{})
+	wh := messenger.New(c, q, "dummy", "https://www.example.com", st, app.MyConfig{})
 	wh.Start()
 	feed := &gofeed.Feed{Title: "title"}
 	now := time.Now()
 	item := &gofeed.Item{Content: "content", PublishedParsed: &now}
-	err = wh.EnqueueMessage("dummy", feed, item, false)
+	err = wh.AddMessage("dummy", feed, item, false)
 	time.Sleep(2 * time.Second)
 	if assert.NoError(t, err) {
 		assert.Equal(t, 1, httpmock.GetTotalCallCount())

@@ -13,8 +13,8 @@ import (
 	"github.com/mmcdole/gofeed"
 
 	"github.com/ErikKalkoken/feedhook/internal/app"
+	"github.com/ErikKalkoken/feedhook/internal/app/messenger"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
-	"github.com/ErikKalkoken/feedhook/internal/app/webhook"
 	"github.com/ErikKalkoken/feedhook/internal/discordhook"
 	"github.com/ErikKalkoken/feedhook/internal/queue"
 	"github.com/ErikKalkoken/feedhook/internal/syncx"
@@ -33,7 +33,7 @@ type Dispatcher struct {
 	clock  Clock
 	done   chan bool // signals that the shutdown is complete
 	fp     *gofeed.Parser
-	hooks  *syncx.Map[string, *webhook.Webhook]
+	hooks  *syncx.Map[string, *messenger.Messenger]
 	quit   chan bool // closed to signal a shutdown
 	st     *storage.Storage
 }
@@ -51,7 +51,7 @@ func New(st *storage.Storage, cfg app.MyConfig, clock Clock) *Dispatcher {
 		clock:  clock,
 		done:   make(chan bool),
 		fp:     fp,
-		hooks:  syncx.NewMap[string, *webhook.Webhook](),
+		hooks:  syncx.NewMap[string, *messenger.Messenger](),
 		quit:   make(chan bool),
 		st:     st,
 	}
@@ -75,7 +75,7 @@ func (d *Dispatcher) Start() {
 		if err != nil {
 			panic(err)
 		}
-		wh := webhook.New(d.client, q, h.Name, h.URL, d.st, d.cfg)
+		wh := messenger.New(d.client, q, h.Name, h.URL, d.st, d.cfg)
 		wh.Start()
 		d.hooks.Store(h.Name, wh)
 	}
@@ -91,7 +91,7 @@ func (d *Dispatcher) Start() {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					usedHooks := make([]*webhook.Webhook, 0)
+					usedHooks := make([]*messenger.Messenger, 0)
 					for _, name := range cf.Webhooks {
 						wh, ok := d.hooks.Load(name)
 						if !ok {
@@ -126,7 +126,7 @@ func (d *Dispatcher) Start() {
 }
 
 // processFeed processes a configured feed.
-func (s *Dispatcher) processFeed(cf app.ConfigFeed, hooks []*webhook.Webhook) error {
+func (s *Dispatcher) processFeed(cf app.ConfigFeed, hooks []*messenger.Messenger) error {
 	myLog := slog.With("feed", cf.Name)
 	feed, err := s.fp.ParseURL(cf.URL)
 	if err != nil {
@@ -151,7 +151,7 @@ func (s *Dispatcher) processFeed(cf app.ConfigFeed, hooks []*webhook.Webhook) er
 			continue
 		}
 		for _, hook := range hooks {
-			if err := hook.EnqueueMessage(cf.Name, feed, item, state == app.StateUpdated); err != nil {
+			if err := hook.AddMessage(cf.Name, feed, item, state == app.StateUpdated); err != nil {
 				myLog.Error("Failed to add item to webhook queue", "hook", hook.Name(), "error", "err")
 				if err := s.st.UpdateFeedStats(cf.Name, func(fs *app.FeedStats) error {
 					fs.ErrorCount++

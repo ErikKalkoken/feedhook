@@ -1,4 +1,4 @@
-package webhook
+package messenger
 
 import (
 	"log/slog"
@@ -16,10 +16,10 @@ const (
 	maxAttempts = 3
 )
 
-// A Webhook handles posting messages to webhooks.
-// Messages are kept in a permanent queue and do not disappear after a restart.
+// A Messenger handles posting messages to webhooks.
 // Failed messages are automatically retried and rate limits are respected.
-type Webhook struct {
+// Messages are kept in a permanent queue, which can survive process restarts.
+type Messenger struct {
 	cfg   app.MyConfig
 	dwh   *discordhook.Webhook
 	name  string
@@ -27,8 +27,8 @@ type Webhook struct {
 	st    *storage.Storage
 }
 
-func New(client *discordhook.Client, queue *queue.Queue, name, url string, st *storage.Storage, cfg app.MyConfig) *Webhook {
-	wh := &Webhook{
+func New(client *discordhook.Client, queue *queue.Queue, name, url string, st *storage.Storage, cfg app.MyConfig) *Messenger {
+	wh := &Messenger{
 		cfg:   cfg,
 		dwh:   discordhook.NewWebhook(client, url),
 		name:  name,
@@ -38,12 +38,12 @@ func New(client *discordhook.Client, queue *queue.Queue, name, url string, st *s
 	return wh
 }
 
-func (wh *Webhook) Name() string {
+func (wh *Messenger) Name() string {
 	return wh.name
 }
 
 // Start starts the service.
-func (wh *Webhook) Start() {
+func (wh *Messenger) Start() {
 	go func() {
 		myLog := slog.With("webhook", wh.name)
 		myLog.Info("Started webhook", "queued", wh.queue.Size())
@@ -109,8 +109,8 @@ func (wh *Webhook) Start() {
 	}()
 }
 
-// EnqueueMessage adds a new message for being send to to webhook
-func (wh *Webhook) EnqueueMessage(feedName string, feed *gofeed.Feed, item *gofeed.Item, isUpdated bool) error {
+// AddMessage adds a new message for being send to to webhook
+func (wh *Messenger) AddMessage(feedName string, feed *gofeed.Feed, item *gofeed.Item, isUpdated bool) error {
 	p, err := newMessage(feedName, feed, item, isUpdated)
 	if err != nil {
 		return err
@@ -122,6 +122,6 @@ func (wh *Webhook) EnqueueMessage(feedName string, feed *gofeed.Feed, item *gofe
 	return wh.queue.Put(v)
 }
 
-func (wh *Webhook) QueueSize() int {
+func (wh *Messenger) QueueSize() int {
 	return wh.queue.Size()
 }
