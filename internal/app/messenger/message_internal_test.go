@@ -19,10 +19,7 @@ func TestMessage(t *testing.T) {
 			assert.Equal(t, "content", x.Item.Description)
 		}
 	})
-}
-
-func TestSerialization(t *testing.T) {
-	t.Run("can serialize and de-serialize payload", func(t *testing.T) {
+	t.Run("can serialize and de-serialize a message", func(t *testing.T) {
 		fi := FeedItem{
 			Description: "description",
 			FeedTitle:   "feedTitle",

@@ -1,7 +1,11 @@
 package messenger
 
 import (
+	"errors"
 	"log/slog"
+	"math"
+	"math/rand/v2"
+	"net/http"
 	"time"
 
 	"github.com/mmcdole/gofeed"
@@ -10,10 +14,6 @@ import (
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 	"github.com/ErikKalkoken/feedhook/internal/discordhook"
 	"github.com/ErikKalkoken/feedhook/internal/queue"
-)
-
-const (
-	maxAttempts = 3
 )
 
 // A Messenger handles posting messages to webhooks.
@@ -55,47 +55,45 @@ func (wh *Messenger) Start() {
 			}
 			m, err := newMessageFromBytes(v)
 			if err != nil {
-				myLog.Error("Failed to de-serialize message", "error", err, "data", string(v))
+				myLog.Error("Failed to de-serialize message. Discarding", "error", err, "data", string(v))
 				continue
 			}
-			pl, err := m.Item.ToDiscordMessage(wh.cfg.App.BrandingDisabled)
+			dm, err := m.Item.ToDiscordMessage(wh.cfg.App.BrandingDisabled)
 			if err != nil {
-				myLog.Error("Failed to convert message to payload", "error", err, "data", string(v))
+				myLog.Error("Failed to convert message for Discord. Discarding", "error", err, "message", m)
+				continue
 			}
+			var attempt int
 			for {
-				err = wh.dwh.Execute(pl)
+				attempt++
+				err = wh.dwh.Execute(dm)
 				if err == nil {
 					break
 				}
-				err429, ok := err.(discordhook.TooManyRequestsError)
-				if !ok {
-					break
-				}
-				myLog.Error("API rate limited exceeded", "retryAfter", err429.RetryAfter)
-				time.Sleep(err429.RetryAfter)
-			}
-			if err != nil {
-				m.Attempt++
-				myLog.Error("Failed to send to webhook", "error", err, "attempt", m.Attempt)
 				if err := wh.st.UpdateWebhookStats(wh.name, func(ws *app.WebhookStats) error {
 					ws.ErrorCount++
 					return nil
 				}); err != nil {
 					myLog.Error("failed to update webhook stats", "error", err)
 				}
-				if m.Attempt == maxAttempts {
-					myLog.Error("Discarding message after too many attempts")
+				if errors.Is(err, discordhook.ErrInvalidMessage) {
+					myLog.Error("Discord Message not valid. Discarding", "error", err, "message", dm)
+					break
+				}
+				errHTTP, ok := err.(discordhook.HTTPError)
+				if ok && errHTTP.Status == http.StatusBadRequest {
+					myLog.Error("Bad request. Discarding", "error", err, "message", dm)
+					break
+				}
+				err429, ok := err.(discordhook.TooManyRequestsError)
+				if ok {
+					myLog.Error("API rate limited exceeded", "retryAfter", err429.RetryAfter)
+					time.Sleep(err429.RetryAfter)
 					continue
 				}
-				v, err := m.toBytes()
-				if err != nil {
-					myLog.Error("Failed to serialize message after failure", "error", err)
-					continue
-				}
-				if err := wh.queue.Put(v); err != nil {
-					myLog.Error("Failed to enqueue message after failure", "error", err)
-				}
-				continue
+				d := maxBackoffJitter(attempt)
+				myLog.Error("Failed to send to webhook. Retrying.", "error", err, "attempt", attempt, "wait", d, "message", dm)
+				time.Sleep(d)
 			}
 			if err := wh.st.UpdateWebhookStats(wh.name, func(ws *app.WebhookStats) error {
 				ws.SentCount++
@@ -124,4 +122,13 @@ func (wh *Messenger) AddMessage(feedName string, feed *gofeed.Feed, item *gofeed
 
 func (wh *Messenger) QueueSize() int {
 	return wh.queue.Size()
+}
+
+func maxBackoffJitter(attempt int) time.Duration {
+	const BASE = 100
+	const MAX_DELAY = 30_000
+	exponential := math.Pow(2, float64(attempt)) * BASE
+	delay := min(exponential, MAX_DELAY)
+	ms := math.Floor(rand.Float64() * delay)
+	return time.Duration(ms) * time.Millisecond
 }
