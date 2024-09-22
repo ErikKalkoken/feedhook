@@ -125,7 +125,7 @@ func (d *Dispatcher) Start() {
 	}()
 }
 
-// processFeed processes a configured feed.
+// processFeed checks a feed for new items and hands them over to configured messengers.
 func (s *Dispatcher) processFeed(cf app.ConfigFeed, hooks []*messenger.Messenger) error {
 	myLog := slog.With("feed", cf.Name)
 	feed, err := s.fp.ParseURL(cf.URL)
@@ -135,6 +135,9 @@ func (s *Dispatcher) processFeed(cf app.ConfigFeed, hooks []*messenger.Messenger
 	oldest := time.Duration(s.cfg.App.Oldest) * time.Second
 	sort.Sort(feed)
 	for _, item := range feed.Items {
+		if item.Content == "" && item.Description == "" {
+			continue
+		}
 		select {
 		case <-s.quit:
 			return errUserAborted
