@@ -15,9 +15,9 @@ import (
 	"github.com/ErikKalkoken/feedhook/internal/app"
 	"github.com/ErikKalkoken/feedhook/internal/app/messenger"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
-	"github.com/ErikKalkoken/feedhook/internal/dhook"
+	"github.com/ErikKalkoken/feedhook/internal/dhooks"
 	"github.com/ErikKalkoken/feedhook/internal/queue"
-	"github.com/ErikKalkoken/feedhook/internal/syncx"
+	"github.com/ErikKalkoken/feedhook/internal/syncedmap"
 )
 
 var errUserAborted = errors.New("aborted by user")
@@ -29,11 +29,11 @@ type Clock interface {
 // Dispatcher is a service that fetches items from feeds and forwards them to webhooks.
 type Dispatcher struct {
 	cfg    app.MyConfig
-	client *dhook.Client
+	client *dhooks.Client
 	clock  Clock
 	done   chan bool // signals that the shutdown is complete
 	fp     *gofeed.Parser
-	hooks  *syncx.Map[string, *messenger.Messenger]
+	hooks  *syncedmap.SyncedMap[string, *messenger.Messenger]
 	quit   chan bool // closed to signal a shutdown
 	st     *storage.Storage
 }
@@ -46,12 +46,12 @@ func New(st *storage.Storage, cfg app.MyConfig, clock Clock) *Dispatcher {
 	fp := gofeed.NewParser()
 	fp.Client = httpClient
 	d := &Dispatcher{
-		client: dhook.NewClient(httpClient),
+		client: dhooks.NewClient(httpClient),
 		cfg:    cfg,
 		clock:  clock,
 		done:   make(chan bool),
 		fp:     fp,
-		hooks:  syncx.NewMap[string, *messenger.Messenger](),
+		hooks:  syncedmap.New[string, *messenger.Messenger](),
 		quit:   make(chan bool),
 		st:     st,
 	}

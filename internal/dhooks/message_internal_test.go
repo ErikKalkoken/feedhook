@@ -1,4 +1,4 @@
-package dhook
+package dhooks
 
 import (
 	"fmt"

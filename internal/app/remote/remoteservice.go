@@ -14,7 +14,7 @@ import (
 	"github.com/ErikKalkoken/feedhook/internal/app/dispatcher"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 	"github.com/ErikKalkoken/feedhook/internal/consoletable"
-	"github.com/ErikKalkoken/feedhook/internal/dhook"
+	"github.com/ErikKalkoken/feedhook/internal/dhooks"
 )
 
 type EmptyArgs struct{}
@@ -26,13 +26,13 @@ type SendPingArgs struct {
 // RemoteService is a service for providing remote access to the app via RPC.
 type RemoteService struct {
 	cfg    app.MyConfig
-	client *dhook.Client
+	client *dhooks.Client
 	d      *dispatcher.Dispatcher
 	st     *storage.Storage
 }
 
 func NewRemoteService(d *dispatcher.Dispatcher, st *storage.Storage, cfg app.MyConfig) *RemoteService {
-	client := dhook.NewClient(http.DefaultClient)
+	client := dhooks.NewClient(http.DefaultClient)
 	x := &RemoteService{
 		cfg:    cfg,
 		client: client,
@@ -98,7 +98,7 @@ func (s *RemoteService) SendPing(args *SendPingArgs, reply *bool) error {
 	if wh.Name == "" {
 		return fmt.Errorf("no webhook found with the name %s", args.Name)
 	}
-	dh := dhook.NewWebhook(s.client, wh.URL)
-	pl := dhook.Message{Content: "Ping from feedhook"}
+	dh := dhooks.NewWebhook(s.client, wh.URL)
+	pl := dhooks.Message{Content: "Ping from feedhook"}
 	return dh.Execute(pl)
 }

@@ -1,5 +1,5 @@
-// Package dhook provides types and functions for sending messages to Discord webhooks.
-package dhook
+// Package dhooks provides types and functions for sending messages to Discord webhooks.
+package dhooks
 
 import (
 	"net/http"

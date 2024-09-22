@@ -10,7 +10,7 @@ import (
 	md "github.com/JohannesKaufmann/html-to-markdown"
 	"github.com/PuerkitoBio/goquery"
 
-	"github.com/ErikKalkoken/feedhook/internal/dhook"
+	"github.com/ErikKalkoken/feedhook/internal/dhooks"
 )
 
 const (
@@ -75,8 +75,8 @@ type FeedItem struct {
 }
 
 // ToDiscordMessage generates a DiscordMessage from a FeedItem.
-func (fi FeedItem) ToDiscordMessage(brandingDisabled bool) (dhook.Message, error) {
-	var dm dhook.Message
+func (fi FeedItem) ToDiscordMessage(brandingDisabled bool) (dhooks.Message, error) {
+	var dm dhooks.Message
 	description, err := converter.ConvertString(fi.Description)
 	if err != nil {
 		return dm, fmt.Errorf("failed to parse description to markdown: %w", err)
@@ -93,7 +93,7 @@ func (fi FeedItem) ToDiscordMessage(brandingDisabled bool) (dhook.Message, error
 	if truncated {
 		slog.Warn("title was truncated", "title", fi.Title)
 	}
-	em := dhook.Embed{
+	em := dhooks.Embed{
 		Description: desc,
 		Title:       title,
 		URL:         fi.ItemURL,
@@ -116,8 +116,8 @@ func (fi FeedItem) ToDiscordMessage(brandingDisabled bool) (dhook.Message, error
 		dm.Username = username
 		dm.AvatarURL = avatarURL
 	}
-	em.Footer = dhook.EmbedFooter{Text: fi.FeedName}
-	dm.Embeds = []dhook.Embed{em}
+	em.Footer = dhooks.EmbedFooter{Text: fi.FeedName}
+	dm.Embeds = []dhooks.Embed{em}
 	return dm, nil
 }
 
