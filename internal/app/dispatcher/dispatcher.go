@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"github.com/ErikKalkoken/feedhook/internal/syncedmap"
 )
 
+var ErrNotFound = errors.New("not found")
 var errUserAborted = errors.New("aborted by user")
 
 type Clock interface {
@@ -126,27 +128,27 @@ func (d *Dispatcher) Start() {
 }
 
 // processFeed checks a feed for new items and hands them over to configured messengers.
-func (s *Dispatcher) processFeed(cf app.ConfigFeed, hooks []*messenger.Messenger) error {
+func (d *Dispatcher) processFeed(cf app.ConfigFeed, hooks []*messenger.Messenger) error {
 	myLog := slog.With("feed", cf.Name)
-	feed, err := s.fp.ParseURL(cf.URL)
+	feed, err := d.fp.ParseURL(cf.URL)
 	if err != nil {
 		return fmt.Errorf("failed to parse URL for feed %s: %w ", cf.Name, err)
 	}
-	oldest := time.Duration(s.cfg.App.Oldest) * time.Second
+	oldest := time.Duration(d.cfg.App.Oldest) * time.Second
 	sort.Sort(feed)
 	for _, item := range feed.Items {
 		if item.Content == "" && item.Description == "" {
 			continue
 		}
 		select {
-		case <-s.quit:
+		case <-d.quit:
 			return errUserAborted
 		default:
 		}
-		if oldest != 0 && item.PublishedParsed != nil && item.PublishedParsed.Before(s.clock.Now().Add(-oldest)) {
+		if oldest != 0 && item.PublishedParsed != nil && item.PublishedParsed.Before(d.clock.Now().Add(-oldest)) {
 			continue
 		}
-		state, err := s.st.GetItemState(cf, item)
+		state, err := d.st.GetItemState(cf, item)
 		if err != nil {
 			slog.Warn("Failed to read item state from DB. Assuming item is new.", "title", item.Title)
 			state = app.StateNew
@@ -155,8 +157,8 @@ func (s *Dispatcher) processFeed(cf app.ConfigFeed, hooks []*messenger.Messenger
 		}
 		for _, hook := range hooks {
 			if err := hook.AddMessage(cf.Name, feed, item, state == app.StateUpdated); err != nil {
-				myLog.Error("Failed to add item to webhook queue", "hook", hook.Name(), "error", "err")
-				if err := s.st.UpdateFeedStats(cf.Name, func(fs *app.FeedStats) error {
+				myLog.Error("Failed to add item to webhook queue", "hook", hook.Name(), "error", err)
+				if err := d.st.UpdateFeedStats(cf.Name, func(fs *app.FeedStats) error {
 					fs.ErrorCount++
 					return nil
 				}); err != nil {
@@ -165,10 +167,10 @@ func (s *Dispatcher) processFeed(cf app.ConfigFeed, hooks []*messenger.Messenger
 				continue
 			}
 		}
-		if err := s.st.RecordItem(cf, item); err != nil {
+		if err := d.st.RecordItem(cf, item); err != nil {
 			return fmt.Errorf("failed to record item: %w", err)
 		}
-		if err := s.st.UpdateFeedStats(cf.Name, func(fs *app.FeedStats) error {
+		if err := d.st.UpdateFeedStats(cf.Name, func(fs *app.FeedStats) error {
 			fs.ReceivedCount++
 			fs.ReceivedLast = time.Now().UTC()
 			return nil
@@ -177,7 +179,7 @@ func (s *Dispatcher) processFeed(cf app.ConfigFeed, hooks []*messenger.Messenger
 		}
 		myLog.Info("Received item", "title", item.Title)
 	}
-	err = s.st.CullItems(cf, 1000)
+	err = d.st.CullItems(cf, 1000)
 	return err
 }
 
@@ -185,7 +187,51 @@ func (s *Dispatcher) processFeed(cf app.ConfigFeed, hooks []*messenger.Messenger
 func (d *Dispatcher) MessengerStatus(webhookName string) (messenger.Status, error) {
 	wh, ok := d.hooks.Load(webhookName)
 	if !ok {
-		return messenger.Status{}, fmt.Errorf("webhook not found: %s", webhookName)
+		return messenger.Status{}, fmt.Errorf("webhook \"%s\": %w", webhookName, ErrNotFound)
+
 	}
 	return wh.Status(), nil
+}
+
+func (d *Dispatcher) PostLatestFeedItem(feedName string) error {
+	var cf app.ConfigFeed
+	for _, f := range d.cfg.Feeds {
+		if f.Name == feedName {
+			cf = f
+			break
+		}
+	}
+	if cf.Name == "" {
+		return fmt.Errorf("feed \"%s\": %w", feedName, ErrNotFound)
+	}
+	hooks := make([]*messenger.Messenger, 0)
+	for _, name := range cf.Webhooks {
+		wh, ok := d.hooks.Load(name)
+		if !ok {
+			panic("expected webhook not found: " + name)
+		}
+		hooks = append(hooks, wh)
+	}
+	feed, err := d.fp.ParseURL(cf.URL)
+	if err != nil {
+		return fmt.Errorf("failed to parse URL for feed: %w ", err)
+	}
+	items := make([]*gofeed.Item, 0)
+	for _, i := range feed.Items {
+		if i.PublishedParsed != nil {
+			items = append(items, i)
+		}
+	}
+	if len(items) == 0 {
+		return fmt.Errorf("No items found in feed")
+	}
+	latest := slices.MaxFunc(items, func(a, b *gofeed.Item) int {
+		return a.PublishedParsed.Compare(*b.PublishedParsed)
+	})
+	for _, hook := range hooks {
+		if err := hook.AddMessage(cf.Name, feed, latest, false); err != nil {
+			return fmt.Errorf("failed to add item to webhook queue: %w", err)
+		}
+	}
+	return nil
 }

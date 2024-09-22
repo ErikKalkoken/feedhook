@@ -33,12 +33,19 @@ func (c Client) SendPing(webhookName string) error {
 	if err != nil {
 		return err
 	}
-	args := SendPingArgs{Name: webhookName}
+	args := SendPingArgs{WebhookName: webhookName}
 	var reply bool
-	if err = rc.Call("RemoteService.SendPing", args, &reply); err != nil {
-		return fmt.Errorf("dialing: %w", err)
+	return rc.Call("RemoteService.SendPing", args, &reply)
+}
+
+func (c Client) PostLatestFeedItem(feedName string) error {
+	rc, err := c.dial()
+	if err != nil {
+		return err
 	}
-	return nil
+	args := SendLatestArgs{FeedName: feedName}
+	var reply bool
+	return rc.Call("RemoteService.PostLatestFeedItem", args, &reply)
 }
 
 func (c Client) dial() (*rpc.Client, error) {

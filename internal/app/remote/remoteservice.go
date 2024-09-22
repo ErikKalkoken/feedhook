@@ -20,7 +20,11 @@ import (
 type EmptyArgs struct{}
 
 type SendPingArgs struct {
-	Name string
+	WebhookName string
+}
+
+type SendLatestArgs struct {
+	FeedName string
 }
 
 // RemoteService is a service for providing remote access to the app via RPC.
@@ -90,15 +94,19 @@ func (s *RemoteService) Statistics(args *EmptyArgs, reply *string) error {
 func (s *RemoteService) SendPing(args *SendPingArgs, reply *bool) error {
 	var wh app.ConfigWebhook
 	for _, w := range s.cfg.Webhooks {
-		if w.Name == args.Name {
+		if w.Name == args.WebhookName {
 			wh = w
 			break
 		}
 	}
 	if wh.Name == "" {
-		return fmt.Errorf("no webhook found with the name %s", args.Name)
+		return fmt.Errorf("no webhook found with the name %s", args.WebhookName)
 	}
 	dh := dhooks.NewWebhook(s.client, wh.URL)
 	pl := dhooks.Message{Content: "Ping from feedhook"}
 	return dh.Execute(pl)
+}
+
+func (s *RemoteService) PostLatestFeedItem(args *SendLatestArgs, reply *bool) error {
+	return s.d.PostLatestFeedItem(args.FeedName)
 }
