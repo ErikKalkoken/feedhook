@@ -10,7 +10,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/ErikKalkoken/feedhook/internal/app"
+	"github.com/ErikKalkoken/feedhook/internal/app/config"
 	"github.com/ErikKalkoken/feedhook/internal/app/dispatcher"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 	"github.com/ErikKalkoken/feedhook/internal/consoletable"
@@ -29,13 +29,13 @@ type SendLatestArgs struct {
 
 // RemoteService is a service for providing remote access to the app via RPC.
 type RemoteService struct {
-	cfg    app.MyConfig
+	cfg    config.MyConfig
 	client *dhooks.Client
 	d      *dispatcher.Dispatcher
 	st     *storage.Storage
 }
 
-func NewRemoteService(d *dispatcher.Dispatcher, st *storage.Storage, cfg app.MyConfig) *RemoteService {
+func NewRemoteService(d *dispatcher.Dispatcher, st *storage.Storage, cfg config.MyConfig) *RemoteService {
 	client := dhooks.NewClient(http.DefaultClient)
 	x := &RemoteService{
 		cfg:    cfg,
@@ -52,7 +52,7 @@ func (s *RemoteService) Statistics(args *EmptyArgs, reply *string) error {
 	feedsTable := consoletable.New("Feeds", 6)
 	feedsTable.Target = out
 	feedsTable.AddRow([]any{"Name", "Enabled", "Webhooks", "Received", "Last", "Errors"})
-	slices.SortFunc(s.cfg.Feeds, func(a, b app.ConfigFeed) int {
+	slices.SortFunc(s.cfg.Feeds, func(a, b config.ConfigFeed) int {
 		return cmp.Compare(a.Name, b.Name)
 	})
 	for _, cf := range s.cfg.Feeds {
@@ -70,7 +70,7 @@ func (s *RemoteService) Statistics(args *EmptyArgs, reply *string) error {
 	whTable := consoletable.New("Webhooks", 5)
 	whTable.Target = out
 	whTable.AddRow([]any{"Name", "Queued", "Sent", "Last", "Errors"})
-	slices.SortFunc(s.cfg.Webhooks, func(a, b app.ConfigWebhook) int {
+	slices.SortFunc(s.cfg.Webhooks, func(a, b config.ConfigWebhook) int {
 		return cmp.Compare(a.Name, b.Name)
 	})
 	for _, cw := range s.cfg.Webhooks {
@@ -92,7 +92,7 @@ func (s *RemoteService) Statistics(args *EmptyArgs, reply *string) error {
 }
 
 func (s *RemoteService) SendPing(args *SendPingArgs, reply *bool) error {
-	var wh app.ConfigWebhook
+	var wh config.ConfigWebhook
 	for _, w := range s.cfg.Webhooks {
 		if w.Name == args.WebhookName {
 			wh = w

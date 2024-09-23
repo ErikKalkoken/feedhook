@@ -8,3 +8,4 @@ feedhookcli
 feedhooksrv
 !cmd/*
 feedhook.zip
+*.bak

@@ -4,9 +4,8 @@ import (
 	"errors"
 	"log/slog"
 
+	"github.com/ErikKalkoken/feedhook/internal/app/config"
 	bolt "go.etcd.io/bbolt"
-
-	"github.com/ErikKalkoken/feedhook/internal/app"
 )
 
 const (
@@ -19,10 +18,10 @@ var ErrNotFound = errors.New("not found")
 
 type Storage struct {
 	db  *bolt.DB
-	cfg app.MyConfig
+	cfg config.MyConfig
 }
 
-func New(db *bolt.DB, cfg app.MyConfig) *Storage {
+func New(db *bolt.DB, cfg config.MyConfig) *Storage {
 	st := &Storage{
 		db:  db,
 		cfg: cfg,

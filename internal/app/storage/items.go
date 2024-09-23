@@ -7,11 +7,12 @@ import (
 	"time"
 
 	"github.com/ErikKalkoken/feedhook/internal/app"
+	"github.com/ErikKalkoken/feedhook/internal/app/config"
 	"github.com/mmcdole/gofeed"
 	bolt "go.etcd.io/bbolt"
 )
 
-func (st *Storage) RecordItem(cf app.ConfigFeed, item *gofeed.Item) error {
+func (st *Storage) RecordItem(cf config.ConfigFeed, item *gofeed.Item) error {
 	err := st.db.Update(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketFeeds))
 		b := root.Bucket([]byte(cf.Name))
@@ -26,7 +27,7 @@ func (st *Storage) RecordItem(cf app.ConfigFeed, item *gofeed.Item) error {
 }
 
 // GetItemState return the state of an item.
-func (st *Storage) GetItemState(cf app.ConfigFeed, item *gofeed.Item) (app.ItemState, error) {
+func (st *Storage) GetItemState(cf config.ConfigFeed, item *gofeed.Item) (app.ItemState, error) {
 	var s app.ItemState
 	err := st.db.View(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketFeeds))
@@ -56,7 +57,7 @@ func (st *Storage) GetItemState(cf app.ConfigFeed, item *gofeed.Item) (app.ItemS
 }
 
 // CullItems deletes the oldest items when there are more items then a limit
-func (st *Storage) CullItems(cf app.ConfigFeed, limit int) error {
+func (st *Storage) CullItems(cf config.ConfigFeed, limit int) error {
 	err := st.db.Update(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketFeeds))
 		b := root.Bucket([]byte(cf.Name))
@@ -103,7 +104,7 @@ func (st *Storage) ListItems(feed string) ([]*app.ProcessedItem, error) {
 	return items, err
 }
 
-func (st *Storage) ItemCount(cf app.ConfigFeed) int {
+func (st *Storage) ItemCount(cf config.ConfigFeed) int {
 	var c int
 	st.db.View(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketFeeds))

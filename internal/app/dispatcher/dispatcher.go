@@ -14,6 +14,7 @@ import (
 	"github.com/mmcdole/gofeed"
 
 	"github.com/ErikKalkoken/feedhook/internal/app"
+	"github.com/ErikKalkoken/feedhook/internal/app/config"
 	"github.com/ErikKalkoken/feedhook/internal/app/messenger"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 	"github.com/ErikKalkoken/feedhook/internal/dhooks"
@@ -30,7 +31,7 @@ type Clock interface {
 
 // Dispatcher is a service that fetches items from feeds and forwards them to webhooks.
 type Dispatcher struct {
-	cfg    app.MyConfig
+	cfg    config.MyConfig
 	client *dhooks.Client
 	clock  Clock
 	done   chan bool // signals that the shutdown is complete
@@ -41,7 +42,7 @@ type Dispatcher struct {
 }
 
 // New creates a new App instance and returns it.
-func New(st *storage.Storage, cfg app.MyConfig, clock Clock) *Dispatcher {
+func New(st *storage.Storage, cfg config.MyConfig, clock Clock) *Dispatcher {
 	httpClient := &http.Client{
 		Timeout: time.Duration(cfg.App.Timeout) * time.Second,
 	}
@@ -128,7 +129,7 @@ func (d *Dispatcher) Start() {
 }
 
 // processFeed checks a feed for new items and hands them over to configured messengers.
-func (d *Dispatcher) processFeed(cf app.ConfigFeed, hooks []*messenger.Messenger) error {
+func (d *Dispatcher) processFeed(cf config.ConfigFeed, hooks []*messenger.Messenger) error {
 	myLog := slog.With("feed", cf.Name)
 	feed, err := d.fp.ParseURL(cf.URL)
 	if err != nil {
@@ -194,7 +195,7 @@ func (d *Dispatcher) MessengerStatus(webhookName string) (messenger.Status, erro
 }
 
 func (d *Dispatcher) PostLatestFeedItem(feedName string) error {
-	var cf app.ConfigFeed
+	var cf config.ConfigFeed
 	for _, f := range d.cfg.Feeds {
 		if f.Name == feedName {
 			cf = f

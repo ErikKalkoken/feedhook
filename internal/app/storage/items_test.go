@@ -11,6 +11,7 @@ import (
 	bolt "go.etcd.io/bbolt"
 
 	"github.com/ErikKalkoken/feedhook/internal/app"
+	"github.com/ErikKalkoken/feedhook/internal/app/config"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 )
 
@@ -21,9 +22,9 @@ func TestItems(t *testing.T) {
 		log.Fatalf("Failed to open DB: %s", err)
 	}
 	defer db.Close()
-	cf := app.ConfigFeed{Name: "feed1", URL: "https://www.example.com/feed", Webhooks: []string{"hook1"}}
-	cfg := app.MyConfig{
-		Feeds: []app.ConfigFeed{cf},
+	cf := config.ConfigFeed{Name: "feed1", URL: "https://www.example.com/feed", Webhooks: []string{"hook1"}}
+	cfg := config.MyConfig{
+		Feeds: []config.ConfigFeed{cf},
 	}
 	st := storage.New(db, cfg)
 	if err := st.Init(); err != nil {

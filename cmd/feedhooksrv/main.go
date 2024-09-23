@@ -16,7 +16,7 @@ import (
 
 	bolt "go.etcd.io/bbolt"
 
-	"github.com/ErikKalkoken/feedhook/internal/app"
+	"github.com/ErikKalkoken/feedhook/internal/app/config"
 	"github.com/ErikKalkoken/feedhook/internal/app/dispatcher"
 	"github.com/ErikKalkoken/feedhook/internal/app/remote"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
@@ -51,7 +51,7 @@ func main() {
 		os.Exit(0)
 	}
 	p := filepath.Join(*cfgPathFlag, configFilename)
-	cfg, err := app.ReadConfig(p)
+	cfg, err := config.ReadConfig(p)
 	if err != nil {
 		log.Fatalf("Config error: %s", err)
 	}
@@ -87,7 +87,7 @@ func main() {
 	<-sc
 }
 
-func startRPC(port int, d *dispatcher.Dispatcher, st *storage.Storage, cfg app.MyConfig) error {
+func startRPC(port int, d *dispatcher.Dispatcher, st *storage.Storage, cfg config.MyConfig) error {
 	rpc.Register(remote.NewRemoteService(d, st, cfg))
 	rpc.HandleHTTP()
 	l, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))

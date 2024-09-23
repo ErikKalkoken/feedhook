@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	bolt "go.etcd.io/bbolt"
 
-	"github.com/ErikKalkoken/feedhook/internal/app"
+	"github.com/ErikKalkoken/feedhook/internal/app/config"
 	"github.com/ErikKalkoken/feedhook/internal/app/dispatcher"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 )
@@ -41,10 +41,10 @@ func TestService(t *testing.T) {
 		t.Fatalf("Failed to open DB: %s", err)
 	}
 	defer db.Close()
-	cfg := app.MyConfig{
-		App:      app.ConfigApp{Oldest: 3600 * 24, Ticker: 1},
-		Webhooks: []app.ConfigWebhook{{Name: "hook1", URL: "https://www.example.com/hook"}},
-		Feeds:    []app.ConfigFeed{{Name: "feed1", URL: "https://www.example.com/feed", Webhooks: []string{"hook1"}}},
+	cfg := config.MyConfig{
+		App:      config.ConfigApp{Oldest: 3600 * 24, Ticker: 1},
+		Webhooks: []config.ConfigWebhook{{Name: "hook1", URL: "https://www.example.com/hook"}},
+		Feeds:    []config.ConfigFeed{{Name: "feed1", URL: "https://www.example.com/feed", Webhooks: []string{"hook1"}}},
 	}
 	st := storage.New(db, cfg)
 	if err := st.Init(); err != nil {

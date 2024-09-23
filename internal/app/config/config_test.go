@@ -1,12 +1,11 @@
-package app_test
+package config_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/ErikKalkoken/feedhook/internal/app"
-
+	"github.com/ErikKalkoken/feedhook/internal/app/config"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -33,7 +32,7 @@ func TestConfig(t *testing.T) {
 	if err := os.WriteFile(p, []byte(toml), 0644); err != nil {
 		t.Fatal(err)
 	}
-	cf, err := app.ReadConfig(p)
+	cf, err := config.ReadConfig(p)
 	if assert.NoError(t, err) {
 		assert.Equal(t, cf.App.Timeout, 2)
 		assert.Equal(t, cf.App.Oldest, 3)

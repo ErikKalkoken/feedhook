@@ -11,6 +11,7 @@ import (
 	"github.com/mmcdole/gofeed"
 
 	"github.com/ErikKalkoken/feedhook/internal/app"
+	"github.com/ErikKalkoken/feedhook/internal/app/config"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 	"github.com/ErikKalkoken/feedhook/internal/dhooks"
 	"github.com/ErikKalkoken/feedhook/internal/queue"
@@ -20,7 +21,7 @@ import (
 // Failed messages are automatically retried and rate limits are respected.
 // Messages are kept in a permanent queue, which can survive process restarts.
 type Messenger struct {
-	cfg      app.MyConfig
+	cfg      config.MyConfig
 	errCount atomic.Int64
 	dwh      *dhooks.Webhook
 	name     string
@@ -28,7 +29,7 @@ type Messenger struct {
 	st       *storage.Storage
 }
 
-func New(client *dhooks.Client, queue *queue.Queue, name, url string, st *storage.Storage, cfg app.MyConfig) *Messenger {
+func New(client *dhooks.Client, queue *queue.Queue, name, url string, st *storage.Storage, cfg config.MyConfig) *Messenger {
 	mg := &Messenger{
 		cfg:   cfg,
 		dwh:   dhooks.NewWebhook(client, url),

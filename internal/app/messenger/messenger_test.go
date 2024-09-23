@@ -8,7 +8,7 @@ import (
 
 	bolt "go.etcd.io/bbolt"
 
-	"github.com/ErikKalkoken/feedhook/internal/app"
+	"github.com/ErikKalkoken/feedhook/internal/app/config"
 	"github.com/ErikKalkoken/feedhook/internal/app/messenger"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 	"github.com/ErikKalkoken/feedhook/internal/dhooks"
@@ -29,7 +29,7 @@ func TestMessenger(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create queue: %s", err)
 	}
-	st := storage.New(db, app.MyConfig{})
+	st := storage.New(db, config.MyConfig{})
 	if err := st.Init(); err != nil {
 		t.Fatalf("Failed to init: %s", err)
 	}
@@ -41,7 +41,7 @@ func TestMessenger(t *testing.T) {
 		httpmock.NewStringResponder(204, ""),
 	)
 	c := dhooks.NewClient(http.DefaultClient)
-	wh := messenger.New(c, q, "dummy", "https://www.example.com", st, app.MyConfig{})
+	wh := messenger.New(c, q, "dummy", "https://www.example.com", st, config.MyConfig{})
 	wh.Start()
 	feed := &gofeed.Feed{Title: "title"}
 	now := time.Now()
