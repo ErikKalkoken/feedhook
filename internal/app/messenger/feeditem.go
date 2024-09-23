@@ -2,6 +2,7 @@ package messenger
 
 import (
 	"fmt"
+	"html"
 	"log/slog"
 	"net/url"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	md "github.com/JohannesKaufmann/html-to-markdown"
 	"github.com/PuerkitoBio/goquery"
+	"github.com/mmcdole/gofeed"
 
 	"github.com/ErikKalkoken/feedhook/internal/dhooks"
 )
@@ -74,6 +76,34 @@ type FeedItem struct {
 	Title       string
 }
 
+func NewFeedItem(feedName string, feed *gofeed.Feed, item *gofeed.Item, isUpdated bool) FeedItem {
+	var description string
+	if item.Content != "" {
+		description = item.Content
+	} else {
+		description = item.Description
+	}
+	fi := FeedItem{
+		Description: description,
+		FeedName:    feedName,
+		FeedTitle:   feed.Title,
+		FeedURL:     feed.Link,
+		IsUpdated:   isUpdated,
+		ItemURL:     item.Link,
+		Title:       item.Title,
+	}
+	if item.PublishedParsed != nil {
+		fi.Published = *item.PublishedParsed
+	}
+	if feed.Image != nil {
+		fi.IconURL = feed.Image.URL
+	}
+	if item.Image != nil {
+		fi.ImageURL = item.Image.URL
+	}
+	return fi
+}
+
 // ToDiscordMessage generates a DiscordMessage from a FeedItem.
 func (fi FeedItem) ToDiscordMessage(brandingDisabled bool) (dhooks.Message, error) {
 	var dm dhooks.Message
@@ -85,7 +115,7 @@ func (fi FeedItem) ToDiscordMessage(brandingDisabled bool) (dhooks.Message, erro
 	if truncated {
 		slog.Warn("description was truncated", "title", fi.Title)
 	}
-	t := fi.Title
+	t := html.UnescapeString(fi.Title)
 	if fi.IsUpdated {
 		t = fmt.Sprintf("UPDATED: %s", t)
 	}
@@ -101,7 +131,8 @@ func (fi FeedItem) ToDiscordMessage(brandingDisabled bool) (dhooks.Message, erro
 	if !fi.Published.IsZero() {
 		em.Timestamp = fi.Published.Format(time.RFC3339)
 	}
-	em.Author.Name, truncated = truncateString(fi.FeedTitle, embedMaxFieldLength)
+	ft := html.UnescapeString(fi.FeedTitle)
+	em.Author.Name, truncated = truncateString(ft, embedMaxFieldLength)
 	if truncated {
 		slog.Warn("author name was truncated", "FeedTitle", fi.FeedTitle)
 	}

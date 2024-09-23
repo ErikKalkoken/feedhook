@@ -78,7 +78,7 @@ func (d *Dispatcher) Start() {
 		if err != nil {
 			panic(err)
 		}
-		wh := messenger.New(d.client, q, h.Name, h.URL, d.st, d.cfg)
+		wh := messenger.NewMessenger(d.client, q, h.Name, h.URL, d.st, d.cfg)
 		wh.Start()
 		d.hooks.Store(h.Name, wh)
 	}
@@ -205,13 +205,16 @@ func (d *Dispatcher) PostLatestFeedItem(feedName string) error {
 	if cf.Name == "" {
 		return fmt.Errorf("feed \"%s\": %w", feedName, ErrNotFound)
 	}
-	hooks := make([]*messenger.Messenger, 0)
+	hooks := make([]config.ConfigWebhook, 0)
 	for _, name := range cf.Webhooks {
-		wh, ok := d.hooks.Load(name)
-		if !ok {
-			panic("expected webhook not found: " + name)
+		for _, h := range d.cfg.Webhooks {
+			if h.Name == name {
+				hooks = append(hooks, h)
+			}
 		}
-		hooks = append(hooks, wh)
+	}
+	if len(hooks) == 0 {
+		return fmt.Errorf("no webhooks configured for feed: %s ", feedName)
 	}
 	feed, err := d.fp.ParseURL(cf.URL)
 	if err != nil {
@@ -229,9 +232,16 @@ func (d *Dispatcher) PostLatestFeedItem(feedName string) error {
 	latest := slices.MaxFunc(items, func(a, b *gofeed.Item) int {
 		return a.PublishedParsed.Compare(*b.PublishedParsed)
 	})
+	fi := messenger.NewFeedItem(feedName, feed, latest, false)
+	m, err := fi.ToDiscordMessage(false)
+	if err != nil {
+		return fmt.Errorf("failed to convert item to Discord message: %w", err)
+	}
+	c := dhooks.NewClient(http.DefaultClient)
 	for _, hook := range hooks {
-		if err := hook.AddMessage(cf.Name, feed, latest, false); err != nil {
-			return fmt.Errorf("failed to add item to webhook queue: %w", err)
+		wh := dhooks.NewWebhook(c, hook.URL)
+		if err := wh.Execute(m); err != nil {
+			return fmt.Errorf("failed to post item to webhook: %w", err)
 		}
 	}
 	return nil

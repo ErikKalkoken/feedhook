@@ -29,7 +29,7 @@ type Messenger struct {
 	st       *storage.Storage
 }
 
-func New(client *dhooks.Client, queue *queue.Queue, name, url string, st *storage.Storage, cfg config.Config) *Messenger {
+func NewMessenger(client *dhooks.Client, queue *queue.Queue, name, url string, st *storage.Storage, cfg config.Config) *Messenger {
 	mg := &Messenger{
 		cfg:   cfg,
 		dwh:   dhooks.NewWebhook(client, url),

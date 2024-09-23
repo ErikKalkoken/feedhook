@@ -41,7 +41,7 @@ func TestMessenger(t *testing.T) {
 		httpmock.NewStringResponder(204, ""),
 	)
 	c := dhooks.NewClient(http.DefaultClient)
-	wh := messenger.New(c, q, "dummy", "https://www.example.com", st, config.Config{})
+	wh := messenger.NewMessenger(c, q, "dummy", "https://www.example.com", st, config.Config{})
 	wh.Start()
 	feed := &gofeed.Feed{Title: "title"}
 	now := time.Now()
