@@ -30,7 +30,7 @@ const (
 )
 
 // Overwritten with current tag when released
-var Version = "0.3.4"
+var Version = "0.3.5"
 
 type realtime struct{}
 
@@ -50,13 +50,13 @@ func main() {
 		fmt.Println(Version)
 		os.Exit(0)
 	}
-	p := filepath.Join(*cfgPathFlag, configFilename)
-	cfg, err := config.FromFile(p)
+	configPath := filepath.Join(*cfgPathFlag, configFilename)
+	cfg, err := config.FromFile(configPath)
 	if err != nil {
 		log.Fatalf("Config error: %s", err)
 	}
 	slog.SetLogLoggerLevel(cfg.App.LoggerLevel())
-	p = filepath.Join(*dbPathFlag, dbFileName)
+	p := filepath.Join(*dbPathFlag, dbFileName)
 	db, err := bolt.Open(p, 0600, &bolt.Options{Timeout: boltOpenTimeout})
 	if err != nil {
 		log.Fatalf("Failed to open DB: %s", err)
@@ -77,7 +77,7 @@ func main() {
 	}
 
 	// start RPC service
-	if err := startRPC(*portFlag, d, st, cfg); err != nil {
+	if err := startRPC(*portFlag, d, st, cfg, configPath); err != nil {
 		log.Fatalf("Failed to start RPC service on port %d: %s", portRPC, err)
 	}
 
@@ -87,8 +87,8 @@ func main() {
 	<-sc
 }
 
-func startRPC(port int, d *dispatcher.Dispatcher, st *storage.Storage, cfg config.Config) error {
-	rpc.Register(remote.NewRemoteService(d, st, cfg))
+func startRPC(port int, d *dispatcher.Dispatcher, st *storage.Storage, cfg config.Config, configPath string) error {
+	rpc.Register(remote.NewRemoteService(d, st, cfg, configPath))
 	rpc.HandleHTTP()
 	l, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
 	if err != nil {

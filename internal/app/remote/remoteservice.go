@@ -29,21 +29,32 @@ type SendLatestArgs struct {
 
 // RemoteService is a service for providing remote access to the app via RPC.
 type RemoteService struct {
-	cfg    config.Config
-	client *dhooks.Client
-	d      *dispatcher.Dispatcher
-	st     *storage.Storage
+	cfg        config.Config
+	configPath string
+	client     *dhooks.Client
+	d          *dispatcher.Dispatcher
+	st         *storage.Storage
 }
 
-func NewRemoteService(d *dispatcher.Dispatcher, st *storage.Storage, cfg config.Config) *RemoteService {
+func NewRemoteService(d *dispatcher.Dispatcher, st *storage.Storage, cfg config.Config, configPath string) *RemoteService {
 	client := dhooks.NewClient(http.DefaultClient)
 	x := &RemoteService{
-		cfg:    cfg,
-		client: client,
-		d:      d,
-		st:     st,
+		cfg:        cfg,
+		client:     client,
+		d:          d,
+		st:         st,
+		configPath: configPath,
 	}
 	return x
+}
+
+func (s *RemoteService) CheckConfig(args *EmptyArgs, reply *bool) error {
+	_, err := config.FromFile(s.configPath)
+	return err
+}
+
+func (s *RemoteService) PostLatestFeedItem(args *SendLatestArgs, reply *bool) error {
+	return s.d.PostLatestFeedItem(args.FeedName)
 }
 
 func (s *RemoteService) Statistics(args *EmptyArgs, reply *string) error {
@@ -105,8 +116,4 @@ func (s *RemoteService) SendPing(args *SendPingArgs, reply *bool) error {
 	dh := dhooks.NewWebhook(s.client, wh.URL)
 	pl := dhooks.Message{Content: "Ping from feedhook"}
 	return dh.Execute(pl)
-}
-
-func (s *RemoteService) PostLatestFeedItem(args *SendLatestArgs, reply *bool) error {
-	return s.d.PostLatestFeedItem(args.FeedName)
 }

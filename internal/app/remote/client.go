@@ -15,14 +15,32 @@ func NewClient(port int) Client {
 	return c
 }
 
+func (c Client) CheckConfig() error {
+	rc, err := c.dial()
+	if err != nil {
+		return err
+	}
+	var reply bool
+	return rc.Call("RemoteService.CheckConfig", EmptyArgs{}, &reply)
+}
+
+func (c Client) PostLatestFeedItem(feedName string) error {
+	rc, err := c.dial()
+	if err != nil {
+		return err
+	}
+	args := SendLatestArgs{FeedName: feedName}
+	var reply bool
+	return rc.Call("RemoteService.PostLatestFeedItem", args, &reply)
+}
+
 func (c Client) Statistics() (string, error) {
 	rc, err := c.dial()
 	if err != nil {
 		return "", err
 	}
-	args := EmptyArgs{}
 	var reply string
-	if err := rc.Call("RemoteService.Statistics", args, &reply); err != nil {
+	if err := rc.Call("RemoteService.Statistics", EmptyArgs{}, &reply); err != nil {
 		return "", fmt.Errorf("call: %w", err)
 	}
 	return reply, nil
@@ -36,16 +54,6 @@ func (c Client) SendPing(webhookName string) error {
 	args := SendPingArgs{WebhookName: webhookName}
 	var reply bool
 	return rc.Call("RemoteService.SendPing", args, &reply)
-}
-
-func (c Client) PostLatestFeedItem(feedName string) error {
-	rc, err := c.dial()
-	if err != nil {
-		return err
-	}
-	args := SendLatestArgs{FeedName: feedName}
-	var reply bool
-	return rc.Call("RemoteService.PostLatestFeedItem", args, &reply)
 }
 
 func (c Client) dial() (*rpc.Client, error) {
