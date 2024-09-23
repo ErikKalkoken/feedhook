@@ -23,7 +23,7 @@ func TestItems(t *testing.T) {
 	}
 	defer db.Close()
 	cf := config.ConfigFeed{Name: "feed1", URL: "https://www.example.com/feed", Webhooks: []string{"hook1"}}
-	cfg := config.MyConfig{
+	cfg := config.Config{
 		Feeds: []config.ConfigFeed{cf},
 	}
 	st := storage.New(db, cfg)

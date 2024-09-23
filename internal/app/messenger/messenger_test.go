@@ -29,7 +29,7 @@ func TestMessenger(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create queue: %s", err)
 	}
-	st := storage.New(db, config.MyConfig{})
+	st := storage.New(db, config.Config{})
 	if err := st.Init(); err != nil {
 		t.Fatalf("Failed to init: %s", err)
 	}
@@ -41,7 +41,7 @@ func TestMessenger(t *testing.T) {
 		httpmock.NewStringResponder(204, ""),
 	)
 	c := dhooks.NewClient(http.DefaultClient)
-	wh := messenger.New(c, q, "dummy", "https://www.example.com", st, config.MyConfig{})
+	wh := messenger.New(c, q, "dummy", "https://www.example.com", st, config.Config{})
 	wh.Start()
 	feed := &gofeed.Feed{Title: "title"}
 	now := time.Now()

@@ -51,7 +51,7 @@ func main() {
 		os.Exit(0)
 	}
 	p := filepath.Join(*cfgPathFlag, configFilename)
-	cfg, err := config.ReadConfig(p)
+	cfg, err := config.FromFile(p)
 	if err != nil {
 		log.Fatalf("Config error: %s", err)
 	}
@@ -87,7 +87,7 @@ func main() {
 	<-sc
 }
 
-func startRPC(port int, d *dispatcher.Dispatcher, st *storage.Storage, cfg config.MyConfig) error {
+func startRPC(port int, d *dispatcher.Dispatcher, st *storage.Storage, cfg config.Config) error {
 	rpc.Register(remote.NewRemoteService(d, st, cfg))
 	rpc.HandleHTTP()
 	l, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))

@@ -18,10 +18,10 @@ var ErrNotFound = errors.New("not found")
 
 type Storage struct {
 	db  *bolt.DB
-	cfg config.MyConfig
+	cfg config.Config
 }
 
-func New(db *bolt.DB, cfg config.MyConfig) *Storage {
+func New(db *bolt.DB, cfg config.Config) *Storage {
 	st := &Storage{
 		db:  db,
 		cfg: cfg,

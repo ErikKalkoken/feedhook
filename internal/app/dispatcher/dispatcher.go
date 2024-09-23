@@ -31,7 +31,7 @@ type Clock interface {
 
 // Dispatcher is a service that fetches items from feeds and forwards them to webhooks.
 type Dispatcher struct {
-	cfg    config.MyConfig
+	cfg    config.Config
 	client *dhooks.Client
 	clock  Clock
 	done   chan bool // signals that the shutdown is complete
@@ -42,7 +42,7 @@ type Dispatcher struct {
 }
 
 // New creates a new App instance and returns it.
-func New(st *storage.Storage, cfg config.MyConfig, clock Clock) *Dispatcher {
+func New(st *storage.Storage, cfg config.Config, clock Clock) *Dispatcher {
 	httpClient := &http.Client{
 		Timeout: time.Duration(cfg.App.Timeout) * time.Second,
 	}

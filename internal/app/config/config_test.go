@@ -32,7 +32,7 @@ func TestConfig(t *testing.T) {
 	if err := os.WriteFile(p, []byte(toml), 0644); err != nil {
 		t.Fatal(err)
 	}
-	cf, err := config.ReadConfig(p)
+	cf, err := config.FromFile(p)
 	if assert.NoError(t, err) {
 		assert.Equal(t, cf.App.Timeout, 2)
 		assert.Equal(t, cf.App.Oldest, 3)

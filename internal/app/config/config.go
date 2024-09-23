@@ -16,13 +16,13 @@ const (
 	logLevelDefault = slog.LevelInfo
 )
 
-type MyConfig struct {
+type Config struct {
 	App      ConfigApp
 	Feeds    []ConfigFeed
 	Webhooks []ConfigWebhook
 }
 
-func (mc *MyConfig) EnabledFeeds() []ConfigFeed {
+func (mc *Config) EnabledFeeds() []ConfigFeed {
 	feeds := make([]ConfigFeed, 0)
 	for _, f := range mc.Feeds {
 		if f.Disabled {
@@ -63,8 +63,8 @@ type ConfigWebhook struct {
 	URL  string `toml:"url"`
 }
 
-func ReadConfig(path string) (MyConfig, error) {
-	var config MyConfig
+func FromFile(path string) (Config, error) {
+	var config Config
 	if _, err := toml.DecodeFile(path, &config); err != nil {
 		return config, err
 	}
@@ -74,7 +74,7 @@ func ReadConfig(path string) (MyConfig, error) {
 	return config, nil
 }
 
-func parseConfig(config *MyConfig) error {
+func parseConfig(config *Config) error {
 	webhookNames := make(map[string]bool)
 	webhookURLs := make(map[string]bool)
 	for _, x := range config.Webhooks {

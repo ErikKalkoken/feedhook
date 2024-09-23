@@ -41,7 +41,7 @@ func TestService(t *testing.T) {
 		t.Fatalf("Failed to open DB: %s", err)
 	}
 	defer db.Close()
-	cfg := config.MyConfig{
+	cfg := config.Config{
 		App:      config.ConfigApp{Oldest: 3600 * 24, Ticker: 1},
 		Webhooks: []config.ConfigWebhook{{Name: "hook1", URL: "https://www.example.com/hook"}},
 		Feeds:    []config.ConfigFeed{{Name: "feed1", URL: "https://www.example.com/feed", Webhooks: []string{"hook1"}}},

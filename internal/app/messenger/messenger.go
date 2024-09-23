@@ -21,7 +21,7 @@ import (
 // Failed messages are automatically retried and rate limits are respected.
 // Messages are kept in a permanent queue, which can survive process restarts.
 type Messenger struct {
-	cfg      config.MyConfig
+	cfg      config.Config
 	errCount atomic.Int64
 	dwh      *dhooks.Webhook
 	name     string
@@ -29,7 +29,7 @@ type Messenger struct {
 	st       *storage.Storage
 }
 
-func New(client *dhooks.Client, queue *queue.Queue, name, url string, st *storage.Storage, cfg config.MyConfig) *Messenger {
+func New(client *dhooks.Client, queue *queue.Queue, name, url string, st *storage.Storage, cfg config.Config) *Messenger {
 	mg := &Messenger{
 		cfg:   cfg,
 		dwh:   dhooks.NewWebhook(client, url),

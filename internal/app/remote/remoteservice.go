@@ -29,13 +29,13 @@ type SendLatestArgs struct {
 
 // RemoteService is a service for providing remote access to the app via RPC.
 type RemoteService struct {
-	cfg    config.MyConfig
+	cfg    config.Config
 	client *dhooks.Client
 	d      *dispatcher.Dispatcher
 	st     *storage.Storage
 }
 
-func NewRemoteService(d *dispatcher.Dispatcher, st *storage.Storage, cfg config.MyConfig) *RemoteService {
+func NewRemoteService(d *dispatcher.Dispatcher, st *storage.Storage, cfg config.Config) *RemoteService {
 	client := dhooks.NewClient(http.DefaultClient)
 	x := &RemoteService{
 		cfg:    cfg,
