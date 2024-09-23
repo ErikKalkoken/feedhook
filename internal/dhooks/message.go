@@ -34,7 +34,8 @@ type Message struct {
 	Username        string  `json:"username,omitempty"`
 }
 
-// Validate checks the message against known Discord limits.
+// Validate checks the message against known Discord limits and requirements.
+// Messages not passing the validation will usually lead to 400 Bad Request responses from Discord.
 // Returns an [ErrInvalidMessage] error in case a limit is violated.
 func (m Message) Validate() error {
 	if len(m.Content) == 0 && len(m.Embeds) == 0 {
@@ -107,11 +108,17 @@ func (em Embed) validate() error {
 			return fmt.Errorf("embed timestamp does not conform to RFC3339: %w", ErrInvalidMessage)
 		}
 	}
-	if em.Image.URL != "" && !isValidPublicURL(em.Image.URL) {
-		return fmt.Errorf("embed image URL not valid: %w", ErrInvalidMessage)
+	if err := em.Author.validate(); err != nil {
+		return err
 	}
-	if em.Thumbnail.URL != "" && !isValidPublicURL(em.Thumbnail.URL) {
-		return fmt.Errorf("embed thumbnail URL not valid: %w", ErrInvalidMessage)
+	if err := em.Footer.validate(); err != nil {
+		return err
+	}
+	if err := em.Image.validate(); err != nil {
+		return err
+	}
+	if err := em.Thumbnail.validate(); err != nil {
+		return err
 	}
 	return nil
 }
@@ -174,8 +181,22 @@ type EmbedImage struct {
 	URL string `json:"url,omitempty"`
 }
 
+func (ei EmbedImage) validate() error {
+	if ei.URL != "" && !isValidPublicURL(ei.URL) {
+		return fmt.Errorf("embed image URL not valid: %w", ErrInvalidMessage)
+	}
+	return nil
+}
+
 type EmbedThumbnail struct {
 	URL string `json:"url,omitempty"`
+}
+
+func (et EmbedThumbnail) validate() error {
+	if et.URL != "" && !isValidPublicURL(et.URL) {
+		return fmt.Errorf("embed thumbnail URL not valid: %w", ErrInvalidMessage)
+	}
+	return nil
 }
 
 // length returns the number of runes in a string.
