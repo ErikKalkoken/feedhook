@@ -30,7 +30,7 @@ const (
 )
 
 // Overwritten with current tag when released
-var Version = "0.3.3"
+var Version = "0.3.4"
 
 type realtime struct{}
 

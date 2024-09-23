@@ -3,6 +3,8 @@ package dhooks
 import (
 	"errors"
 	"fmt"
+	"log/slog"
+	"net/url"
 	"time"
 )
 
@@ -105,6 +107,12 @@ func (em Embed) validate() error {
 			return fmt.Errorf("embed timestamp does not conform to RFC3339: %w", ErrInvalidMessage)
 		}
 	}
+	if em.Image.URL != "" && !isValidPublicURL(em.Image.URL) {
+		return fmt.Errorf("embed image URL not valid: %w", ErrInvalidMessage)
+	}
+	if em.Thumbnail.URL != "" && !isValidPublicURL(em.Thumbnail.URL) {
+		return fmt.Errorf("embed thumbnail URL not valid: %w", ErrInvalidMessage)
+	}
 	return nil
 }
 
@@ -117,6 +125,12 @@ type EmbedAuthor struct {
 func (ea EmbedAuthor) validate() error {
 	if length(ea.Name) > authorNameLength {
 		return fmt.Errorf("embed author name too long: %w", ErrInvalidMessage)
+	}
+	if ea.IconURL != "" && !isValidPublicURL(ea.IconURL) {
+		return fmt.Errorf("embed author icon URL not valid: %w", ErrInvalidMessage)
+	}
+	if ea.URL != "" && !isValidPublicURL(ea.URL) {
+		return fmt.Errorf("embed author URL not valid: %w", ErrInvalidMessage)
 	}
 	return nil
 }
@@ -150,6 +164,9 @@ func (ef EmbedFooter) validate() error {
 	if length(ef.Text) > footerTextLength {
 		return fmt.Errorf("embed footer text too long: %w", ErrInvalidMessage)
 	}
+	if ef.IconURL != "" && !isValidPublicURL(ef.IconURL) {
+		return fmt.Errorf("footer icon URL not valid: %w", ErrInvalidMessage)
+	}
 	return nil
 }
 
@@ -164,4 +181,17 @@ type EmbedThumbnail struct {
 // length returns the number of runes in a string.
 func length(s string) int {
 	return len([]rune(s))
+}
+
+// isValidPublicURL reports wether a raw URL is both a public and valid URL.
+func isValidPublicURL(rawURL string) bool {
+	u, err := url.ParseRequestURI(rawURL)
+	if err != nil {
+		slog.Warn("error when trying to parse URL", "url", rawURL, "err", err)
+		return false
+	}
+	if u.Scheme == "https" || u.Scheme == "http" {
+		return true
+	}
+	return false
 }

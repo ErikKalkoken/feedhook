@@ -126,7 +126,9 @@ func (fi FeedItem) ToDiscordMessage(brandingDisabled bool) (dhooks.Message, erro
 	em := dhooks.Embed{
 		Description: desc,
 		Title:       title,
-		URL:         fi.ItemURL,
+	}
+	if fi.ItemURL != "" && isValidPublicURL(fi.ItemURL) {
+		em.URL = fi.ItemURL
 	}
 	if !fi.Published.IsZero() {
 		em.Timestamp = fi.Published.Format(time.RFC3339)
@@ -136,11 +138,13 @@ func (fi FeedItem) ToDiscordMessage(brandingDisabled bool) (dhooks.Message, erro
 	if truncated {
 		slog.Warn("author name was truncated", "FeedTitle", fi.FeedTitle)
 	}
-	em.Author.URL = fi.FeedURL
+	if fi.FeedURL != "" && isValidPublicURL(fi.FeedURL) {
+		em.Author.URL = fi.FeedURL
+	}
 	if fi.IconURL != "" {
 		em.Author.IconURL = fi.IconURL
 	}
-	if fi.ImageURL != "" {
+	if fi.ImageURL != "" && isValidPublicURL(fi.ImageURL) {
 		em.Image.URL = fi.ImageURL
 	}
 	if !brandingDisabled {
@@ -165,4 +169,17 @@ func truncateString(s string, maxLen int) (string, bool) {
 	}
 	x := string(runes[0 : maxLen-3])
 	return x + "...", true
+}
+
+// isValidPublicURL reports wether a raw URL is both a public and valid URL.
+func isValidPublicURL(rawURL string) bool {
+	u, err := url.ParseRequestURI(rawURL)
+	if err != nil {
+		slog.Warn("error when trying to parse URL", "url", rawURL, "err", err)
+		return false
+	}
+	if u.Scheme == "https" || u.Scheme == "http" {
+		return true
+	}
+	return false
 }

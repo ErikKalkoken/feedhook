@@ -15,10 +15,10 @@ func TestFeedItem(t *testing.T) {
 			Description: "description",
 			FeedName:    "feedName",
 			FeedTitle:   "feedTitle",
-			FeedURL:     "feedURL",
-			ImageURL:    "imageURL",
-			IconURL:     "iconURL",
-			ItemURL:     "itemURL",
+			FeedURL:     "http://www.example.com/feed",
+			ImageURL:    "http://www.example.com/image",
+			IconURL:     "http://www.example.com/icon",
+			ItemURL:     "http://www.example.com/item",
 			Published:   published,
 			Title:       "title",
 		}
@@ -29,10 +29,10 @@ func TestFeedItem(t *testing.T) {
 			em := x.Embeds[0]
 			assert.Equal(t, "description", em.Description)
 			assert.Equal(t, "feedTitle", em.Author.Name)
-			assert.Equal(t, "feedURL", em.Author.URL)
-			assert.Equal(t, "iconURL", em.Author.IconURL)
-			assert.Equal(t, "imageURL", em.Image.URL)
-			assert.Equal(t, "itemURL", em.URL)
+			assert.Equal(t, "http://www.example.com/feed", em.Author.URL)
+			assert.Equal(t, "http://www.example.com/icon", em.Author.IconURL)
+			assert.Equal(t, "http://www.example.com/image", em.Image.URL)
+			assert.Equal(t, "http://www.example.com/item", em.URL)
 			assert.Equal(t, published.Format(time.RFC3339), em.Timestamp)
 			assert.Equal(t, "title", em.Title)
 			assert.Equal(t, "feedName", em.Footer.Text)

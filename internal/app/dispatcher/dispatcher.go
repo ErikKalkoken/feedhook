@@ -237,6 +237,9 @@ func (d *Dispatcher) PostLatestFeedItem(feedName string) error {
 	if err != nil {
 		return fmt.Errorf("failed to convert item to Discord message: %w", err)
 	}
+	if err := m.Validate(); err != nil {
+		return fmt.Errorf("failed to convert item to Discord message: %w", err)
+	}
 	c := dhooks.NewClient(http.DefaultClient)
 	for _, hook := range hooks {
 		wh := dhooks.NewWebhook(c, hook.URL)

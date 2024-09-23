@@ -3,6 +3,7 @@ package dhooks
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -71,6 +72,7 @@ func NewWebhook(client *Client, url string) *Webhook {
 // HTTP status codes of 400 or above are returns as [HTTPError],
 // except for 429s, which are returned as [TooManyRequestsError].
 func (wh *Webhook) Execute(m Message) error {
+	slog.Debug("message", "detail", fmt.Sprintf("%+v", m))
 	dat, err := json.Marshal(m)
 	if err != nil {
 		return err
