@@ -1,7 +1,6 @@
 package storage_test
 
 import (
-	"log"
 	"path/filepath"
 	"testing"
 	"time"
@@ -19,7 +18,7 @@ func TestItems(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "test.db")
 	db, err := bolt.Open(p, 0600, nil)
 	if err != nil {
-		log.Fatalf("Failed to open DB: %s", err)
+		t.Fatalf("Failed to open DB: %s", err)
 	}
 	defer db.Close()
 	cf := config.ConfigFeed{Name: "feed1", URL: "https://www.example.com/feed", Webhooks: []string{"hook1"}}
@@ -28,7 +27,7 @@ func TestItems(t *testing.T) {
 	}
 	st := storage.New(db, cfg)
 	if err := st.Init(); err != nil {
-		log.Fatalf("Failed to init: %s", err)
+		t.Fatalf("Failed to init: %s", err)
 	}
 	t.Run("should report unknown item with GUID as new", func(t *testing.T) {
 		if err := st.ClearFeeds(); err != nil {

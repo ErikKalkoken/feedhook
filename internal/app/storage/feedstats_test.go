@@ -1,7 +1,6 @@
 package storage_test
 
 import (
-	"log"
 	"path/filepath"
 	"testing"
 
@@ -17,7 +16,7 @@ func TestFeedStats(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "test.db")
 	db, err := bolt.Open(p, 0600, nil)
 	if err != nil {
-		log.Fatalf("Failed to open DB: %s", err)
+		t.Fatalf("Failed to open DB: %s", err)
 	}
 	defer db.Close()
 	cf := config.ConfigFeed{Name: "feed1", URL: "https://www.example.com/feed", Webhooks: []string{"hook1"}}

@@ -71,12 +71,12 @@ func (d *Dispatcher) Close() {
 // Start starts the dispatcher
 // User should call Close() subsequently to shut down dispatcher gracefully
 // and prevent any potential data loss.
-func (d *Dispatcher) Start() {
+func (d *Dispatcher) Start() error {
 	// Create and start webhooks
 	for _, h := range d.cfg.Webhooks {
 		q, err := queue.New(d.st.DB(), h.Name)
 		if err != nil {
-			panic(err)
+			return err
 		}
 		wh := messenger.NewMessenger(d.client, q, h.Name, h.URL, d.st, d.cfg)
 		wh.Start()
@@ -126,6 +126,7 @@ func (d *Dispatcher) Start() {
 		ticker.Stop()
 		d.done <- true
 	}()
+	return nil
 }
 
 // processFeed checks a feed for new items and hands them over to configured messengers.

@@ -4,7 +4,6 @@ package remote
 import (
 	"cmp"
 	"fmt"
-	"log"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -71,7 +70,7 @@ func (s *RemoteService) Statistics(args *EmptyArgs, reply *string) error {
 		if err == storage.ErrNotFound {
 			continue
 		} else if err != nil {
-			log.Fatal(err)
+			return err
 		}
 		feedsTable.AddRow([]any{o.Name, !cf.Disabled, cf.Webhooks, o.ReceivedCount, o.ReceivedLast, o.ErrorCount})
 	}
@@ -89,7 +88,7 @@ func (s *RemoteService) Statistics(args *EmptyArgs, reply *string) error {
 		if err == storage.ErrNotFound {
 			continue
 		} else if err != nil {
-			log.Fatal(err)
+			return err
 		}
 		ms, err := s.d.MessengerStatus(cw.Name)
 		if err != nil {

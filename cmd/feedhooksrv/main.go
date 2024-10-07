@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"log/slog"
 	"net"
 	"net/http"
@@ -30,7 +29,7 @@ const (
 )
 
 // Overwritten with current tag when released
-var Version = "0.3.5"
+var Version = "0.2.1"
 
 type realtime struct{}
 
@@ -53,32 +52,37 @@ func main() {
 	configPath := filepath.Join(*cfgPathFlag, configFilename)
 	cfg, err := config.FromFile(configPath)
 	if err != nil {
-		log.Fatalf("Config error: %s", err)
+		slog.Error("Invalid config", "error", err)
+		os.Exit(1)
 	}
 	slog.SetLogLoggerLevel(cfg.App.LoggerLevel())
 	p := filepath.Join(*dbPathFlag, dbFileName)
 	db, err := bolt.Open(p, 0600, &bolt.Options{Timeout: boltOpenTimeout})
 	if err != nil {
-		log.Fatalf("Failed to open DB: %s", err)
+		slog.Error("Failed to open DB", "error", err)
+		os.Exit(1)
 	}
 	defer db.Close()
 	st := storage.New(db, cfg)
 	if err := st.Init(); err != nil {
-		log.Fatalf("DB init failed: %s", err)
+		slog.Error("DB init failed", "error", err)
+		os.Exit(1)
 	}
 
 	// start the dispatcher
 	d := dispatcher.New(st, cfg, realtime{})
 	if !*offlineFlag {
-		d.Start()
+		if err := d.Start(); err != nil {
+			slog.Error("Failed to start dispatcher", "error", err)
+			os.Exit(1)
+		}
 		defer d.Close()
-	} else {
-		slog.Info("Main service not started as requested")
 	}
 
 	// start RPC service
 	if err := startRPC(*portFlag, d, st, cfg, configPath); err != nil {
-		log.Fatalf("Failed to start RPC service on port %d: %s", portRPC, err)
+		slog.Error("Failed to start RPC service", "port", portRPC, "error", err)
+		os.Exit(1)
 	}
 
 	// Ensure graceful shutdown

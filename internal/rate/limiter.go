@@ -45,7 +45,7 @@ func (l *Limiter) Wait() {
 	next := last.Add(l.period)
 	if now := time.Now(); now.Before(next) {
 		d := roundUpDuration(next.Sub(now), l.period/time.Duration(l.max))
-		slog.Warn("Rate limit exhausted. Waiting for reset", "retryAfter", d, "name", l.name)
+		slog.Info("Rate limit exhausted. Waiting for reset", "retryAfter", d, "name", l.name)
 		time.Sleep(d)
 	}
 	l.entries[l.index] = time.Now()

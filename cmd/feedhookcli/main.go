@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/ErikKalkoken/feedhook/internal/app/remote"
@@ -93,6 +92,7 @@ func main() {
 		},
 	}
 	if err := app.Run(os.Args); err != nil {
-		log.Fatal(err)
+		fmt.Printf("Failed to start app: %s", err)
+		os.Exit(1)
 	}
 }
