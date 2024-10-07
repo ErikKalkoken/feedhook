@@ -1,3 +1,23 @@
+/*
+Feedhooksrv is a service for forwarding RSS and Atom feeds to Discord webhooks.
+
+Usage:
+
+	feedhook [options]:
+
+Options:
+
+	-config
+		path to configuration file
+	-db
+		path to database file
+	-offline
+		run RPC service only
+	-port
+		port for RPC service
+	-v
+		show version
+*/
 package main
 
 import (

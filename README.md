@@ -138,7 +138,7 @@ sudo supervisorctl start feedhook
 
 ## CLI tool
 
-Feedhook comes with a CLI tool. With it you can:
+Feedhook comes with a CLI tool for querying the feedhook service. With it you can:
 
 - Check if the configuration is valid
 - See live statistics (e.g. how many items have been received from reach feed)
