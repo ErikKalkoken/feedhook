@@ -109,7 +109,7 @@ func (fi FeedItem) ToDiscordMessage(brandingDisabled bool) (dhooks.Message, erro
 	var dm dhooks.Message
 	description, err := converter.ConvertString(fi.Description)
 	if err != nil {
-		return dm, fmt.Errorf("failed to parse description to markdown: %w", err)
+		return dm, fmt.Errorf("convert description to markdown: %w", err)
 	}
 	desc, truncated := truncateString(description, embedDescriptionMaxLength)
 	if truncated {

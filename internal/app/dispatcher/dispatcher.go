@@ -134,7 +134,7 @@ func (d *Dispatcher) processFeed(cf config.ConfigFeed, hooks []*messenger.Messen
 	myLog := slog.With("feed", cf.Name)
 	feed, err := d.fp.ParseURL(cf.URL)
 	if err != nil {
-		return fmt.Errorf("failed to parse URL for feed %s: %w ", cf.Name, err)
+		return fmt.Errorf("parse URL for feed %s: %w ", cf.Name, err)
 	}
 	oldest := time.Duration(d.cfg.App.Oldest) * time.Second
 	sort.Sort(feed)
@@ -170,7 +170,7 @@ func (d *Dispatcher) processFeed(cf config.ConfigFeed, hooks []*messenger.Messen
 			}
 		}
 		if err := d.st.RecordItem(cf, item); err != nil {
-			return fmt.Errorf("failed to record item: %w", err)
+			return fmt.Errorf("record item: %w", err)
 		}
 		if err := d.st.UpdateFeedStats(cf.Name, func(fs *app.FeedStats) error {
 			fs.ReceivedCount++
@@ -219,7 +219,7 @@ func (d *Dispatcher) PostLatestFeedItem(feedName string) error {
 	}
 	feed, err := d.fp.ParseURL(cf.URL)
 	if err != nil {
-		return fmt.Errorf("failed to parse URL for feed: %w ", err)
+		return fmt.Errorf("parse URL for feed: %w ", err)
 	}
 	items := make([]*gofeed.Item, 0)
 	for _, i := range feed.Items {
@@ -228,7 +228,7 @@ func (d *Dispatcher) PostLatestFeedItem(feedName string) error {
 		}
 	}
 	if len(items) == 0 {
-		return fmt.Errorf("No items found in feed")
+		return fmt.Errorf("no items found in feed")
 	}
 	latest := slices.MaxFunc(items, func(a, b *gofeed.Item) int {
 		return a.PublishedParsed.Compare(*b.PublishedParsed)
@@ -236,16 +236,16 @@ func (d *Dispatcher) PostLatestFeedItem(feedName string) error {
 	fi := messenger.NewFeedItem(feedName, feed, latest, false)
 	m, err := fi.ToDiscordMessage(false)
 	if err != nil {
-		return fmt.Errorf("failed to convert item to Discord message: %w", err)
+		return fmt.Errorf("convert item to Discord message: %w", err)
 	}
 	if err := m.Validate(); err != nil {
-		return fmt.Errorf("failed to convert item to Discord message: %w", err)
+		return fmt.Errorf("convert item to Discord message: %w", err)
 	}
 	c := dhooks.NewClient(http.DefaultClient)
 	for _, hook := range hooks {
 		wh := dhooks.NewWebhook(c, hook.URL)
 		if err := wh.Execute(m); err != nil {
-			return fmt.Errorf("failed to post item to webhook: %w", err)
+			return fmt.Errorf("post item to webhook: %w", err)
 		}
 	}
 	return nil
