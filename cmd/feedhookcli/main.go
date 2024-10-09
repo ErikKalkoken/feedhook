@@ -1,24 +1,4 @@
-/*
-Feedhookcli is a CLI tool for querying the feedhook service.
-
-Usage:
-
-	feedhookcli [global options] command [command options]
-
-Commands are:
-
-	check-config  checks wether the config is valid
-	ping          send a test message to a webhook
-	post-latest   posts the latest feed item to configured webhooks
-	stats         show current statistics
-	help, h       Shows a list of commands or help for one command
-
-Global flags are:
-
-	--port value   port where the RPC service of feedhooksrv is running
-	--help, -h     show help
-	--version, -v  print the version
-*/
+// Feedhookcli is a CLI tool for querying the feedhook service.
 package main
 
 import (
@@ -117,7 +97,7 @@ func main() {
 		},
 	}
 	if err := app.Run(os.Args); err != nil {
-		fmt.Printf("Failed to start app: %s", err)
+		fmt.Printf("ERROR: %s\n", err)
 		os.Exit(1)
 	}
 }
