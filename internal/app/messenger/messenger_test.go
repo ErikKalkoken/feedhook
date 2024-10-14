@@ -35,24 +35,45 @@ func TestMessenger(t *testing.T) {
 	}
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
-	httpmock.RegisterResponder(
-		"POST",
-		"https://www.example.com",
-		httpmock.NewStringResponder(204, ""),
-	)
-	c := dhooks.NewClient(http.DefaultClient)
-	wh := messenger.NewMessenger(c, q, "dummy", "https://www.example.com", st, config.Config{})
-	wh.Start()
-	feed := &gofeed.Feed{Title: "title"}
-	now := time.Now()
-	item := &gofeed.Item{Content: "content", PublishedParsed: &now}
-	err = wh.AddMessage("dummy", feed, item, false)
-	time.Sleep(2 * time.Second)
-	if assert.NoError(t, err) {
-		assert.Equal(t, 1, httpmock.GetTotalCallCount())
-	}
-	ws, err := st.GetWebhookStats("dummy")
-	if assert.NoError(t, err) {
-		assert.Equal(t, 1, ws.SentCount)
-	}
+	t.Run("can submit messages", func(t *testing.T) {
+		st.ClearWebhookStats()
+		q.Clear()
+		httpmock.Reset()
+		httpmock.RegisterResponder(
+			"POST",
+			"https://www.example.com",
+			httpmock.NewStringResponder(204, ""),
+		)
+		c := dhooks.NewClient(http.DefaultClient)
+		mg := messenger.NewMessenger(c, q, "dummy", "https://www.example.com", st, config.Config{})
+		mg.Start()
+		feed := &gofeed.Feed{Title: "title"}
+		now := time.Now()
+		item := &gofeed.Item{Content: "content", PublishedParsed: &now}
+		err = mg.AddMessage("dummy", feed, item, false)
+		time.Sleep(2 * time.Second)
+		if assert.NoError(t, err) {
+			assert.Equal(t, 1, httpmock.GetTotalCallCount())
+		}
+		ws, err := st.GetWebhookStats("dummy")
+		if assert.NoError(t, err) {
+			assert.Equal(t, 1, ws.SentCount)
+		}
+	})
+	t.Run("can submit messages 2", func(t *testing.T) {
+		st.ClearWebhookStats()
+		q.Clear()
+		httpmock.Reset()
+		httpmock.RegisterResponder(
+			"POST",
+			"https://www.example.com",
+			httpmock.NewStringResponder(204, ""),
+		)
+		c := dhooks.NewClient(http.DefaultClient)
+		mg := messenger.NewMessenger(c, q, "dummy", "https://www.example.com", st, config.Config{})
+		mg.Start()
+		time.Sleep(100 * time.Millisecond)
+		mg.Close()
+		assert.Equal(t, 0, httpmock.GetTotalCallCount())
+	})
 }

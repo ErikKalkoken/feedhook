@@ -36,6 +36,20 @@ func (st *Storage) UpdateWebhookStats(name string, f func(ws *app.WebhookStats) 
 	return err
 }
 
+func (st *Storage) ClearWebhookStats() error {
+	err := st.db.Update(func(tx *bolt.Tx) error {
+		root := tx.Bucket([]byte(bucketStats))
+		b := root.Bucket([]byte(bucketWebhooks))
+		return b.ForEach(func(k, v []byte) error {
+			if err := b.Delete(k); err != nil {
+				return err
+			}
+			return nil
+		})
+	})
+	return err
+}
+
 func (st *Storage) GetWebhookStats(name string) (*app.WebhookStats, error) {
 	fs := &app.WebhookStats{Name: name}
 	err := st.db.View(func(tx *bolt.Tx) error {

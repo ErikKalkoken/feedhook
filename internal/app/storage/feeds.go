@@ -18,17 +18,15 @@ func (st *Storage) ListFeeds() ([]string, error) {
 func (st *Storage) ClearFeeds() error {
 	err := st.db.Update(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketFeeds))
-		root.ForEachBucket(func(k []byte) error {
+		return root.ForEachBucket(func(k []byte) error {
 			b := root.Bucket(k)
-			b.ForEach(func(k, v []byte) error {
+			return b.ForEach(func(k, v []byte) error {
 				if err := b.Delete(k); err != nil {
 					return err
 				}
 				return nil
 			})
-			return nil
 		})
-		return nil
 	})
 	return err
 }

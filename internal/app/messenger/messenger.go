@@ -1,6 +1,7 @@
 package messenger
 
 import (
+	"context"
 	"log/slog"
 	"math"
 	"math/rand/v2"
@@ -22,22 +23,33 @@ import (
 // Unsent messages are queued and will be picked up again after a process restart.
 type Messenger struct {
 	cfg      config.Config
-	errCount atomic.Int64
+	shutdown chan struct{} // commence shutdown
+	done     chan struct{} // shutdown completed
 	dwh      *dhooks.Webhook
+	errCount atomic.Int64
 	name     string
 	queue    *queue.Queue
 	st       *storage.Storage
 }
 
+// NewMessenger returns a new Messenger.
 func NewMessenger(client *dhooks.Client, queue *queue.Queue, name, url string, st *storage.Storage, cfg config.Config) *Messenger {
 	mg := &Messenger{
-		cfg:   cfg,
-		dwh:   dhooks.NewWebhook(client, url),
-		name:  name,
-		queue: queue,
-		st:    st,
+		cfg:      cfg,
+		shutdown: make(chan struct{}),
+		done:     make(chan struct{}),
+		dwh:      dhooks.NewWebhook(client, url),
+		name:     name,
+		queue:    queue,
+		st:       st,
 	}
 	return mg
+}
+
+// Close conducts a graceful shutdown of a message and frees it's resources.
+func (mg *Messenger) Close() {
+	mg.shutdown <- struct{}{}
+	<-mg.done
 }
 
 func (mg *Messenger) Name() string {
@@ -46,12 +58,26 @@ func (mg *Messenger) Name() string {
 
 // Start starts the service.
 func (mg *Messenger) Start() {
+	ctx, cancel := context.WithCancel(context.Background())
+	stopped := make(chan struct{})
+	// shutdown main goroutine when signal is received
+	go func() {
+		<-mg.shutdown
+		cancel()
+		<-stopped
+		mg.done <- struct{}{}
+	}()
+	// main goroutine
 	go func() {
 		myLog := slog.With("webhook", mg.name)
-		myLog.Info("Started webhook", "queued", mg.queue.Size())
+		myLog.Info("Started", "queued", mg.queue.Size())
+	loop:
 		for {
-			v, err := mg.queue.Get()
-			if err != nil {
+			v, err := mg.queue.GetWithContext(ctx)
+			if err == context.Canceled {
+				myLog.Info("canceled")
+				break
+			} else if err != nil {
 				myLog.Error("Failed to read from queue", "error", err)
 				continue
 			}
@@ -71,6 +97,10 @@ func (mg *Messenger) Start() {
 			}
 			var attempt int
 			for {
+				if ctx.Err() == context.Canceled {
+					myLog.Info("Canceled")
+					break loop
+				}
 				attempt++
 				err = mg.dwh.Execute(dm)
 				if err == nil {
@@ -97,10 +127,12 @@ func (mg *Messenger) Start() {
 				ws.SentLast = time.Now().UTC()
 				return nil
 			}); err != nil {
-				myLog.Error("failed to update webhook stats", "error", err)
+				myLog.Error("Failed to update webhook stats", "error", err)
 			}
 			myLog.Info("Posted item", "feed", m.Item.FeedName, "title", m.Item.Title, "queued", mg.queue.Size())
 		}
+		myLog.Info("Stopped")
+		stopped <- struct{}{}
 	}()
 }
 
