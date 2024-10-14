@@ -43,5 +43,29 @@ func TestMap(t *testing.T) {
 			assert.Equal(t, i, v)
 		}
 	})
-
+	t.Run("can return a clone", func(t *testing.T) {
+		m := syncedmap.New[string, int]()
+		m.Store("alpha", 1)
+		m.Store("bravo", 2)
+		m2 := m.Clone()
+		expected := map[string]int{
+			"alpha": 1,
+			"bravo": 2,
+		}
+		assert.Equal(t, expected, m2)
+	})
+	t.Run("can iterate over it's elements", func(t *testing.T) {
+		m := syncedmap.New[string, int]()
+		m.Store("alpha", 1)
+		m.Store("bravo", 2)
+		m2 := make(map[string]int)
+		for k, v := range m.All() {
+			m2[k] = v
+		}
+		expected := map[string]int{
+			"alpha": 1,
+			"bravo": 2,
+		}
+		assert.Equal(t, expected, m2)
+	})
 }

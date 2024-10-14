@@ -69,13 +69,13 @@ func (mg *Messenger) Start() {
 	}()
 	// main goroutine
 	go func() {
-		myLog := slog.With("webhook", mg.name)
+		myLog := slog.With("messenger", mg.name)
 		myLog.Info("Started", "queued", mg.queue.Size())
 	loop:
 		for {
 			v, err := mg.queue.GetWithContext(ctx)
 			if err == context.Canceled {
-				myLog.Info("canceled")
+				myLog.Debug("canceled")
 				break
 			} else if err != nil {
 				myLog.Error("Failed to read from queue", "error", err)
@@ -98,7 +98,7 @@ func (mg *Messenger) Start() {
 			var attempt int
 			for {
 				if ctx.Err() == context.Canceled {
-					myLog.Info("Canceled")
+					myLog.Debug("Canceled")
 					break loop
 				}
 				attempt++

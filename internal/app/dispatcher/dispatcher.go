@@ -34,7 +34,7 @@ type Dispatcher struct {
 	cfg        config.Config
 	client     *dhooks.Client
 	clock      Clock
-	done       chan struct{} // signals that the shutdown is complete
+	stopped    chan struct{} // signals that the shutdown is complete
 	fp         *gofeed.Parser
 	messengers *syncedmap.SyncedMap[string, *messenger.Messenger]
 	quit       chan struct{} // closed to signal a shutdown
@@ -52,7 +52,7 @@ func New(st *storage.Storage, cfg config.Config, clock Clock) *Dispatcher {
 		client:     dhooks.NewClient(httpClient),
 		cfg:        cfg,
 		clock:      clock,
-		done:       make(chan struct{}),
+		stopped:    make(chan struct{}),
 		fp:         fp,
 		messengers: syncedmap.New[string, *messenger.Messenger](),
 		quit:       make(chan struct{}),
@@ -64,7 +64,17 @@ func New(st *storage.Storage, cfg config.Config, clock Clock) *Dispatcher {
 // Close conducts a graceful shutdown of the dispatcher.
 func (d *Dispatcher) Close() {
 	close(d.quit)
-	<-d.done
+	<-d.stopped
+	slog.Info("Dispatcher stopped")
+	var wg sync.WaitGroup
+	for _, mg := range d.messengers.All() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			mg.Close()
+		}()
+	}
+	wg.Wait()
 	slog.Info("Graceful shutdown completed")
 }
 
@@ -79,8 +89,8 @@ func (d *Dispatcher) Start() error {
 			return err
 		}
 		ms := messenger.NewMessenger(d.client, q, h.Name, h.URL, d.st, d.cfg)
-		ms.Start()
 		d.messengers.Store(h.Name, ms)
+		ms.Start()
 	}
 	// process feeds until aborted
 	var wg sync.WaitGroup
@@ -118,9 +128,9 @@ func (d *Dispatcher) Start() error {
 			case <-ticker.C:
 			}
 		}
-		slog.Info("Stopped")
+		slog.Debug("Dispatcher loop stopped")
 		ticker.Stop()
-		d.done <- struct{}{}
+		d.stopped <- struct{}{}
 	}()
 	return nil
 }

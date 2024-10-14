@@ -1,6 +1,10 @@
 package syncedmap
 
-import "sync"
+import (
+	"iter"
+	"maps"
+	"sync"
+)
 
 // SyncedMap represents a generic hashmap that is safe to use concurrently.
 type SyncedMap[K comparable, V any] struct {
@@ -30,4 +34,20 @@ func (sm *SyncedMap[K, V]) Store(key K, value V) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	sm.m[key] = value
+}
+
+// Clone returns a snapshot of the map
+func (sm *SyncedMap[K, V]) Clone() map[K]V {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	return maps.Clone(sm.m)
+}
+
+// All() returns an iterator over the map.
+// All does not necessarily correspond to any consistent snapshot of the Map's contents.
+// For a consistent snapshot use Clone().
+func (sm *SyncedMap[K, V]) All() iter.Seq2[K, V] {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	return maps.All(sm.m)
 }
