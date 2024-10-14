@@ -1,6 +1,7 @@
 package queue_test
 
 import (
+	"context"
 	"math/rand/v2"
 	"path/filepath"
 	"testing"
@@ -24,6 +25,7 @@ func TestQueue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create queue: %s", err)
 	}
+	t.Parallel()
 	t.Run("can put and get with one item", func(t *testing.T) {
 		if err := q.Clear(); err != nil {
 			t.Fatal(err)
@@ -92,6 +94,47 @@ func TestQueue(t *testing.T) {
 			t.Fatal(err)
 		}
 		assert.True(t, q.IsEmpty())
+	})
+	t.Run("should wait until there is an item in the queue with context", func(t *testing.T) {
+		if err := q.Clear(); err != nil {
+			t.Fatal(err)
+		}
+		g := new(errgroup.Group)
+		ctx := context.Background()
+		g.Go(func() error {
+			v, err := q.GetWithContext(ctx)
+			if err != nil {
+				return err
+			}
+			assert.Equal(t, []byte("alpha"), v)
+			return nil
+		})
+		time.Sleep(250 * time.Millisecond)
+		if err := q.Put([]byte("alpha")); err != nil {
+			t.Fatal(err)
+		}
+		err := g.Wait()
+		if assert.NoError(t, err) {
+			assert.True(t, q.IsEmpty())
+		}
+	})
+	t.Run("should abort wait when context is canceled", func(t *testing.T) {
+		if err := q.Clear(); err != nil {
+			t.Fatal(err)
+		}
+		g := new(errgroup.Group)
+		ctx, cancel := context.WithCancel(context.Background())
+		g.Go(func() error {
+			_, err := q.GetWithContext(ctx)
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+		time.Sleep(10 * time.Millisecond)
+		cancel()
+		err := g.Wait()
+		assert.ErrorIs(t, err, context.Canceled)
 	})
 	t.Run("should allow multiple consumers and producers", func(t *testing.T) {
 		if err := q.Clear(); err != nil {

@@ -1,8 +1,9 @@
-// Package queue contains a persistent queue.
+// Package queue implements a persistent FIFO queue for Bolt.
 package queue
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"sync"
@@ -12,8 +13,7 @@ import (
 
 var ErrEmpty = errors.New("empty queue")
 
-// Queue represents a persistent FIFO queue and support multiple concurrent consumers and produces.
-// It uses Bolt as database.
+// Queue represents a persistent FIFO queue for Bolt.
 type Queue struct {
 	db   *bolt.DB
 	name string
@@ -81,8 +81,23 @@ func (q *Queue) GetNoWait() ([]byte, error) {
 	return v2, err
 }
 
-// Get returns an item from the queue. If the queue is empty it will block until there is a new item.
+// Get returns an item from the queue.
+// If the queue is empty it will block until there is a new item in the queue.
 func (q *Queue) Get() ([]byte, error) {
+	return q.GetWithContext(context.Background())
+}
+
+// GetWithContext returns an item from the queue.
+// If the queue is empty it will block until there is a new item in the queue
+// or the context is canceled.
+func (q *Queue) GetWithContext(ctx context.Context) ([]byte, error) {
+	stopf := context.AfterFunc(ctx, func() {
+		q.cond.L.Lock()
+		defer q.cond.L.Unlock()
+		q.cond.Broadcast()
+	})
+	defer stopf()
+
 	q.cond.L.Lock()
 	defer q.cond.L.Unlock()
 	for {
@@ -93,6 +108,9 @@ func (q *Queue) Get() ([]byte, error) {
 			return nil, err
 		}
 		q.cond.Wait()
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 	}
 }
 
