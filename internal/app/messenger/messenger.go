@@ -17,9 +17,9 @@ import (
 	"github.com/ErikKalkoken/feedhook/internal/queue"
 )
 
-// A Messenger handles posting messages to webhooks.
+// A Messenger handles posting messages to a webhook.
 // Failed messages are automatically retried and rate limits are respected.
-// Messages are kept in a permanent queue, which can survive process restarts.
+// Unsent messages are queued and will be picked up again after a process restart.
 type Messenger struct {
 	cfg      config.Config
 	errCount atomic.Int64

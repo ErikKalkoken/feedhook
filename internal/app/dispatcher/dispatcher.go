@@ -31,14 +31,14 @@ type Clock interface {
 
 // Dispatcher is a service that fetches items from feeds and forwards them to webhooks.
 type Dispatcher struct {
-	cfg    config.Config
-	client *dhooks.Client
-	clock  Clock
-	done   chan bool // signals that the shutdown is complete
-	fp     *gofeed.Parser
-	hooks  *syncedmap.SyncedMap[string, *messenger.Messenger]
-	quit   chan bool // closed to signal a shutdown
-	st     *storage.Storage
+	cfg        config.Config
+	client     *dhooks.Client
+	clock      Clock
+	done       chan struct{} // signals that the shutdown is complete
+	fp         *gofeed.Parser
+	messengers *syncedmap.SyncedMap[string, *messenger.Messenger]
+	quit       chan struct{} // closed to signal a shutdown
+	st         *storage.Storage
 }
 
 // New creates a new App instance and returns it.
@@ -49,14 +49,14 @@ func New(st *storage.Storage, cfg config.Config, clock Clock) *Dispatcher {
 	fp := gofeed.NewParser()
 	fp.Client = httpClient
 	d := &Dispatcher{
-		client: dhooks.NewClient(httpClient),
-		cfg:    cfg,
-		clock:  clock,
-		done:   make(chan bool),
-		fp:     fp,
-		hooks:  syncedmap.New[string, *messenger.Messenger](),
-		quit:   make(chan bool),
-		st:     st,
+		client:     dhooks.NewClient(httpClient),
+		cfg:        cfg,
+		clock:      clock,
+		done:       make(chan struct{}),
+		fp:         fp,
+		messengers: syncedmap.New[string, *messenger.Messenger](),
+		quit:       make(chan struct{}),
+		st:         st,
 	}
 	return d
 }
@@ -78,9 +78,9 @@ func (d *Dispatcher) Start() error {
 		if err != nil {
 			return err
 		}
-		wh := messenger.NewMessenger(d.client, q, h.Name, h.URL, d.st, d.cfg)
-		wh.Start()
-		d.hooks.Store(h.Name, wh)
+		ms := messenger.NewMessenger(d.client, q, h.Name, h.URL, d.st, d.cfg)
+		ms.Start()
+		d.messengers.Store(h.Name, ms)
 	}
 	// process feeds until aborted
 	var wg sync.WaitGroup
@@ -96,7 +96,7 @@ func (d *Dispatcher) Start() error {
 					defer wg.Done()
 					usedHooks := make([]*messenger.Messenger, 0)
 					for _, name := range cf.Webhooks {
-						wh, ok := d.hooks.Load(name)
+						wh, ok := d.messengers.Load(name)
 						if !ok {
 							panic("expected webhook not found: " + name)
 						}
@@ -112,19 +112,15 @@ func (d *Dispatcher) Start() error {
 			}
 			wg.Wait()
 			slog.Info("Finished processing feeds", "feeds", len(feeds))
-		wait:
-			for {
-				select {
-				case <-d.quit:
-					break main
-				case <-ticker.C:
-					break wait
-				}
+			select {
+			case <-d.quit:
+				break main
+			case <-ticker.C:
 			}
 		}
 		slog.Info("Stopped")
 		ticker.Stop()
-		d.done <- true
+		d.done <- struct{}{}
 	}()
 	return nil
 }
@@ -187,7 +183,7 @@ func (d *Dispatcher) processFeed(cf config.ConfigFeed, hooks []*messenger.Messen
 
 // MessengerStatus returns the current status of a messenger.
 func (d *Dispatcher) MessengerStatus(webhookName string) (messenger.Status, error) {
-	wh, ok := d.hooks.Load(webhookName)
+	wh, ok := d.messengers.Load(webhookName)
 	if !ok {
 		return messenger.Status{}, fmt.Errorf("webhook \"%s\": %w", webhookName, ErrNotFound)
 
