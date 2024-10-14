@@ -97,25 +97,25 @@ func TestQueue(t *testing.T) {
 		if err := q.Clear(); err != nil {
 			t.Fatal(err)
 		}
-		results := make([]string, 0)
+		results := make([]string, 6)
 		g := new(errgroup.Group)
 		g.Go(func() error {
-			for range 3 {
+			for i := range 3 {
 				v, err := q.Get()
 				if err != nil {
 					return err
 				}
-				results = append(results, string(v))
+				results[i] = string(v)
 			}
 			return nil
 		})
 		g.Go(func() error {
-			for range 3 {
+			for i := range 3 {
 				v, err := q.Get()
 				if err != nil {
 					return err
 				}
-				results = append(results, string(v))
+				results[i+3] = string(v)
 			}
 			return nil
 		})
