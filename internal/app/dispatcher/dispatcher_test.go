@@ -90,4 +90,24 @@ func TestService(t *testing.T) {
 		assert.True(t, d.Close())
 		assert.False(t, d.Close())
 	})
+	t.Run("should restart dispatcher", func(t *testing.T) {
+		httpmock.Reset()
+		httpmock.RegisterResponder(
+			"GET",
+			"https://www.example.com/feed",
+			httpmock.NewXmlResponderOrPanic(200, httpmock.File("testdata/atomfeed.xml")),
+		)
+		httpmock.RegisterResponder(
+			"POST",
+			"https://www.example.com/hook",
+			httpmock.NewStringResponder(204, ""),
+		)
+		d := dispatcher.New(st, cfg, faketime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
+		if err := d.Start(); err != nil {
+			t.Fatal(err)
+		}
+		err := d.Restart()
+		assert.NoError(t, err)
+		assert.True(t, d.Close())
+	})
 }

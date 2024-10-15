@@ -37,11 +37,11 @@ type Dispatcher struct {
 	stopped    chan struct{} // shutdown is complete
 	fp         *gofeed.Parser
 	messengers *syncedmap.SyncedMap[string, *messenger.Messenger]
-	shutdown   chan struct{} // commence shutdown
 	st         *storage.Storage
 
 	mu        sync.Mutex
 	isRunning bool
+	shutdown  chan struct{} // commence shutdown
 }
 
 // New creates a new App instance and returns it.
@@ -84,9 +84,14 @@ func (d *Dispatcher) Close() bool {
 		}()
 	}
 	wg.Wait()
-	slog.Info("Graceful shutdown completed")
+	slog.Info("shutdown completed")
 	d.isRunning = false
 	return true
+}
+
+func (d *Dispatcher) Restart() error {
+	d.Close()
+	return d.Start()
 }
 
 // Start starts the dispatcher
@@ -100,11 +105,11 @@ func (d *Dispatcher) Start() error {
 			return fmt.Errorf("dispatcher already running")
 		}
 		d.isRunning = true
+		d.shutdown = make(chan struct{})
 		return nil
 	}(); err != nil {
 		return err
 	}
-	d.shutdown = make(chan struct{})
 	// Create and start webhooks
 	for _, h := range d.cfg.Webhooks {
 		q, err := pqueue.New(d.st.DB(), h.Name)

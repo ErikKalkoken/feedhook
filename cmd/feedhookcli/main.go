@@ -83,6 +83,17 @@ func main() {
 				},
 			},
 			{
+				Name:  "restart",
+				Usage: "restarts the service",
+				Action: func(cCtx *cli.Context) error {
+					if err := client.Restart(); err != nil {
+						return err
+					}
+					fmt.Println("Restarted")
+					return nil
+				},
+			},
+			{
 				Name:  "stats",
 				Usage: "show current statistics",
 				Action: func(cCtx *cli.Context) error {

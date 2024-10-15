@@ -56,6 +56,10 @@ func (s *RemoteService) PostLatestFeedItem(args *SendLatestArgs, reply *bool) er
 	return s.d.PostLatestFeedItem(args.FeedName)
 }
 
+func (s *RemoteService) Restart(args *EmptyArgs, reply *bool) error {
+	return s.d.Restart()
+}
+
 func (s *RemoteService) Statistics(args *EmptyArgs, reply *string) error {
 	out := &strings.Builder{}
 	// Feed stats
