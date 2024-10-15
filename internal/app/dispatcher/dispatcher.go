@@ -18,7 +18,7 @@ import (
 	"github.com/ErikKalkoken/feedhook/internal/app/messenger"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 	"github.com/ErikKalkoken/feedhook/internal/dhooks"
-	"github.com/ErikKalkoken/feedhook/internal/queue"
+	"github.com/ErikKalkoken/feedhook/internal/pqueue"
 	"github.com/ErikKalkoken/feedhook/internal/syncedmap"
 )
 
@@ -84,7 +84,7 @@ func (d *Dispatcher) Close() {
 func (d *Dispatcher) Start() error {
 	// Create and start webhooks
 	for _, h := range d.cfg.Webhooks {
-		q, err := queue.New(d.st.DB(), h.Name)
+		q, err := pqueue.New(d.st.DB(), h.Name)
 		if err != nil {
 			return err
 		}

@@ -1,4 +1,4 @@
-package queue_test
+package pqueue_test
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ErikKalkoken/feedhook/internal/queue"
+	"github.com/ErikKalkoken/feedhook/internal/pqueue"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sync/errgroup"
 
@@ -21,7 +21,7 @@ func TestQueue(t *testing.T) {
 		t.Fatalf("Failed to open DB: %s", err)
 	}
 	defer db.Close()
-	q, err := queue.New(db, "test")
+	q, err := pqueue.New(db, "test")
 	if err != nil {
 		t.Fatalf("Failed to create queue: %s", err)
 	}
@@ -71,7 +71,7 @@ func TestQueue(t *testing.T) {
 			t.Fatal(err)
 		}
 		_, err := q.GetNoWait()
-		assert.ErrorIs(t, err, queue.ErrEmpty)
+		assert.ErrorIs(t, err, pqueue.ErrEmpty)
 	})
 	t.Run("should wait until there is an item in the queue", func(t *testing.T) {
 		if err := q.Clear(); err != nil {
@@ -206,7 +206,7 @@ func TestQueue(t *testing.T) {
 			g.Go(func() error {
 				for {
 					v, err := q.GetNoWait()
-					if err == queue.ErrEmpty {
+					if err == pqueue.ErrEmpty {
 						break
 					} else if err != nil {
 						return err
@@ -233,7 +233,7 @@ func TestResurrectQueue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open DB: %s", err)
 	}
-	q, err := queue.New(db, "johnny")
+	q, err := pqueue.New(db, "johnny")
 	if err != nil {
 		t.Fatalf("Failed to create queue: %s", err)
 	}
@@ -245,7 +245,7 @@ func TestResurrectQueue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to open DB: %s", err)
 	}
-	q, err = queue.New(db, "johnny")
+	q, err = pqueue.New(db, "johnny")
 	if err != nil {
 		t.Fatalf("Failed to create queue: %s", err)
 	}

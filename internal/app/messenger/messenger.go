@@ -15,7 +15,7 @@ import (
 	"github.com/ErikKalkoken/feedhook/internal/app/config"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 	"github.com/ErikKalkoken/feedhook/internal/dhooks"
-	"github.com/ErikKalkoken/feedhook/internal/queue"
+	"github.com/ErikKalkoken/feedhook/internal/pqueue"
 )
 
 // A Messenger handles posting messages to a webhook.
@@ -28,12 +28,12 @@ type Messenger struct {
 	dwh      *dhooks.Webhook
 	errCount atomic.Int64
 	name     string
-	queue    *queue.Queue
+	queue    *pqueue.PQueue
 	st       *storage.Storage
 }
 
 // NewMessenger returns a new Messenger.
-func NewMessenger(client *dhooks.Client, queue *queue.Queue, name, url string, st *storage.Storage, cfg config.Config) *Messenger {
+func NewMessenger(client *dhooks.Client, queue *pqueue.PQueue, name, url string, st *storage.Storage, cfg config.Config) *Messenger {
 	mg := &Messenger{
 		cfg:      cfg,
 		shutdown: make(chan struct{}),

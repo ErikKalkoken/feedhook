@@ -12,7 +12,7 @@ import (
 	"github.com/ErikKalkoken/feedhook/internal/app/messenger"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 	"github.com/ErikKalkoken/feedhook/internal/dhooks"
-	"github.com/ErikKalkoken/feedhook/internal/queue"
+	"github.com/ErikKalkoken/feedhook/internal/pqueue"
 	"github.com/jarcoal/httpmock"
 	"github.com/mmcdole/gofeed"
 	"github.com/stretchr/testify/assert"
@@ -25,7 +25,7 @@ func TestMessenger(t *testing.T) {
 		t.Fatalf("Failed to open DB: %s", err)
 	}
 	defer db.Close()
-	q, err := queue.New(db, "test")
+	q, err := pqueue.New(db, "test")
 	if err != nil {
 		t.Fatalf("Failed to create queue: %s", err)
 	}
