@@ -34,11 +34,14 @@ type Dispatcher struct {
 	cfg        config.Config
 	client     *dhooks.Client
 	clock      Clock
-	stopped    chan struct{} // signals that the shutdown is complete
+	stopped    chan struct{} // shutdown is complete
 	fp         *gofeed.Parser
 	messengers *syncedmap.SyncedMap[string, *messenger.Messenger]
-	quit       chan struct{} // closed to signal a shutdown
+	shutdown   chan struct{} // commence shutdown
 	st         *storage.Storage
+
+	mu        sync.Mutex
+	isRunning bool
 }
 
 // New creates a new App instance and returns it.
@@ -55,15 +58,21 @@ func New(st *storage.Storage, cfg config.Config, clock Clock) *Dispatcher {
 		stopped:    make(chan struct{}),
 		fp:         fp,
 		messengers: syncedmap.New[string, *messenger.Messenger](),
-		quit:       make(chan struct{}),
 		st:         st,
 	}
 	return d
 }
 
 // Close conducts a graceful shutdown of the dispatcher.
-func (d *Dispatcher) Close() {
-	close(d.quit)
+// If the dispatcher is already closed it does nothing.
+// Reports whether a close was performed.
+func (d *Dispatcher) Close() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if !d.isRunning {
+		return false
+	}
+	close(d.shutdown)
 	<-d.stopped
 	slog.Info("Dispatcher stopped")
 	var wg sync.WaitGroup
@@ -76,12 +85,26 @@ func (d *Dispatcher) Close() {
 	}
 	wg.Wait()
 	slog.Info("Graceful shutdown completed")
+	d.isRunning = false
+	return true
 }
 
 // Start starts the dispatcher
 // User should call Close() subsequently to shut down dispatcher gracefully
 // and prevent any potential data loss.
 func (d *Dispatcher) Start() error {
+	if err := func() error {
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		if d.isRunning {
+			return fmt.Errorf("dispatcher already running")
+		}
+		d.isRunning = true
+		return nil
+	}(); err != nil {
+		return err
+	}
+	d.shutdown = make(chan struct{})
 	// Create and start webhooks
 	for _, h := range d.cfg.Webhooks {
 		q, err := pqueue.New(d.st.DB(), h.Name)
@@ -123,7 +146,7 @@ func (d *Dispatcher) Start() error {
 			wg.Wait()
 			slog.Info("Finished processing feeds", "feeds", len(feeds))
 			select {
-			case <-d.quit:
+			case <-d.shutdown:
 				break main
 			case <-ticker.C:
 			}
@@ -149,7 +172,7 @@ func (d *Dispatcher) processFeed(cf config.ConfigFeed, hooks []*messenger.Messen
 			continue
 		}
 		select {
-		case <-d.quit:
+		case <-d.shutdown:
 			return errUserAborted
 		default:
 		}
