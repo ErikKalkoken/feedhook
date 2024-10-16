@@ -34,6 +34,15 @@ func (c Client) PostLatestFeedItem(feedName string) error {
 	return rc.Call("RemoteService.PostLatestFeedItem", args, &reply)
 }
 
+func (c Client) Restart() error {
+	rc, err := c.dial()
+	if err != nil {
+		return err
+	}
+	var reply bool
+	return rc.Call("RemoteService.Restart", EmptyArgs{}, &reply)
+}
+
 func (c Client) Statistics() (string, error) {
 	rc, err := c.dial()
 	if err != nil {

@@ -1,5 +1,5 @@
-// Package queue implements a persistent FIFO queue for Bolt.
-package queue
+// Package pqueue implements persistent queues.
+package pqueue
 
 import (
 	"bytes"
@@ -13,8 +13,8 @@ import (
 
 var ErrEmpty = errors.New("empty queue")
 
-// Queue represents a persistent FIFO queue for Bolt.
-type Queue struct {
+// PQueue represents a persistent FIFO queue.
+type PQueue struct {
 	db   *bolt.DB
 	name string
 
@@ -22,10 +22,10 @@ type Queue struct {
 	cond *sync.Cond
 }
 
-// New returns a new Queue object with a given name.
+// New returns a new PQueue instance with the given name.
 // When a queue with that name already exists in the DB, it will be re-used.
-func New(db *bolt.DB, name string) (*Queue, error) {
-	q := &Queue{
+func New(db *bolt.DB, name string) (*PQueue, error) {
+	q := &PQueue{
 		db:   db,
 		name: name,
 	}
@@ -41,7 +41,7 @@ func New(db *bolt.DB, name string) (*Queue, error) {
 }
 
 // Clear deletes all items from the queue.
-func (q *Queue) Clear() error {
+func (q *PQueue) Clear() error {
 	err := q.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(q.name))
 		b.ForEach(func(k, v []byte) error {
@@ -53,13 +53,13 @@ func (q *Queue) Clear() error {
 }
 
 // IsEmpty reports wether the queue is empty.
-func (q *Queue) IsEmpty() bool {
+func (q *PQueue) IsEmpty() bool {
 	return q.Size() == 0
 }
 
 // GetNoWait return an item from the queue.
 // When the queue is empty it returns the ErrEmpty error.
-func (q *Queue) GetNoWait() ([]byte, error) {
+func (q *PQueue) GetNoWait() ([]byte, error) {
 	tx, err := q.db.Begin(true)
 	if err != nil {
 		return nil, err
@@ -83,14 +83,14 @@ func (q *Queue) GetNoWait() ([]byte, error) {
 
 // Get returns an item from the queue.
 // If the queue is empty it will block until there is a new item in the queue.
-func (q *Queue) Get() ([]byte, error) {
+func (q *PQueue) Get() ([]byte, error) {
 	return q.GetWithContext(context.Background())
 }
 
 // GetWithContext returns an item from the queue.
 // If the queue is empty it will block until there is a new item in the queue
 // or the context is canceled.
-func (q *Queue) GetWithContext(ctx context.Context) ([]byte, error) {
+func (q *PQueue) GetWithContext(ctx context.Context) ([]byte, error) {
 	stopf := context.AfterFunc(ctx, func() {
 		q.cond.L.Lock()
 		defer q.cond.L.Unlock()
@@ -115,7 +115,7 @@ func (q *Queue) GetWithContext(ctx context.Context) ([]byte, error) {
 }
 
 // Puts adds an item to the queue.
-func (q *Queue) Put(v []byte) error {
+func (q *PQueue) Put(v []byte) error {
 	err := q.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(q.name))
 		id, err := b.NextSequence()
@@ -137,7 +137,7 @@ func itob(v uint64) []byte {
 	return b
 }
 
-func (q *Queue) Size() int {
+func (q *PQueue) Size() int {
 	var c int
 	q.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(q.name))

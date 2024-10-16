@@ -18,7 +18,7 @@ import (
 	"github.com/ErikKalkoken/feedhook/internal/app/messenger"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 	"github.com/ErikKalkoken/feedhook/internal/dhooks"
-	"github.com/ErikKalkoken/feedhook/internal/queue"
+	"github.com/ErikKalkoken/feedhook/internal/pqueue"
 	"github.com/ErikKalkoken/feedhook/internal/syncedmap"
 )
 
@@ -30,15 +30,20 @@ type Clock interface {
 }
 
 // Dispatcher is a service that fetches items from feeds and forwards them to webhooks.
+//
+// A dispatcher can be started, stopped and restarted.
 type Dispatcher struct {
 	cfg        config.Config
 	client     *dhooks.Client
 	clock      Clock
-	stopped    chan struct{} // signals that the shutdown is complete
+	stopped    chan struct{} // shutdown is complete
 	fp         *gofeed.Parser
 	messengers *syncedmap.SyncedMap[string, *messenger.Messenger]
-	quit       chan struct{} // closed to signal a shutdown
 	st         *storage.Storage
+
+	mu        sync.Mutex
+	isRunning bool
+	shutdown  chan struct{} // commence shutdown
 }
 
 // New creates a new App instance and returns it.
@@ -55,15 +60,21 @@ func New(st *storage.Storage, cfg config.Config, clock Clock) *Dispatcher {
 		stopped:    make(chan struct{}),
 		fp:         fp,
 		messengers: syncedmap.New[string, *messenger.Messenger](),
-		quit:       make(chan struct{}),
 		st:         st,
 	}
 	return d
 }
 
-// Close conducts a graceful shutdown of the dispatcher.
-func (d *Dispatcher) Close() {
-	close(d.quit)
+// Stop stops the dispatcher, which includes the gracefully shutdown of all messengers.
+// Trying to stop an already stopped dispatcher does nothing.
+// Reports whether a stop was actually performed.
+func (d *Dispatcher) Stop() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if !d.isRunning {
+		return false
+	}
+	close(d.shutdown)
 	<-d.stopped
 	slog.Info("Dispatcher stopped")
 	var wg sync.WaitGroup
@@ -71,20 +82,39 @@ func (d *Dispatcher) Close() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			mg.Close()
+			mg.Shutdown()
 		}()
 	}
 	wg.Wait()
-	slog.Info("Graceful shutdown completed")
+	slog.Info("shutdown completed")
+	d.isRunning = false
+	return true
+}
+
+func (d *Dispatcher) Restart() error {
+	d.Stop()
+	return d.Start()
 }
 
 // Start starts the dispatcher
 // User should call Close() subsequently to shut down dispatcher gracefully
 // and prevent any potential data loss.
 func (d *Dispatcher) Start() error {
+	if err := func() error {
+		d.mu.Lock()
+		defer d.mu.Unlock()
+		if d.isRunning {
+			return fmt.Errorf("dispatcher already running")
+		}
+		d.isRunning = true
+		d.shutdown = make(chan struct{})
+		return nil
+	}(); err != nil {
+		return err
+	}
 	// Create and start webhooks
 	for _, h := range d.cfg.Webhooks {
-		q, err := queue.New(d.st.DB(), h.Name)
+		q, err := pqueue.New(d.st.DB(), h.Name)
 		if err != nil {
 			return err
 		}
@@ -123,7 +153,7 @@ func (d *Dispatcher) Start() error {
 			wg.Wait()
 			slog.Info("Finished processing feeds", "feeds", len(feeds))
 			select {
-			case <-d.quit:
+			case <-d.shutdown:
 				break main
 			case <-ticker.C:
 			}
@@ -149,7 +179,7 @@ func (d *Dispatcher) processFeed(cf config.ConfigFeed, hooks []*messenger.Messen
 			continue
 		}
 		select {
-		case <-d.quit:
+		case <-d.shutdown:
 			return errUserAborted
 		default:
 		}

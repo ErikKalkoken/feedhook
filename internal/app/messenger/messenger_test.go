@@ -12,7 +12,7 @@ import (
 	"github.com/ErikKalkoken/feedhook/internal/app/messenger"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 	"github.com/ErikKalkoken/feedhook/internal/dhooks"
-	"github.com/ErikKalkoken/feedhook/internal/queue"
+	"github.com/ErikKalkoken/feedhook/internal/pqueue"
 	"github.com/jarcoal/httpmock"
 	"github.com/mmcdole/gofeed"
 	"github.com/stretchr/testify/assert"
@@ -25,7 +25,7 @@ func TestMessenger(t *testing.T) {
 		t.Fatalf("Failed to open DB: %s", err)
 	}
 	defer db.Close()
-	q, err := queue.New(db, "test")
+	q, err := pqueue.New(db, "test")
 	if err != nil {
 		t.Fatalf("Failed to create queue: %s", err)
 	}
@@ -35,6 +35,12 @@ func TestMessenger(t *testing.T) {
 	}
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
+	c := dhooks.NewClient(http.DefaultClient)
+	t.Run("can return name", func(t *testing.T) {
+		mg := messenger.NewMessenger(c, q, "dummy", "https://www.example.com", st, config.Config{})
+		assert.Equal(t, "dummy", mg.Name())
+
+	})
 	t.Run("can submit messages", func(t *testing.T) {
 		st.ClearWebhookStats()
 		q.Clear()
@@ -44,9 +50,10 @@ func TestMessenger(t *testing.T) {
 			"https://www.example.com",
 			httpmock.NewStringResponder(204, ""),
 		)
-		c := dhooks.NewClient(http.DefaultClient)
 		mg := messenger.NewMessenger(c, q, "dummy", "https://www.example.com", st, config.Config{})
-		mg.Start()
+		if err := mg.Start(); err != nil {
+			t.Fatal(err)
+		}
 		feed := &gofeed.Feed{Title: "title"}
 		now := time.Now()
 		item := &gofeed.Item{Content: "content", PublishedParsed: &now}
@@ -59,21 +66,43 @@ func TestMessenger(t *testing.T) {
 		if assert.NoError(t, err) {
 			assert.Equal(t, 1, ws.SentCount)
 		}
+		mg.Shutdown()
 	})
 	t.Run("can submit messages 2", func(t *testing.T) {
 		st.ClearWebhookStats()
 		q.Clear()
 		httpmock.Reset()
-		httpmock.RegisterResponder(
-			"POST",
-			"https://www.example.com",
-			httpmock.NewStringResponder(204, ""),
-		)
-		c := dhooks.NewClient(http.DefaultClient)
 		mg := messenger.NewMessenger(c, q, "dummy", "https://www.example.com", st, config.Config{})
-		mg.Start()
+		if err := mg.Start(); err != nil {
+			t.Fatal(err)
+		}
 		time.Sleep(100 * time.Millisecond)
-		mg.Close()
+		mg.Shutdown()
 		assert.Equal(t, 0, httpmock.GetTotalCallCount())
+	})
+	t.Run("should return error when try to start twice", func(t *testing.T) {
+		st.ClearWebhookStats()
+		q.Clear()
+		httpmock.Reset()
+		mg := messenger.NewMessenger(c, q, "dummy", "https://www.example.com", st, config.Config{})
+		if err := mg.Start(); err != nil {
+			t.Fatal(err)
+		}
+		err := mg.Start()
+		assert.Error(t, err)
+		mg.Shutdown()
+	})
+	t.Run("should report if shutdown was done", func(t *testing.T) {
+		st.ClearWebhookStats()
+		q.Clear()
+		httpmock.Reset()
+		mg := messenger.NewMessenger(c, q, "dummy", "https://www.example.com", st, config.Config{})
+		if err := mg.Start(); err != nil {
+			t.Fatal(err)
+		}
+		ok := mg.Shutdown()
+		assert.True(t, ok)
+		ok = mg.Shutdown()
+		assert.False(t, ok)
 	})
 }

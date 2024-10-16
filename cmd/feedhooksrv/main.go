@@ -30,7 +30,7 @@ const (
 )
 
 // Overwritten with current tag when released
-var Version = "0.2.3"
+var Version = "0.3.0"
 
 type realtime struct{}
 
@@ -77,7 +77,7 @@ func main() {
 			slog.Error("Failed to start dispatcher", "error", err)
 			os.Exit(1)
 		}
-		defer d.Close()
+		defer d.Stop()
 	}
 
 	// start RPC service
