@@ -2,10 +2,12 @@ package messenger
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"math"
 	"math/rand/v2"
 	"net/http"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -30,6 +32,9 @@ type Messenger struct {
 	name     string
 	queue    *pqueue.PQueue
 	st       *storage.Storage
+
+	mu        sync.Mutex
+	isRunning bool
 }
 
 // NewMessenger returns a new Messenger.
@@ -46,18 +51,51 @@ func NewMessenger(client *dhooks.Client, queue *pqueue.PQueue, name, url string,
 	return mg
 }
 
-// Shutdown conducts a graceful shutdown of a messenger and frees it's resources.
-func (mg *Messenger) Shutdown() {
-	mg.shutdown <- struct{}{}
-	<-mg.done
+// AddMessage adds a new message for being send to to webhook
+func (wh *Messenger) AddMessage(feedName string, feed *gofeed.Feed, item *gofeed.Item, isUpdated bool) error {
+	p, err := newMessage(feedName, feed, item, isUpdated)
+	if err != nil {
+		return err
+	}
+	v, err := p.toBytes()
+	if err != nil {
+		return err
+	}
+	return wh.queue.Put(v)
 }
 
 func (mg *Messenger) Name() string {
 	return mg.name
 }
 
+// Shutdown conducts a graceful shutdown of a messenger and frees it's resources.
+// Reports wether a shutdown was actually conducted.
+func (mg *Messenger) Shutdown() bool {
+	mg.mu.Lock()
+	defer mg.mu.Unlock()
+	if !mg.isRunning {
+		return false
+	}
+	mg.shutdown <- struct{}{}
+	<-mg.done
+	mg.isRunning = false
+	return true
+}
+
 // Start starts the service.
-func (mg *Messenger) Start() {
+func (mg *Messenger) Start() error {
+	if err := func() error {
+		mg.mu.Lock()
+		defer mg.mu.Unlock()
+		if mg.isRunning {
+			return fmt.Errorf("messenger %s already running", mg.name)
+		}
+		mg.isRunning = true
+		return nil
+	}(); err != nil {
+		return err
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	stopped := make(chan struct{})
 	// shutdown main goroutine when signal is received
@@ -134,19 +172,16 @@ func (mg *Messenger) Start() {
 		myLog.Info("Stopped")
 		stopped <- struct{}{}
 	}()
+	return nil
 }
 
-// AddMessage adds a new message for being send to to webhook
-func (wh *Messenger) AddMessage(feedName string, feed *gofeed.Feed, item *gofeed.Item, isUpdated bool) error {
-	p, err := newMessage(feedName, feed, item, isUpdated)
-	if err != nil {
-		return err
-	}
-	v, err := p.toBytes()
-	if err != nil {
-		return err
-	}
-	return wh.queue.Put(v)
+func maxBackoffJitter(attempt int) time.Duration {
+	const BASE = 100
+	const MAX_DELAY = 30_000
+	exponential := math.Pow(2, float64(attempt)) * BASE
+	delay := min(exponential, MAX_DELAY)
+	ms := math.Floor(rand.Float64() * delay)
+	return time.Duration(ms) * time.Millisecond
 }
 
 type Status struct {
@@ -160,13 +195,4 @@ func (mg *Messenger) Status() Status {
 		ErrorCount: int(mg.errCount.Load()),
 	}
 	return x
-}
-
-func maxBackoffJitter(attempt int) time.Duration {
-	const BASE = 100
-	const MAX_DELAY = 30_000
-	exponential := math.Pow(2, float64(attempt)) * BASE
-	delay := min(exponential, MAX_DELAY)
-	ms := math.Floor(rand.Float64() * delay)
-	return time.Duration(ms) * time.Millisecond
 }
