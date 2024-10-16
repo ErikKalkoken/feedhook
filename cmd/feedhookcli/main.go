@@ -1,4 +1,4 @@
-// Feedhookcli is a CLI tool for querying the feedhook service.
+// Feedhookcli is a CLI tool for interacting with a running service.
 package main
 
 import (
@@ -21,7 +21,7 @@ func main() {
 	var client remote.Client
 	app := &cli.App{
 		Name:  "feedhookcli",
-		Usage: "CLI interface to the feedhook service",
+		Usage: "CLI tool for interacting with a running service",
 		Action: func(*cli.Context) error {
 			fmt.Println("Command not found")
 			return nil
