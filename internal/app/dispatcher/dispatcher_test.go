@@ -57,7 +57,7 @@ func TestService(t *testing.T) {
 			t.Fatal(err)
 		}
 		time.Sleep(2 * time.Second)
-		d.Close()
+		d.Stop()
 		info := httpmock.GetCallCountInfo()
 		assert.Equal(t, 1, info["POST https://www.example.com/hook"])
 		assert.LessOrEqual(t, 1, info["GET https://www.example.com/feed"])
@@ -84,11 +84,11 @@ func TestService(t *testing.T) {
 		}
 		err := d.Start()
 		assert.Error(t, err)
-		d.Close()
+		d.Stop()
 		err = d.Start()
 		assert.NoError(t, err)
-		assert.True(t, d.Close())
-		assert.False(t, d.Close())
+		assert.True(t, d.Stop())
+		assert.False(t, d.Stop())
 	})
 	t.Run("should restart dispatcher", func(t *testing.T) {
 		httpmock.Reset()
@@ -108,6 +108,6 @@ func TestService(t *testing.T) {
 		}
 		err := d.Restart()
 		assert.NoError(t, err)
-		assert.True(t, d.Close())
+		assert.True(t, d.Stop())
 	})
 }

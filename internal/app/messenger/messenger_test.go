@@ -73,7 +73,7 @@ func TestMessenger(t *testing.T) {
 		mg := messenger.NewMessenger(c, q, "dummy", "https://www.example.com", st, config.Config{})
 		mg.Start()
 		time.Sleep(100 * time.Millisecond)
-		mg.Close()
+		mg.Shutdown()
 		assert.Equal(t, 0, httpmock.GetTotalCallCount())
 	})
 }

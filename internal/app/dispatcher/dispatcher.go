@@ -30,6 +30,8 @@ type Clock interface {
 }
 
 // Dispatcher is a service that fetches items from feeds and forwards them to webhooks.
+//
+// A dispatcher can be started, stopped and restarted.
 type Dispatcher struct {
 	cfg        config.Config
 	client     *dhooks.Client
@@ -63,10 +65,10 @@ func New(st *storage.Storage, cfg config.Config, clock Clock) *Dispatcher {
 	return d
 }
 
-// Close conducts a graceful shutdown of the dispatcher.
-// If the dispatcher is already closed it does nothing.
-// Reports whether a close was performed.
-func (d *Dispatcher) Close() bool {
+// Stop stops the dispatcher, which includes the gracefully shutdown of all messengers.
+// Trying to stop an already stopped dispatcher does nothing.
+// Reports whether a stop was actually performed.
+func (d *Dispatcher) Stop() bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if !d.isRunning {
@@ -80,7 +82,7 @@ func (d *Dispatcher) Close() bool {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			mg.Close()
+			mg.Shutdown()
 		}()
 	}
 	wg.Wait()
@@ -90,7 +92,7 @@ func (d *Dispatcher) Close() bool {
 }
 
 func (d *Dispatcher) Restart() error {
-	d.Close()
+	d.Stop()
 	return d.Start()
 }
 

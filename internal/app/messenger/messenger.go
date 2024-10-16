@@ -46,8 +46,8 @@ func NewMessenger(client *dhooks.Client, queue *pqueue.PQueue, name, url string,
 	return mg
 }
 
-// Close conducts a graceful shutdown of a message and frees it's resources.
-func (mg *Messenger) Close() {
+// Shutdown conducts a graceful shutdown of a messenger and frees it's resources.
+func (mg *Messenger) Shutdown() {
 	mg.shutdown <- struct{}{}
 	<-mg.done
 }

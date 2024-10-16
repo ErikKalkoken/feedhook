@@ -77,7 +77,7 @@ func main() {
 			slog.Error("Failed to start dispatcher", "error", err)
 			os.Exit(1)
 		}
-		defer d.Close()
+		defer d.Stop()
 	}
 
 	// start RPC service
