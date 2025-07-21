@@ -16,8 +16,8 @@ import (
 	"github.com/ErikKalkoken/feedhook/internal/app"
 	"github.com/ErikKalkoken/feedhook/internal/app/config"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
-	"github.com/ErikKalkoken/feedhook/internal/dhooks"
 	"github.com/ErikKalkoken/feedhook/internal/pqueue"
+	"github.com/ErikKalkoken/go-dhooks"
 )
 
 // A Messenger handles posting messages to a webhook.

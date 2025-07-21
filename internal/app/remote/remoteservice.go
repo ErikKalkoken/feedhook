@@ -13,7 +13,7 @@ import (
 	"github.com/ErikKalkoken/feedhook/internal/app/dispatcher"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 	"github.com/ErikKalkoken/feedhook/internal/consoletable"
-	"github.com/ErikKalkoken/feedhook/internal/dhooks"
+	"github.com/ErikKalkoken/go-dhooks"
 )
 
 type EmptyArgs struct{}
