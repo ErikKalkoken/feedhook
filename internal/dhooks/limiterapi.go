@@ -43,7 +43,7 @@ func (l *limiterAPI) UpdateFromHeader(h http.Header) error {
 	if !rl2.isSet() {
 		return nil
 	}
-	if rl2.bucket == l.rl.bucket && rl2.resetAt == l.rl.resetAt {
+	if rl2.bucket == l.rl.bucket && rl2.resetAt.Equal(l.rl.resetAt) {
 		return nil
 	}
 	l.rl = rl2
