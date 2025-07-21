@@ -15,5 +15,5 @@ url = "https://discord.com/api/webhooks/XXX/YYY"
 [[feeds]]
 name = "NYT"
 url = "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml"
-webhook = "Hook-1"
+webhooks = ["Hook-1"]
 # disabled = false

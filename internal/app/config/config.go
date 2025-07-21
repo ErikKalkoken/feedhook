@@ -103,7 +103,10 @@ func parseConfig(config *Config) error {
 	webhooksUsed := make(map[string]bool)
 	for _, x := range config.Feeds {
 		if x.Name == "" {
-			return fmt.Errorf("one feed has no name")
+			return fmt.Errorf("feed has no name")
+		}
+		if len(x.Webhooks) == 0 {
+			return fmt.Errorf("feed %s has no webhooks", x.Name)
 		}
 		if x.URL == "" {
 			return fmt.Errorf("feed %s has no url", x.Name)
