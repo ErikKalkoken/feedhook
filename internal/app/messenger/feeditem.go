@@ -12,7 +12,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/mmcdole/gofeed"
 
-	"github.com/ErikKalkoken/feedhook/internal/dhooks"
+	"github.com/ErikKalkoken/go-dhooks"
 )
 
 const (

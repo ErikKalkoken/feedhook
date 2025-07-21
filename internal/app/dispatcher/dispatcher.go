@@ -17,9 +17,9 @@ import (
 	"github.com/ErikKalkoken/feedhook/internal/app/config"
 	"github.com/ErikKalkoken/feedhook/internal/app/messenger"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
-	"github.com/ErikKalkoken/feedhook/internal/dhooks"
 	"github.com/ErikKalkoken/feedhook/internal/pqueue"
 	"github.com/ErikKalkoken/feedhook/internal/syncedmap"
+	"github.com/ErikKalkoken/go-dhooks"
 )
 
 var ErrNotFound = errors.New("not found")
