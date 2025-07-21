@@ -17,7 +17,7 @@ import (
 	"github.com/ErikKalkoken/feedhook/internal/app/config"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 	"github.com/ErikKalkoken/feedhook/internal/pqueue"
-	"github.com/ErikKalkoken/go-dhooks"
+	"github.com/ErikKalkoken/go-dhook"
 )
 
 // A Messenger handles posting messages to a webhook.
@@ -27,7 +27,7 @@ type Messenger struct {
 	cfg      config.Config
 	shutdown chan struct{} // commence shutdown
 	done     chan struct{} // shutdown completed
-	dwh      *dhooks.Webhook
+	dwh      *dhook.Webhook
 	errCount atomic.Int64
 	name     string
 	queue    *pqueue.PQueue
@@ -38,12 +38,12 @@ type Messenger struct {
 }
 
 // NewMessenger returns a new Messenger.
-func NewMessenger(client *dhooks.Client, queue *pqueue.PQueue, name, url string, st *storage.Storage, cfg config.Config) *Messenger {
+func NewMessenger(client *dhook.Client, queue *pqueue.PQueue, name, url string, st *storage.Storage, cfg config.Config) *Messenger {
 	mg := &Messenger{
 		cfg:      cfg,
 		shutdown: make(chan struct{}),
 		done:     make(chan struct{}),
-		dwh:      dhooks.NewWebhook(client, url),
+		dwh:      dhook.NewWebhook(client, url),
 		name:     name,
 		queue:    queue,
 		st:       st,
@@ -145,12 +145,12 @@ func (mg *Messenger) Start() error {
 					break
 				}
 				mg.errCount.Add(1)
-				errHTTP, ok := err.(dhooks.HTTPError)
+				errHTTP, ok := err.(dhook.HTTPError)
 				if ok && errHTTP.Status == http.StatusBadRequest {
 					myLog.Error("Bad request. Discarding", "error", err, "message", dm)
 					break
 				}
-				err429, ok := err.(dhooks.TooManyRequestsError)
+				err429, ok := err.(dhook.TooManyRequestsError)
 				if ok {
 					myLog.Error("API rate limited exceeded", "retryAfter", err429.RetryAfter)
 					time.Sleep(err429.RetryAfter)

@@ -12,7 +12,7 @@ import (
 	"github.com/ErikKalkoken/feedhook/internal/app/messenger"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 	"github.com/ErikKalkoken/feedhook/internal/pqueue"
-	"github.com/ErikKalkoken/go-dhooks"
+	"github.com/ErikKalkoken/go-dhook"
 	"github.com/jarcoal/httpmock"
 	"github.com/mmcdole/gofeed"
 	"github.com/stretchr/testify/assert"
@@ -35,7 +35,7 @@ func TestMessenger(t *testing.T) {
 	}
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
-	c := dhooks.NewClient(http.DefaultClient)
+	c := dhook.NewClient(http.DefaultClient)
 	t.Run("can return name", func(t *testing.T) {
 		mg := messenger.NewMessenger(c, q, "dummy", "https://www.example.com", st, config.Config{})
 		assert.Equal(t, "dummy", mg.Name())

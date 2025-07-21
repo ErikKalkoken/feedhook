@@ -13,7 +13,7 @@ import (
 	"github.com/ErikKalkoken/feedhook/internal/app/dispatcher"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 	"github.com/ErikKalkoken/feedhook/internal/consoletable"
-	"github.com/ErikKalkoken/go-dhooks"
+	"github.com/ErikKalkoken/go-dhook"
 )
 
 type EmptyArgs struct{}
@@ -30,13 +30,13 @@ type SendLatestArgs struct {
 type RemoteService struct {
 	cfg        config.Config
 	configPath string
-	client     *dhooks.Client
+	client     *dhook.Client
 	d          *dispatcher.Dispatcher
 	st         *storage.Storage
 }
 
 func NewRemoteService(d *dispatcher.Dispatcher, st *storage.Storage, cfg config.Config, configPath string) *RemoteService {
-	client := dhooks.NewClient(http.DefaultClient)
+	client := dhook.NewClient(http.DefaultClient)
 	x := &RemoteService{
 		cfg:        cfg,
 		client:     client,
@@ -116,7 +116,7 @@ func (s *RemoteService) SendPing(args *SendPingArgs, reply *bool) error {
 	if wh.Name == "" {
 		return fmt.Errorf("no webhook found with the name %s", args.WebhookName)
 	}
-	dh := dhooks.NewWebhook(s.client, wh.URL)
-	pl := dhooks.Message{Content: "Ping from feedhook"}
+	dh := dhook.NewWebhook(s.client, wh.URL)
+	pl := dhook.Message{Content: "Ping from feedhook"}
 	return dh.Execute(pl)
 }
