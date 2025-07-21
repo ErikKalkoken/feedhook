@@ -40,6 +40,13 @@ func TestParseConfig(t *testing.T) {
 		}
 		assert.Error(t, parseConfig(&cf))
 	})
+	t.Run("should return error when feed has no webhook", func(t *testing.T) {
+		cf := Config{
+			Webhooks: []ConfigWebhook{{Name: "hook", URL: "https://www.example.com/url1"}},
+			Feeds:    []ConfigFeed{{Name: "feed", URL: "https://www.example.com/url2"}},
+		}
+		assert.Error(t, parseConfig(&cf))
+	})
 	t.Run("should return error when feed has no https://www.example.com/url", func(t *testing.T) {
 		cf := Config{
 			Webhooks: []ConfigWebhook{{Name: "hook", URL: "https://www.example.com/url1"}},

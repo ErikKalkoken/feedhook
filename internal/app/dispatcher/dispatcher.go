@@ -131,6 +131,10 @@ func (d *Dispatcher) Start() error {
 	main:
 		for {
 			for _, cf := range feeds {
+				if len(cf.Webhooks) == 0 {
+					slog.Warn("Skipping feed without webhooks", "name", cf.Name)
+					continue
+				}
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
