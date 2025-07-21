@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ErikKalkoken/go-dhook"
 	"github.com/mmcdole/gofeed"
 
 	"github.com/ErikKalkoken/feedhook/internal/app"
@@ -19,7 +20,6 @@ import (
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 	"github.com/ErikKalkoken/feedhook/internal/pqueue"
 	"github.com/ErikKalkoken/feedhook/internal/syncedmap"
-	"github.com/ErikKalkoken/go-dhooks"
 )
 
 var ErrNotFound = errors.New("not found")
@@ -34,7 +34,7 @@ type Clock interface {
 // A dispatcher can be started, stopped and restarted.
 type Dispatcher struct {
 	cfg        config.Config
-	client     *dhooks.Client
+	client     *dhook.Client
 	clock      Clock
 	stopped    chan struct{} // shutdown is complete
 	fp         *gofeed.Parser
@@ -54,7 +54,7 @@ func New(st *storage.Storage, cfg config.Config, clock Clock) *Dispatcher {
 	fp := gofeed.NewParser()
 	fp.Client = httpClient
 	d := &Dispatcher{
-		client:     dhooks.NewClient(httpClient),
+		client:     dhook.NewClient(httpClient),
 		cfg:        cfg,
 		clock:      clock,
 		stopped:    make(chan struct{}),
@@ -277,9 +277,9 @@ func (d *Dispatcher) PostLatestFeedItem(feedName string) error {
 	if err := m.Validate(); err != nil {
 		return fmt.Errorf("convert item to Discord message: %w", err)
 	}
-	c := dhooks.NewClient(http.DefaultClient)
+	c := dhook.NewClient(http.DefaultClient)
 	for _, hook := range hooks {
-		wh := dhooks.NewWebhook(c, hook.URL)
+		wh := dhook.NewWebhook(c, hook.URL)
 		if err := wh.Execute(m); err != nil {
 			return fmt.Errorf("post item to webhook: %w", err)
 		}
