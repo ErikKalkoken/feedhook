@@ -53,8 +53,9 @@ func New(st *storage.Storage, cfg config.Config, clock Clock) *Dispatcher {
 	}
 	fp := gofeed.NewParser()
 	fp.Client = httpClient
+	client := dhook.NewClient(dhook.WithHTTPClient(httpClient))
 	d := &Dispatcher{
-		client:     dhook.NewClient(httpClient),
+		client:     client,
 		cfg:        cfg,
 		clock:      clock,
 		stopped:    make(chan struct{}),
@@ -281,9 +282,8 @@ func (d *Dispatcher) PostLatestFeedItem(feedName string) error {
 	if err := m.Validate(); err != nil {
 		return fmt.Errorf("convert item to Discord message: %w", err)
 	}
-	c := dhook.NewClient(http.DefaultClient)
 	for _, hook := range hooks {
-		wh := dhook.NewWebhook(c, hook.URL)
+		wh := d.client.NewWebhook(hook.URL)
 		if err := wh.Execute(m); err != nil {
 			return fmt.Errorf("post item to webhook: %w", err)
 		}

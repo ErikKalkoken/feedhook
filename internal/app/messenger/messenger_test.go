@@ -1,7 +1,6 @@
 package messenger_test
 
 import (
-	"net/http"
 	"path/filepath"
 	"testing"
 	"time"
@@ -35,7 +34,7 @@ func TestMessenger(t *testing.T) {
 	}
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
-	c := dhook.NewClient(http.DefaultClient)
+	c := dhook.NewClient()
 	t.Run("can return name", func(t *testing.T) {
 		mg := messenger.NewMessenger(c, q, "dummy", "https://www.example.com", st, config.Config{})
 		assert.Equal(t, "dummy", mg.Name())
