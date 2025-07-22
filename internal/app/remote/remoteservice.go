@@ -5,7 +5,6 @@ import (
 	"cmp"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"slices"
 	"strings"
 
@@ -36,10 +35,9 @@ type RemoteService struct {
 }
 
 func NewRemoteService(d *dispatcher.Dispatcher, st *storage.Storage, cfg config.Config, configPath string) *RemoteService {
-	client := dhook.NewClient(http.DefaultClient)
 	x := &RemoteService{
 		cfg:        cfg,
-		client:     client,
+		client:     dhook.NewClient(),
 		d:          d,
 		st:         st,
 		configPath: configPath,
@@ -116,7 +114,6 @@ func (s *RemoteService) SendPing(args *SendPingArgs, reply *bool) error {
 	if wh.Name == "" {
 		return fmt.Errorf("no webhook found with the name %s", args.WebhookName)
 	}
-	dh := dhook.NewWebhook(s.client, wh.URL)
-	pl := dhook.Message{Content: "Ping from feedhook"}
-	return dh.Execute(pl)
+	dh := s.client.NewWebhook(wh.URL)
+	return dh.Execute(dhook.Message{Content: "Ping from feedhook"})
 }
