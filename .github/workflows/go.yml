@@ -1,4 +1,5 @@
 # Main workflow for testing and releasing
+# spellchecker: disable
 
 name: CI/CD
 
@@ -25,7 +26,12 @@ jobs:
       run: go build -v ./...
 
     - name: Test
-      run: go test -v ./...
+      run: go test -v -coverprofile=coverage.txt ./...
+
+    - name: Upload coverage reports to Codecov
+      uses: codecov/codecov-action@v5
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
 
   release:
     if: startsWith(github.ref, 'refs/tags/')

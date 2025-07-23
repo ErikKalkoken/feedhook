@@ -14,11 +14,11 @@ import (
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 )
 
-type faketime struct {
+type fakeTime struct {
 	now time.Time
 }
 
-func (rt faketime) Now() time.Time {
+func (rt fakeTime) Now() time.Time {
 	return rt.now
 }
 
@@ -52,7 +52,7 @@ func TestService(t *testing.T) {
 			"https://www.example.com/hook",
 			httpmock.NewStringResponder(204, ""),
 		)
-		d := dispatcher.New(st, cfg, faketime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
+		d := dispatcher.New(st, cfg, fakeTime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
 		if err := d.Start(); err != nil {
 			t.Fatal(err)
 		}
@@ -78,7 +78,7 @@ func TestService(t *testing.T) {
 			"https://www.example.com/hook",
 			httpmock.NewStringResponder(204, ""),
 		)
-		d := dispatcher.New(st, cfg, faketime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
+		d := dispatcher.New(st, cfg, fakeTime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
 		if err := d.Start(); err != nil {
 			t.Fatal(err)
 		}
@@ -102,7 +102,7 @@ func TestService(t *testing.T) {
 			"https://www.example.com/hook",
 			httpmock.NewStringResponder(204, ""),
 		)
-		d := dispatcher.New(st, cfg, faketime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
+		d := dispatcher.New(st, cfg, fakeTime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
 		if err := d.Start(); err != nil {
 			t.Fatal(err)
 		}

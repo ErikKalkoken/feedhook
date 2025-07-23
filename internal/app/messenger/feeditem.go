@@ -130,7 +130,7 @@ func (fi FeedItem) ToDiscordMessage(brandingDisabled bool) (dhook.Message, error
 		em.URL = fi.ItemURL
 	}
 	if !fi.Published.IsZero() {
-		em.Timestamp = fi.Published.Format(time.RFC3339)
+		em.Timestamp = fi.Published
 	}
 	ft := html.UnescapeString(fi.FeedTitle)
 	em.Author.Name, truncated = truncateString(ft, embedMaxFieldLength)
@@ -150,7 +150,7 @@ func (fi FeedItem) ToDiscordMessage(brandingDisabled bool) (dhook.Message, error
 		dm.Username = username
 		dm.AvatarURL = avatarURL
 	}
-	em.Footer = dhook.EmbedFooter{Text: fi.FeedName}
+	em.Footer = dhook.Footer{Text: fi.FeedName}
 	dm.Embeds = []dhook.Embed{em}
 	return dm, nil
 }

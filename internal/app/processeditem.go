@@ -1,3 +1,4 @@
+// Package app is the parent package for the app and types shared across the app.
 package app
 
 import (

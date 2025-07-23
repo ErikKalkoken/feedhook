@@ -46,7 +46,7 @@ func (st *Storage) GetItemState(cf config.ConfigFeed, item *gofeed.Item) (app.It
 		if err != nil {
 			return err
 		}
-		if pp := *item.PublishedParsed; pp.UTC() == pi.Published.UTC() {
+		if pp := *item.PublishedParsed; pp.Equal(pi.Published) {
 			s = app.StateProcessed
 			return nil
 		}

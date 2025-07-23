@@ -1,3 +1,4 @@
+// Package storage provides access to persistent storage.
 package storage
 
 import (

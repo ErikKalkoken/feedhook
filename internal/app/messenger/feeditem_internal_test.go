@@ -33,7 +33,7 @@ func TestFeedItem(t *testing.T) {
 			assert.Equal(t, "http://www.example.com/icon", em.Author.IconURL)
 			assert.Equal(t, "http://www.example.com/image", em.Image.URL)
 			assert.Equal(t, "http://www.example.com/item", em.URL)
-			assert.Equal(t, published.Format(time.RFC3339), em.Timestamp)
+			assert.True(t, published.Equal(em.Timestamp))
 			assert.Equal(t, "title", em.Title)
 			assert.Equal(t, "feedName", em.Footer.Text)
 		}
