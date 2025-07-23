@@ -4,6 +4,7 @@ A service for forwarding RSS and Atom feeds to Discord webhooks.
 
 ![GitHub Release](https://img.shields.io/github/v/release/ErikKalkoken/feedhook)
 [![CI/CD](https://github.com/ErikKalkoken/feedhook/actions/workflows/go.yml/badge.svg)](https://github.com/ErikKalkoken/feedhook/actions/workflows/go.yml)
+[![codecov](https://codecov.io/github/ErikKalkoken/feedhook/graph/badge.svg?token=jnRQ5oJ0AP)](https://codecov.io/github/ErikKalkoken/feedhook)
 ![GitHub License](https://img.shields.io/github/license/ErikKalkoken/feedhook)
 
 ## Content
