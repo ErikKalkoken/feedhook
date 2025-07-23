@@ -284,7 +284,7 @@ func (d *Dispatcher) PostLatestFeedItem(feedName string) error {
 	}
 	for _, hook := range hooks {
 		wh := d.client.NewWebhook(hook.URL)
-		if err := wh.Execute(m); err != nil {
+		if _, err := wh.Execute(m, nil); err != nil {
 			return fmt.Errorf("post item to webhook: %w", err)
 		}
 	}

@@ -115,5 +115,6 @@ func (s *RemoteService) SendPing(args *SendPingArgs, reply *bool) error {
 		return fmt.Errorf("no webhook found with the name %s", args.WebhookName)
 	}
 	dh := s.client.NewWebhook(wh.URL)
-	return dh.Execute(dhook.Message{Content: "Ping from feedhook"})
+	_, err := dh.Execute(dhook.Message{Content: "Ping from feedhook"}, nil)
+	return err
 }

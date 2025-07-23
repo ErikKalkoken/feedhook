@@ -6,7 +6,8 @@ import (
 	"sync"
 )
 
-// SyncedMap represents a generic hashmap that is safe to use concurrently.
+// SyncedMap represents a generic hashmap
+// that is safe for concurrent use by multiple goroutines.
 type SyncedMap[K comparable, V any] struct {
 	mu sync.RWMutex
 	m  map[K]V

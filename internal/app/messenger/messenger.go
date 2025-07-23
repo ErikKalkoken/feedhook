@@ -140,7 +140,7 @@ func (mg *Messenger) Start() error {
 					break loop
 				}
 				attempt++
-				err = mg.dwh.Execute(dm)
+				_, err = mg.dwh.Execute(dm, nil)
 				if err == nil {
 					break
 				}

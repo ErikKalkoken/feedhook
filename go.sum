@@ -4,6 +4,8 @@ github.com/ErikKalkoken/go-dhook v0.1.1 h1:xsbQ04HvczQn0Ft8GJMtJvqOzeEiZd217jWhM
 github.com/ErikKalkoken/go-dhook v0.1.1/go.mod h1:VaPX/RUL/NQ7zmJ0xDrom2xZd22prKqBqUxWP5U7swY=
 github.com/ErikKalkoken/go-dhook v0.2.0 h1:bjiuCzRZ1uUiBoXJzrJq3n/6/16d5wuWZNA0eij9MXo=
 github.com/ErikKalkoken/go-dhook v0.2.0/go.mod h1:VaPX/RUL/NQ7zmJ0xDrom2xZd22prKqBqUxWP5U7swY=
+github.com/ErikKalkoken/go-dhook v0.3.0 h1:hcfmNBpyRWPXdBvwV5LhBn1aCAhkAaGl7y7LDuh4pvw=
+github.com/ErikKalkoken/go-dhook v0.3.0/go.mod h1:mRHqlQm1BjELopCg35conmBoz9nBIoPCF78jEVEU+D4=
 github.com/JohannesKaufmann/html-to-markdown v1.6.0 h1:04VXMiE50YYfCfLboJCLcgqF5x+rHJnb1ssNmqpLH/k=
 github.com/JohannesKaufmann/html-to-markdown v1.6.0/go.mod h1:NUI78lGg/a7vpEJTz/0uOcYMaibytE4BUOQS8k78yPQ=
 github.com/PuerkitoBio/goquery v1.9.2/go.mod h1:GHPCaP0ODyyxqcNoFGYlAprUFH81NuRPd0GX3Zu2Mvk=

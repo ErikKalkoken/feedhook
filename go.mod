@@ -4,7 +4,7 @@ go 1.24.3
 
 require (
 	github.com/BurntSushi/toml v1.5.0
-	github.com/ErikKalkoken/go-dhook v0.2.0
+	github.com/ErikKalkoken/go-dhook v0.3.0
 	github.com/JohannesKaufmann/html-to-markdown v1.6.0
 	github.com/PuerkitoBio/goquery v1.10.3
 	github.com/dustin/go-humanize v1.0.1
