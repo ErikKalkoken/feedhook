@@ -1,3 +1,4 @@
+// Package syncedmap provides a synced map.
 package syncedmap
 
 import (
@@ -44,9 +45,9 @@ func (sm *SyncedMap[K, V]) Clone() map[K]V {
 	return maps.Clone(sm.m)
 }
 
-// All() returns an iterator over the map.
+// All returns an iterator over the map.
 // All does not necessarily correspond to any consistent snapshot of the Map's contents.
-// For a consistent snapshot use Clone().
+// For a consistent snapshot use [SyncedMap.Clone].
 func (sm *SyncedMap[K, V]) All() iter.Seq2[K, V] {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()

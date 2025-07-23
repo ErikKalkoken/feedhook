@@ -114,7 +114,7 @@ func (q *PQueue) GetWithContext(ctx context.Context) ([]byte, error) {
 	}
 }
 
-// Puts adds an item to the queue.
+// Put adds an item to the queue.
 func (q *PQueue) Put(v []byte) error {
 	err := q.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(q.name))

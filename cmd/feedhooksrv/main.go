@@ -29,7 +29,7 @@ const (
 	portRPC         = 2233
 )
 
-// Overwritten with current tag when released
+// Version is overwritten via build tag when released.
 var Version = "0.3.0"
 
 type realtime struct{}

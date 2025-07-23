@@ -1,3 +1,4 @@
+// Package messenger provides the ability to post messages to a webhook.
 package messenger
 
 import (
@@ -52,7 +53,7 @@ func NewMessenger(client *dhook.Client, queue *pqueue.PQueue, name, url string, 
 }
 
 // AddMessage adds a new message for being send to to webhook
-func (wh *Messenger) AddMessage(feedName string, feed *gofeed.Feed, item *gofeed.Item, isUpdated bool) error {
+func (mg *Messenger) AddMessage(feedName string, feed *gofeed.Feed, item *gofeed.Item, isUpdated bool) error {
 	p, err := newMessage(feedName, feed, item, isUpdated)
 	if err != nil {
 		return err
@@ -61,7 +62,7 @@ func (wh *Messenger) AddMessage(feedName string, feed *gofeed.Feed, item *gofeed
 	if err != nil {
 		return err
 	}
-	return wh.queue.Put(v)
+	return mg.queue.Put(v)
 }
 
 func (mg *Messenger) Name() string {
@@ -176,10 +177,12 @@ func (mg *Messenger) Start() error {
 }
 
 func maxBackoffJitter(attempt int) time.Duration {
-	const BASE = 100
-	const MAX_DELAY = 30_000
-	exponential := math.Pow(2, float64(attempt)) * BASE
-	delay := min(exponential, MAX_DELAY)
+	const (
+		base     = 100
+		maxDelay = 30_000
+	)
+	exponential := math.Pow(2, float64(attempt)) * base
+	delay := min(exponential, maxDelay)
 	ms := math.Floor(rand.Float64() * delay)
 	return time.Duration(ms) * time.Millisecond
 }

@@ -1,3 +1,4 @@
+// Package consoletable provides the functionality to print formatted tables on the console.
 package consoletable
 
 import (

@@ -1,4 +1,4 @@
-// Package remoteservice contains the logic for communicating between cli and server process
+// Package remote contains the logic for communicating between cli and server process.
 package remote
 
 import (
