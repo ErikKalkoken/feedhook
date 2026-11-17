@@ -1,6 +1,9 @@
 package messenger_test
 
 import (
+	"bytes"
+	"context"
+	"net/http"
 	"path/filepath"
 	"testing"
 	"time"
@@ -103,5 +106,120 @@ func TestMessenger(t *testing.T) {
 		assert.True(t, ok)
 		ok = mg.Shutdown()
 		assert.False(t, ok)
+	})
+	t.Run("should shut down promptly while rate limited", func(t *testing.T) {
+		st.ClearWebhookStats()
+		q.Clear()
+		httpmock.Reset()
+		const url = "https://www.example.com/limited"
+		httpmock.RegisterResponder(
+			"POST",
+			url,
+			httpmock.NewStringResponder(429, `{"retry_after": 3600}`).HeaderSet(http.Header{"Retry-After": {"3600"}}),
+		)
+		// own client, so the rate limit state does not leak into other tests
+		mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", url, st, config.Config{})
+		if err := mg.Start(); err != nil {
+			t.Fatal(err)
+		}
+		feed := &gofeed.Feed{Title: "title"}
+		now := time.Now()
+		first := &gofeed.Item{Title: "first-item", Content: "content", PublishedParsed: &now}
+		if err := mg.AddMessage("dummy", feed, first, false); err != nil {
+			t.Fatal(err)
+		}
+		for start := time.Now(); httpmock.GetTotalCallCount() == 0; {
+			if time.Since(start) > 2*time.Second {
+				t.Fatal("timed out waiting for POST")
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		second := &gofeed.Item{Title: "second-item", Content: "content", PublishedParsed: &now}
+		if err := mg.AddMessage("dummy", feed, second, false); err != nil {
+			t.Fatal(err)
+		}
+		done := make(chan bool)
+		go func() {
+			done <- mg.Shutdown()
+		}()
+		select {
+		case ok := <-done:
+			assert.True(t, ok)
+		case <-time.After(2 * time.Second):
+			t.Fatal("shutdown did not return in time")
+		}
+		assert.Equal(t, 2, q.Size())
+		v, err := q.Get(context.Background())
+		if assert.NoError(t, err) {
+			assert.True(t, bytes.Contains(v, []byte("first-item")), "unsent message is no longer first")
+		}
+		q.Clear()
+	})
+	t.Run("should not count shutdown while waiting for rate limit as error", func(t *testing.T) {
+		st.ClearWebhookStats()
+		q.Clear()
+		httpmock.Reset()
+		const url = "https://www.example.com/waiting"
+		httpmock.RegisterResponder("POST", url, httpmock.NewStringResponder(204, ""))
+		// allows one request only, so the second message waits for the limiter
+		c := dhook.NewClient(dhook.WithWebhookRateLimit(1, time.Hour))
+		mg := messenger.NewMessenger(c, q, "dummy", url, st, config.Config{})
+		if err := mg.Start(); err != nil {
+			t.Fatal(err)
+		}
+		feed := &gofeed.Feed{Title: "title"}
+		now := time.Now()
+		for _, title := range []string{"first-item", "second-item"} {
+			item := &gofeed.Item{Title: title, Content: "content", PublishedParsed: &now}
+			if err := mg.AddMessage("dummy", feed, item, false); err != nil {
+				t.Fatal(err)
+			}
+		}
+		for start := time.Now(); q.Size() != 1; {
+			if time.Since(start) > 2*time.Second {
+				t.Fatal("timed out waiting for first message to be sent")
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		time.Sleep(50 * time.Millisecond) // let the messenger block in the limiter
+		mg.Shutdown()
+		assert.Equal(t, 0, mg.Status().ErrorCount)
+		assert.Equal(t, 1, httpmock.GetTotalCallCount())
+		v, err := q.Get(context.Background())
+		if assert.NoError(t, err) {
+			assert.True(t, bytes.Contains(v, []byte("second-item")))
+		}
+		q.Clear()
+	})
+	t.Run("should discard message on bad request without counting it as sent", func(t *testing.T) {
+		st.ClearWebhookStats()
+		q.Clear()
+		httpmock.Reset()
+		const url = "https://www.example.com/bad"
+		httpmock.RegisterResponder("POST", url, httpmock.NewStringResponder(400, `{"message": "bad"}`))
+		mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", url, st, config.Config{})
+		if err := mg.Start(); err != nil {
+			t.Fatal(err)
+		}
+		feed := &gofeed.Feed{Title: "title"}
+		now := time.Now()
+		item := &gofeed.Item{Content: "content", PublishedParsed: &now}
+		if err := mg.AddMessage("dummy", feed, item, false); err != nil {
+			t.Fatal(err)
+		}
+		for start := time.Now(); !q.IsEmpty(); {
+			if time.Since(start) > 2*time.Second {
+				t.Fatal("timed out waiting for message to be discarded")
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		mg.Shutdown()
+		assert.Equal(t, 1, httpmock.GetTotalCallCount())
+		ws, err := st.GetWebhookStats("dummy")
+		if err == nil {
+			assert.Equal(t, 0, ws.SentCount)
+		} else {
+			assert.ErrorIs(t, err, storage.ErrNotFound)
+		}
 	})
 }

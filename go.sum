@@ -1,7 +1,7 @@
 github.com/BurntSushi/toml v1.6.0 h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=
 github.com/BurntSushi/toml v1.6.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
-github.com/ErikKalkoken/go-dhook v0.4.0 h1:CzN3j7d3zMVUfgGQ9ZTLseSWI7/zSL4yQ5y4SlQaTy4=
-github.com/ErikKalkoken/go-dhook v0.4.0/go.mod h1:mRHqlQm1BjELopCg35conmBoz9nBIoPCF78jEVEU+D4=
+github.com/ErikKalkoken/go-dhook v0.5.1 h1:TZtSqizH1uqBZs+/AeV3ZIuWLCNXL+DozWqI3k1CLmM=
+github.com/ErikKalkoken/go-dhook v0.5.1/go.mod h1:mRHqlQm1BjELopCg35conmBoz9nBIoPCF78jEVEU+D4=
 github.com/JohannesKaufmann/html-to-markdown v1.6.0 h1:04VXMiE50YYfCfLboJCLcgqF5x+rHJnb1ssNmqpLH/k=
 github.com/JohannesKaufmann/html-to-markdown v1.6.0/go.mod h1:NUI78lGg/a7vpEJTz/0uOcYMaibytE4BUOQS8k78yPQ=
 github.com/PuerkitoBio/goquery v1.9.2/go.mod h1:GHPCaP0ODyyxqcNoFGYlAprUFH81NuRPd0GX3Zu2Mvk=

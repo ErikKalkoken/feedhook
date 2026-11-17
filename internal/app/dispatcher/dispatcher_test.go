@@ -120,6 +120,28 @@ func TestService(t *testing.T) {
 	})
 }
 
+func TestStartFailure(t *testing.T) {
+	cfg := config.Config{
+		App: config.ConfigApp{Ticker: 1},
+		// the empty name is not a valid bucket name, so creating the second queue fails
+		Webhooks: []config.ConfigWebhook{{Name: "hook1", URL: "https://www.example.com/hook1"}, {Name: "", URL: "https://www.example.com/hook2"}},
+	}
+	st := newTestStorage(t, cfg)
+	d := dispatcher.New(st, cfg, fakeTime{now: time.Now()})
+	err := d.Start()
+	assert.Error(t, err)
+	done := make(chan bool)
+	go func() {
+		done <- d.Stop()
+	}()
+	select {
+	case ok := <-done:
+		assert.False(t, ok)
+	case <-time.After(2 * time.Second):
+		t.Fatal("stop did not return in time")
+	}
+}
+
 func TestFetchFeedUsesConfiguredTimeout(t *testing.T) {
 	cfg := config.Config{
 		App:      config.ConfigApp{Timeout: 120},
@@ -150,6 +172,49 @@ func TestFetchFeedUsesConfiguredTimeout(t *testing.T) {
 	err := d.PostLatestFeedItem("feed1")
 	if assert.NoError(t, err) && assert.True(t, hasDeadline) {
 		assert.WithinDuration(t, start.Add(120*time.Second), deadline, 5*time.Second)
+	}
+}
+
+func TestStopCancelsFeedFetch(t *testing.T) {
+	cfg := config.Config{
+		App:      config.ConfigApp{Ticker: 1, Timeout: 120},
+		Webhooks: []config.ConfigWebhook{{Name: "hook1", URL: "https://www.example.com/hook"}},
+		Feeds:    []config.ConfigFeed{{Name: "feed1", URL: "https://www.example.com/feed", Webhooks: []string{"hook1"}}},
+	}
+	st := newTestStorage(t, cfg)
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+	started := make(chan struct{}, 1)
+	httpmock.RegisterResponder(
+		"GET",
+		"https://www.example.com/feed",
+		func(req *http.Request) (*http.Response, error) {
+			select {
+			case started <- struct{}{}:
+			default:
+			}
+			<-req.Context().Done()
+			return nil, req.Context().Err()
+		},
+	)
+	d := dispatcher.New(st, cfg, fakeTime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
+	if err := d.Start(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for feed fetch")
+	}
+	done := make(chan bool)
+	go func() {
+		done <- d.Stop()
+	}()
+	select {
+	case ok := <-done:
+		assert.True(t, ok)
+	case <-time.After(2 * time.Second):
+		t.Fatal("stop did not return in time")
 	}
 }
 
