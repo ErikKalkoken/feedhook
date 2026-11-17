@@ -61,10 +61,10 @@ func (s *RemoteService) Statistics(args *EmptyArgs, reply *string) error {
 	feedsTable := consoletable.New("Feeds", 6)
 	feedsTable.Target = out
 	feedsTable.AddRow([]any{"Name", "Enabled", "Webhooks", "Received", "Last", "Errors"})
-	slices.SortFunc(s.cfg.Feeds, func(a, b config.ConfigFeed) int {
+	feeds := slices.SortedFunc(slices.Values(s.cfg.Feeds), func(a, b config.ConfigFeed) int {
 		return cmp.Compare(a.Name, b.Name)
 	})
-	for _, cf := range s.cfg.Feeds {
+	for _, cf := range feeds {
 		o, err := s.st.GetFeedStats(cf.Name)
 		if err == storage.ErrNotFound {
 			continue
@@ -79,10 +79,10 @@ func (s *RemoteService) Statistics(args *EmptyArgs, reply *string) error {
 	whTable := consoletable.New("Webhooks", 5)
 	whTable.Target = out
 	whTable.AddRow([]any{"Name", "Queued", "Sent", "Last", "Errors"})
-	slices.SortFunc(s.cfg.Webhooks, func(a, b config.ConfigWebhook) int {
+	webhooks := slices.SortedFunc(slices.Values(s.cfg.Webhooks), func(a, b config.ConfigWebhook) int {
 		return cmp.Compare(a.Name, b.Name)
 	})
-	for _, cw := range s.cfg.Webhooks {
+	for _, cw := range webhooks {
 		o, err := s.st.GetWebhookStats(cw.Name)
 		if err == storage.ErrNotFound {
 			continue
