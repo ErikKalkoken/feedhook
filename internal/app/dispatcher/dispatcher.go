@@ -246,37 +246,23 @@ func (d *Dispatcher) MessengerStatus(webhookName string) (messenger.Status, erro
 
 // SendPing sends a ping message to a configured webhook.
 func (d *Dispatcher) SendPing(webhookName string) error {
-	var url string
-	for _, w := range d.cfg.Webhooks {
-		if w.Name == webhookName {
-			url = w.URL
-			break
-		}
-	}
-	if url == "" {
+	wh, ok := d.cfg.WebhookByName(webhookName)
+	if !ok {
 		return fmt.Errorf("webhook \"%s\": %w", webhookName, ErrNotFound)
 	}
-	_, err := d.client.NewWebhook(url).Execute(dhook.Message{Content: "Ping from feedhook"}, nil)
+	_, err := d.client.NewWebhook(wh.URL).Execute(dhook.Message{Content: "Ping from feedhook"}, nil)
 	return err
 }
 
 func (d *Dispatcher) PostLatestFeedItem(feedName string) error {
-	var cf config.ConfigFeed
-	for _, f := range d.cfg.Feeds {
-		if f.Name == feedName {
-			cf = f
-			break
-		}
-	}
-	if cf.Name == "" {
+	cf, ok := d.cfg.FeedByName(feedName)
+	if !ok {
 		return fmt.Errorf("feed \"%s\": %w", feedName, ErrNotFound)
 	}
 	hooks := make([]config.ConfigWebhook, 0)
 	for _, name := range cf.Webhooks {
-		for _, h := range d.cfg.Webhooks {
-			if h.Name == name {
-				hooks = append(hooks, h)
-			}
+		if h, ok := d.cfg.WebhookByName(name); ok {
+			hooks = append(hooks, h)
 		}
 	}
 	if len(hooks) == 0 {

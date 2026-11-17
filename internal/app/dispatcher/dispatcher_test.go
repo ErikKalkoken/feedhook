@@ -24,22 +24,28 @@ func (rt fakeTime) Now() time.Time {
 	return rt.now
 }
 
-func TestService(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "test.db")
-	db, err := bolt.Open(p, 0600, nil)
+// newTestStorage returns an initialized storage backed by a temporary DB.
+func newTestStorage(t *testing.T, cfg config.Config) *storage.Storage {
+	t.Helper()
+	db, err := bolt.Open(filepath.Join(t.TempDir(), "test.db"), 0600, nil)
 	if err != nil {
 		t.Fatalf("Failed to open DB: %s", err)
 	}
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
+	st := storage.New(db, cfg)
+	if err := st.Init(); err != nil {
+		t.Fatalf("Failed to init: %s", err)
+	}
+	return st
+}
+
+func TestService(t *testing.T) {
 	cfg := config.Config{
 		App:      config.ConfigApp{Oldest: 3600 * 24, Ticker: 1},
 		Webhooks: []config.ConfigWebhook{{Name: "hook1", URL: "https://www.example.com/hook"}},
 		Feeds:    []config.ConfigFeed{{Name: "feed1", URL: "https://www.example.com/feed", Webhooks: []string{"hook1"}}},
 	}
-	st := storage.New(db, cfg)
-	if err := st.Init(); err != nil {
-		t.Fatalf("Failed to init: %s", err)
-	}
+	st := newTestStorage(t, cfg)
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	t.Run("can receive item from feed and send it to configured hook", func(t *testing.T) {
@@ -115,21 +121,12 @@ func TestService(t *testing.T) {
 }
 
 func TestFetchFeedUsesConfiguredTimeout(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "test.db")
-	db, err := bolt.Open(p, 0600, nil)
-	if err != nil {
-		t.Fatalf("Failed to open DB: %s", err)
-	}
-	defer db.Close()
 	cfg := config.Config{
 		App:      config.ConfigApp{Timeout: 120},
 		Webhooks: []config.ConfigWebhook{{Name: "hook1", URL: "https://www.example.com/hook"}},
 		Feeds:    []config.ConfigFeed{{Name: "feed1", URL: "https://www.example.com/feed", Webhooks: []string{"hook1"}}},
 	}
-	st := storage.New(db, cfg)
-	if err := st.Init(); err != nil {
-		t.Fatalf("Failed to init: %s", err)
-	}
+	st := newTestStorage(t, cfg)
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	var deadline time.Time
@@ -150,27 +147,18 @@ func TestFetchFeedUsesConfiguredTimeout(t *testing.T) {
 	)
 	d := dispatcher.New(st, cfg, fakeTime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
 	start := time.Now()
-	err = d.PostLatestFeedItem("feed1")
+	err := d.PostLatestFeedItem("feed1")
 	if assert.NoError(t, err) && assert.True(t, hasDeadline) {
 		assert.WithinDuration(t, start.Add(120*time.Second), deadline, 5*time.Second)
 	}
 }
 
 func TestSendPing(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "test.db")
-	db, err := bolt.Open(p, 0600, nil)
-	if err != nil {
-		t.Fatalf("Failed to open DB: %s", err)
-	}
-	defer db.Close()
 	cfg := config.Config{
 		App:      config.ConfigApp{Timeout: 120},
 		Webhooks: []config.ConfigWebhook{{Name: "hook1", URL: "https://www.example.com/hook"}},
 	}
-	st := storage.New(db, cfg)
-	if err := st.Init(); err != nil {
-		t.Fatalf("Failed to init: %s", err)
-	}
+	st := newTestStorage(t, cfg)
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	d := dispatcher.New(st, cfg, fakeTime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})

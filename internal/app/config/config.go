@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -23,15 +24,33 @@ type Config struct {
 	Webhooks []ConfigWebhook
 }
 
-func (mc *Config) EnabledFeeds() []ConfigFeed {
+func (c *Config) EnabledFeeds() []ConfigFeed {
 	feeds := make([]ConfigFeed, 0)
-	for _, f := range mc.Feeds {
+	for _, f := range c.Feeds {
 		if f.Disabled {
 			continue
 		}
 		feeds = append(feeds, f)
 	}
 	return feeds
+}
+
+// FeedByName returns the feed with the given name and reports whether it was found.
+func (c *Config) FeedByName(name string) (ConfigFeed, bool) {
+	i := slices.IndexFunc(c.Feeds, func(f ConfigFeed) bool { return f.Name == name })
+	if i == -1 {
+		return ConfigFeed{}, false
+	}
+	return c.Feeds[i], true
+}
+
+// WebhookByName returns the webhook with the given name and reports whether it was found.
+func (c *Config) WebhookByName(name string) (ConfigWebhook, bool) {
+	i := slices.IndexFunc(c.Webhooks, func(w ConfigWebhook) bool { return w.Name == name })
+	if i == -1 {
+		return ConfigWebhook{}, false
+	}
+	return c.Webhooks[i], true
 }
 
 type ConfigApp struct {

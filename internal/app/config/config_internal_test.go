@@ -165,3 +165,41 @@ func TestEnabledFeeds(t *testing.T) {
 		assert.Len(t, f, 1)
 	})
 }
+
+func TestFeedByName(t *testing.T) {
+	cf := Config{
+		Feeds: []ConfigFeed{
+			{Name: "feed1", URL: "https://www.example.com/url1", Webhooks: []string{"hook1"}},
+			{Name: "feed2", URL: "https://www.example.com/url2", Webhooks: []string{"hook1"}},
+		},
+	}
+	t.Run("should return existing feed", func(t *testing.T) {
+		f, ok := cf.FeedByName("feed2")
+		if assert.True(t, ok) {
+			assert.Equal(t, "https://www.example.com/url2", f.URL)
+		}
+	})
+	t.Run("should report false for unknown feed", func(t *testing.T) {
+		_, ok := cf.FeedByName("unknown")
+		assert.False(t, ok)
+	})
+}
+
+func TestWebhookByName(t *testing.T) {
+	cf := Config{
+		Webhooks: []ConfigWebhook{
+			{Name: "hook1", URL: "https://www.example.com/hook1"},
+			{Name: "hook2", URL: "https://www.example.com/hook2"},
+		},
+	}
+	t.Run("should return existing webhook", func(t *testing.T) {
+		w, ok := cf.WebhookByName("hook2")
+		if assert.True(t, ok) {
+			assert.Equal(t, "https://www.example.com/hook2", w.URL)
+		}
+	})
+	t.Run("should report false for unknown webhook", func(t *testing.T) {
+		_, ok := cf.WebhookByName("unknown")
+		assert.False(t, ok)
+	})
+}
