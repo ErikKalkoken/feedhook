@@ -1,6 +1,7 @@
 package syncedmap_test
 
 import (
+	"maps"
 	"math/rand/v2"
 	"sync"
 	"testing"
@@ -58,10 +59,7 @@ func TestMap(t *testing.T) {
 		m := syncedmap.New[string, int]()
 		m.Store("alpha", 1)
 		m.Store("bravo", 2)
-		m2 := make(map[string]int)
-		for k, v := range m.All() {
-			m2[k] = v
-		}
+		m2 := maps.Collect(m.All())
 		expected := map[string]int{
 			"alpha": 1,
 			"bravo": 2,

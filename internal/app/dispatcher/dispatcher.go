@@ -80,11 +80,9 @@ func (d *Dispatcher) Stop() bool {
 	slog.Info("Dispatcher stopped")
 	var wg sync.WaitGroup
 	for _, mg := range d.messengers.All() {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			mg.Shutdown()
-		}()
+		})
 	}
 	wg.Wait()
 	slog.Info("shutdown completed")
@@ -136,9 +134,7 @@ func (d *Dispatcher) Start() error {
 					slog.Warn("Skipping feed without webhooks", "name", cf.Name)
 					continue
 				}
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
+				wg.Go(func() {
 					usedHooks := make([]*messenger.Messenger, 0)
 					for _, name := range cf.Webhooks {
 						wh, ok := d.messengers.Load(name)
@@ -153,7 +149,7 @@ func (d *Dispatcher) Start() error {
 					} else if err != nil {
 						slog.Error("Failed to process feed", "feed", cf.Name, "error", err)
 					}
-				}()
+				})
 			}
 			wg.Wait()
 			slog.Info("Finished processing feeds", "feeds", len(feeds))
