@@ -2,6 +2,7 @@
 package dispatcher
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -53,7 +54,12 @@ func New(st *storage.Storage, cfg config.Config, clock Clock) *Dispatcher {
 	}
 	fp := gofeed.NewParser()
 	fp.Client = httpClient
-	client := dhook.NewClient(dhook.WithHTTPClient(httpClient))
+	opts := []dhook.ClientOption{dhook.WithHTTPClient(httpClient)}
+	if cfg.App.Timeout > 0 {
+		// dhook applies its own 30s default otherwise.
+		opts = append(opts, dhook.WithHTTPTimeout(time.Duration(cfg.App.Timeout)*time.Second))
+	}
+	client := dhook.NewClient(opts...)
 	d := &Dispatcher{
 		client:     client,
 		cfg:        cfg,
@@ -166,10 +172,16 @@ func (d *Dispatcher) Start() error {
 	return nil
 }
 
+// fetchFeed fetches and parses a feed.
+// It avoids ParseURL's fixed 30s timeout, so the configured client timeout applies.
+func (d *Dispatcher) fetchFeed(url string) (*gofeed.Feed, error) {
+	return d.fp.ParseURLWithContext(url, context.Background())
+}
+
 // processFeed checks a feed for new items and hands them over to configured messengers.
 func (d *Dispatcher) processFeed(cf config.ConfigFeed, hooks []*messenger.Messenger) error {
 	myLog := slog.With("feed", cf.Name)
-	feed, err := d.fp.ParseURL(cf.URL)
+	feed, err := d.fetchFeed(cf.URL)
 	if err != nil {
 		return fmt.Errorf("parse URL for feed %s: %w ", cf.Name, err)
 	}
@@ -232,6 +244,22 @@ func (d *Dispatcher) MessengerStatus(webhookName string) (messenger.Status, erro
 	return wh.Status(), nil
 }
 
+// SendPing sends a ping message to a configured webhook.
+func (d *Dispatcher) SendPing(webhookName string) error {
+	var url string
+	for _, w := range d.cfg.Webhooks {
+		if w.Name == webhookName {
+			url = w.URL
+			break
+		}
+	}
+	if url == "" {
+		return fmt.Errorf("webhook \"%s\": %w", webhookName, ErrNotFound)
+	}
+	_, err := d.client.NewWebhook(url).Execute(dhook.Message{Content: "Ping from feedhook"}, nil)
+	return err
+}
+
 func (d *Dispatcher) PostLatestFeedItem(feedName string) error {
 	var cf config.ConfigFeed
 	for _, f := range d.cfg.Feeds {
@@ -254,7 +282,7 @@ func (d *Dispatcher) PostLatestFeedItem(feedName string) error {
 	if len(hooks) == 0 {
 		return fmt.Errorf("no webhooks configured for feed: %s ", feedName)
 	}
-	feed, err := d.fp.ParseURL(cf.URL)
+	feed, err := d.fetchFeed(cf.URL)
 	if err != nil {
 		return fmt.Errorf("parse URL for feed: %w ", err)
 	}
