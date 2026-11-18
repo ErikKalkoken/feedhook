@@ -22,6 +22,8 @@ import (
 	"github.com/ErikKalkoken/go-dhook"
 )
 
+const queueRetryDelay = 10 * time.Second
+
 type Status struct {
 	QueueSize  int
 	ErrorCount int
@@ -32,8 +34,6 @@ type Status struct {
 // Unsent messages are queued and will be picked up again after a process restart.
 type Messenger struct {
 	cfg      config.Config
-	shutdown chan struct{} // commence shutdown
-	done     chan struct{} // shutdown completed
 	dwh      *dhook.Webhook
 	errCount atomic.Int64
 	name     string
@@ -42,18 +42,18 @@ type Messenger struct {
 
 	mu        sync.Mutex // serializes Start and Shutdown
 	isRunning bool
+	cancel    context.CancelFunc // commence shutdown
+	done      chan struct{}      // closed when shutdown is complete
 }
 
 // NewMessenger returns a new Messenger.
 func NewMessenger(client *dhook.Client, queue *pqueue.PQueue, name, url string, st *storage.Storage, cfg config.Config) *Messenger {
 	mg := &Messenger{
-		cfg:      cfg,
-		shutdown: make(chan struct{}),
-		done:     make(chan struct{}),
-		dwh:      client.NewWebhook(url),
-		name:     name,
-		queue:    queue,
-		st:       st,
+		cfg:   cfg,
+		dwh:   client.NewWebhook(url),
+		name:  name,
+		queue: queue,
+		st:    st,
 	}
 	return mg
 }
@@ -83,7 +83,7 @@ func (mg *Messenger) Shutdown() bool {
 	if !mg.isRunning {
 		return false
 	}
-	mg.shutdown <- struct{}{}
+	mg.cancel()
 	<-mg.done
 	mg.isRunning = false
 	return true
@@ -99,29 +99,25 @@ func (mg *Messenger) Status() Status {
 
 // Start starts the service.
 func (mg *Messenger) Start() error {
-	if err := func() error {
+	var ctx context.Context
+	var done chan struct{}
+	err := func() error {
 		mg.mu.Lock()
 		defer mg.mu.Unlock()
 		if mg.isRunning {
 			return fmt.Errorf("messenger %s already running", mg.name)
 		}
 		mg.isRunning = true
+		ctx, mg.cancel = context.WithCancel(context.Background())
+		mg.done = make(chan struct{})
+		done = mg.done
 		return nil
-	}(); err != nil {
+	}()
+	if err != nil {
 		return err
 	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	stopped := make(chan struct{})
-	// shutdown main goroutine when signal is received
 	go func() {
-		<-mg.shutdown
-		cancel()
-		<-stopped
-		mg.done <- struct{}{}
-	}()
-	// main goroutine
-	go func() {
+		defer close(done)
 		myLog := slog.With("messenger", mg.name)
 		myLog.Info("Started", "queued", mg.queue.Size())
 		for {
@@ -134,11 +130,13 @@ func (mg *Messenger) Start() error {
 				break
 			}
 			if err != nil {
-				myLog.Error("Failed to process queue item", "error", err)
+				myLog.Error("Failed to process queue item. Retrying", "error", err, "wait", queueRetryDelay)
+				if !sleepContext(ctx, queueRetryDelay) {
+					break
+				}
 			}
 		}
-		myLog.Info("Stopped")
-		stopped <- struct{}{}
+		myLog.Info("Stopped", "queued", mg.queue.Size())
 	}()
 	return nil
 }
@@ -173,8 +171,9 @@ func (mg *Messenger) send(ctx context.Context, v []byte, myLog *slog.Logger) err
 		}
 		mg.errCount.Add(1)
 		errHTTP, ok := err.(dhook.HTTPError)
-		if ok && errHTTP.Status == http.StatusBadRequest {
-			myLog.Error("Bad request. Discarding", "error", err, "message", dm)
+		// 400 and 413 mean the message itself is invalid
+		if ok && (errHTTP.Status == http.StatusBadRequest || errHTTP.Status == http.StatusRequestEntityTooLarge) {
+			myLog.Error("Webhook rejected message. Discarding", "error", err, "message", dm)
 			return nil
 		}
 		var d time.Duration
@@ -198,7 +197,7 @@ func (mg *Messenger) send(ctx context.Context, v []byte, myLog *slog.Logger) err
 	if err != nil {
 		myLog.Error("Failed to update webhook stats", "error", err)
 	}
-	myLog.Info("Posted item", "feed", m.Item.FeedName, "title", m.Item.Title, "queued", mg.queue.Size()-1)
+	myLog.Info("Posted item", "feed", m.Item.FeedName, "title", m.Item.Title)
 	return nil
 }
 

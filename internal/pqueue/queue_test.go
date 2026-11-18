@@ -284,6 +284,27 @@ func TestProcess(t *testing.T) {
 			assert.Equal(t, want, string(v))
 		}
 	})
+	t.Run("should return when context is already canceled and queue is empty", func(t *testing.T) {
+		q := createQueue(t, db)
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			for range 1000 {
+				err := q.Process(ctx, func(v []byte) error {
+					t.Error("fn called on empty queue")
+					return nil
+				})
+				assert.ErrorIs(t, err, context.Canceled)
+			}
+		}()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("Process hangs")
+		}
+	})
 	t.Run("should abort process when context is canceled", func(t *testing.T) {
 		q := createQueue(t, db)
 		ctx, cancel := context.WithCancel(t.Context())

@@ -109,13 +109,14 @@ func (q *PQueue) peekWithContext(ctx context.Context) ([]byte, []byte, error) {
 		k, v, err := q.peekNoWait()
 		if err == nil {
 			return k, v, nil
-		} else if err != errEmpty {
+		}
+		if err != errEmpty {
+			return nil, nil, err
+		}
+		if err := ctx.Err(); err != nil {
 			return nil, nil, err
 		}
 		q.cond.Wait()
-		if ctx.Err() != nil {
-			return nil, nil, ctx.Err()
-		}
 	}
 }
 
@@ -164,10 +165,7 @@ func (q *PQueue) Size() int {
 	var c int
 	q.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(q.name))
-		b.ForEach(func(k, v []byte) error {
-			c++
-			return nil
-		})
+		c = b.Stats().KeyN
 		return nil
 	})
 	return c

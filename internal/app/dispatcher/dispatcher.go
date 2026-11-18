@@ -210,14 +210,19 @@ func (d *Dispatcher) processFeed(ctx context.Context, cf config.ConfigFeed, hook
 		}
 		for _, hook := range hooks {
 			if err := hook.AddMessage(cf.Name, feed, item, state == app.StateUpdated); err != nil {
-				myLog.Error("Failed to add item to webhook queue", "hook", hook.Name(), "error", err)
-				if err := d.st.UpdateFeedStats(cf.Name, func(fs *app.FeedStats) error {
+				myLog.Error(
+					"Failed to add item to webhook queue. Item will not be delivered to this webhook",
+					slog.String("hook", hook.Name()),
+					slog.String("title", item.Title),
+					slog.Any("error", err),
+				)
+				err := d.st.UpdateFeedStats(cf.Name, func(fs *app.FeedStats) error {
 					fs.ErrorCount++
 					return nil
-				}); err != nil {
+				})
+				if err != nil {
 					myLog.Error("failed to update feed stats", "error", err)
 				}
-				continue
 			}
 		}
 		if err := d.st.RecordItem(cf, item); err != nil {

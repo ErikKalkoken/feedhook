@@ -3,8 +3,12 @@ package messenger_test
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"path/filepath"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -19,6 +23,58 @@ import (
 	"github.com/mmcdole/gofeed"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestMessengerBacksOffOnQueueError(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "test.db")
+	db, err := bolt.Open(p, 0600, nil)
+	if err != nil {
+		t.Fatalf("Failed to open DB: %s", err)
+	}
+	q, err := pqueue.New(db, "test")
+	if err != nil {
+		t.Fatalf("Failed to create queue: %s", err)
+	}
+	st := storage.New(db, config.Config{})
+	db.Close() // every queue access fails from now on
+	h := &countingHandler{prefix: "Failed to process queue item"}
+	defer slog.SetDefault(slog.Default())
+	slog.SetDefault(slog.New(h))
+	mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", "https://www.example.com", st, config.Config{})
+	if err := mg.Start(); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	done := make(chan bool)
+	go func() {
+		done <- mg.Shutdown()
+	}()
+	select {
+	case ok := <-done:
+		assert.True(t, ok)
+	case <-time.After(2 * time.Second):
+		t.Fatal("shutdown did not return in time")
+	}
+	assert.Equal(t, int64(1), h.count.Load())
+}
+
+// countingHandler is a slog handler that counts the records with a message starting with prefix.
+type countingHandler struct {
+	prefix string
+	count  atomic.Int64
+}
+
+func (h *countingHandler) Enabled(context.Context, slog.Level) bool { return true }
+
+func (h *countingHandler) Handle(_ context.Context, r slog.Record) error {
+	if strings.HasPrefix(r.Message, h.prefix) {
+		h.count.Add(1)
+	}
+	return nil
+}
+
+func (h *countingHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
+
+func (h *countingHandler) WithGroup(string) slog.Handler { return h }
 
 func TestMessenger(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "test.db")
@@ -107,6 +163,34 @@ func TestMessenger(t *testing.T) {
 		ok = mg.Shutdown()
 		assert.False(t, ok)
 	})
+	t.Run("can restart after shutdown", func(t *testing.T) {
+		st.ClearWebhookStats()
+		q.Clear()
+		httpmock.Reset()
+		httpmock.RegisterResponder("POST", "https://www.example.com", httpmock.NewStringResponder(204, ""))
+		mg := messenger.NewMessenger(c, q, "dummy", "https://www.example.com", st, config.Config{})
+		if err := mg.Start(); err != nil {
+			t.Fatal(err)
+		}
+		assert.True(t, mg.Shutdown())
+		if err := mg.Start(); err != nil {
+			t.Fatal(err)
+		}
+		feed := &gofeed.Feed{Title: "title"}
+		now := time.Now()
+		item := &gofeed.Item{Content: "content", PublishedParsed: &now}
+		if err := mg.AddMessage("dummy", feed, item, false); err != nil {
+			t.Fatal(err)
+		}
+		for start := time.Now(); !q.IsEmpty(); {
+			if time.Since(start) > 2*time.Second {
+				t.Fatal("timed out waiting for message to be sent after restart")
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		assert.True(t, mg.Shutdown())
+		assert.Equal(t, 1, httpmock.GetTotalCallCount())
+	})
 	t.Run("should shut down promptly while rate limited", func(t *testing.T) {
 		st.ClearWebhookStats()
 		q.Clear()
@@ -191,35 +275,72 @@ func TestMessenger(t *testing.T) {
 		}
 		q.Clear()
 	})
-	t.Run("should discard message on bad request without counting it as sent", func(t *testing.T) {
-		st.ClearWebhookStats()
-		q.Clear()
-		httpmock.Reset()
-		const url = "https://www.example.com/bad"
-		httpmock.RegisterResponder("POST", url, httpmock.NewStringResponder(400, `{"message": "bad"}`))
-		mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", url, st, config.Config{})
-		if err := mg.Start(); err != nil {
-			t.Fatal(err)
-		}
-		feed := &gofeed.Feed{Title: "title"}
-		now := time.Now()
-		item := &gofeed.Item{Content: "content", PublishedParsed: &now}
-		if err := mg.AddMessage("dummy", feed, item, false); err != nil {
-			t.Fatal(err)
-		}
-		for start := time.Now(); !q.IsEmpty(); {
-			if time.Since(start) > 2*time.Second {
-				t.Fatal("timed out waiting for message to be discarded")
+	for _, status := range []int{400, 413} {
+		t.Run(fmt.Sprintf("should discard message on status %d without counting it as sent", status), func(t *testing.T) {
+			st.ClearWebhookStats()
+			q.Clear()
+			httpmock.Reset()
+			const url = "https://www.example.com/rejected"
+			httpmock.RegisterResponder("POST", url, httpmock.NewStringResponder(status, `{"message": "rejected"}`))
+			mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", url, st, config.Config{})
+			if err := mg.Start(); err != nil {
+				t.Fatal(err)
 			}
-			time.Sleep(10 * time.Millisecond)
-		}
-		mg.Shutdown()
-		assert.Equal(t, 1, httpmock.GetTotalCallCount())
-		ws, err := st.GetWebhookStats("dummy")
-		if err == nil {
-			assert.Equal(t, 0, ws.SentCount)
-		} else {
-			assert.ErrorIs(t, err, storage.ErrNotFound)
-		}
-	})
+			feed := &gofeed.Feed{Title: "title"}
+			now := time.Now()
+			item := &gofeed.Item{Content: "content", PublishedParsed: &now}
+			if err := mg.AddMessage("dummy", feed, item, false); err != nil {
+				t.Fatal(err)
+			}
+			for start := time.Now(); !q.IsEmpty(); {
+				if time.Since(start) > 2*time.Second {
+					t.Fatal("timed out waiting for message to be discarded")
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			mg.Shutdown()
+			assert.Equal(t, 1, httpmock.GetTotalCallCount())
+			ws, err := st.GetWebhookStats("dummy")
+			if err == nil {
+				assert.Equal(t, 0, ws.SentCount)
+			} else {
+				assert.ErrorIs(t, err, storage.ErrNotFound)
+			}
+		})
+	}
+	for _, status := range []int{500, 401, 403, 404} {
+		t.Run(fmt.Sprintf("should retry message on status %d", status), func(t *testing.T) {
+			st.ClearWebhookStats()
+			q.Clear()
+			httpmock.Reset()
+			const url = "https://www.example.com/flaky"
+			httpmock.RegisterResponder("POST", url, httpmock.ResponderFromMultipleResponses([]*http.Response{
+				httpmock.NewStringResponse(status, ""),
+				httpmock.NewStringResponse(204, ""),
+			}))
+			mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", url, st, config.Config{})
+			if err := mg.Start(); err != nil {
+				t.Fatal(err)
+			}
+			feed := &gofeed.Feed{Title: "title"}
+			now := time.Now()
+			item := &gofeed.Item{Content: "content", PublishedParsed: &now}
+			if err := mg.AddMessage("dummy", feed, item, false); err != nil {
+				t.Fatal(err)
+			}
+			for start := time.Now(); !q.IsEmpty(); {
+				if time.Since(start) > 2*time.Second {
+					t.Fatal("timed out waiting for message to be sent")
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+			mg.Shutdown()
+			assert.Equal(t, 2, httpmock.GetTotalCallCount())
+			assert.Equal(t, 1, mg.Status().ErrorCount)
+			ws, err := st.GetWebhookStats("dummy")
+			if assert.NoError(t, err) {
+				assert.Equal(t, 1, ws.SentCount)
+			}
+		})
+	}
 }
