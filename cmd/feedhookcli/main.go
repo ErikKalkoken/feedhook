@@ -41,7 +41,7 @@ func main() {
 		Commands: []*cli.Command{
 			{
 				Name:  "check-config",
-				Usage: "checks wether the config is valid",
+				Usage: "checks whether the config is valid",
 				Action: func(cCtx *cli.Context) error {
 					if err := client.CheckConfig(); err != nil {
 						return err

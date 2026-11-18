@@ -18,7 +18,7 @@ const (
 	// contentMaxLength = 2000
 	embedMaxFieldLength       = 256 // title, author name, field names
 	embedDescriptionMaxLength = 4096
-	avatarURL                 = "https://cdn.imgpile.com/f/aQ1yR7t_xl.png"
+	avatarURL                 = "https://cdn.jsdelivr.net/gh/ErikKalkoken/feedhook@main/assets/icon.png"
 	username                  = "Feedhook"
 )
 

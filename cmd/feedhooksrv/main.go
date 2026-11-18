@@ -1,4 +1,4 @@
-// Feedhooksrv is a service for forwarding RSS and Atom feeds to Discord webhooks.
+// Feedhooksrv is a self-hosted service that posts new items from RSS and Atom feeds to Discord webhooks.
 package main
 
 import (
@@ -110,7 +110,7 @@ func startRPC(port int, d *dispatcher.Dispatcher, st *storage.Storage, cfg confi
 // myUsage writes a custom usage message to configured output stream.
 func myUsage() {
 	s := "Usage: feedhooksrv [options]:\n\n" +
-		"A service for forwarding RSS and Atom feeds to Discord webhooks.\n" +
+		"A self-hosted service that posts new items from RSS and Atom feeds to Discord webhooks.\n" +
 		"For more information please see: https://github.com/ErikKalkoken/feedhook\n\n" +
 		"Options:\n"
 	fmt.Fprint(flag.CommandLine.Output(), s)
