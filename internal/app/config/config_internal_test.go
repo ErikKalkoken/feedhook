@@ -102,7 +102,7 @@ func TestParseConfig(t *testing.T) {
 			},
 			Feeds: []ConfigFeed{{Name: "feed1", URL: "https://www.example.com/url2", Webhooks: []string{"hook1"}}},
 		}
-		assert.Error(t, parseConfig(&cf))
+		assert.ErrorContains(t, parseConfig(&cf), "webhook name hook1 not unique")
 	})
 	t.Run("should return error when webhook URLs not unique", func(t *testing.T) {
 		cf := Config{
@@ -112,7 +112,7 @@ func TestParseConfig(t *testing.T) {
 			},
 			Feeds: []ConfigFeed{{Name: "feed1", URL: "https://www.example.com/url2", Webhooks: []string{"hook1"}}},
 		}
-		assert.Error(t, parseConfig(&cf))
+		assert.ErrorContains(t, parseConfig(&cf), "webhook hook2: url not unique")
 	})
 	t.Run("should return error when feed names are not unique", func(t *testing.T) {
 		cf := Config{

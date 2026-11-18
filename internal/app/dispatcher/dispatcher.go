@@ -198,7 +198,7 @@ func (d *Dispatcher) processFeed(ctx context.Context, cf config.ConfigFeed, hook
 		if ctx.Err() != nil {
 			return errUserAborted
 		}
-		if oldest != 0 && item.PublishedParsed != nil && item.PublishedParsed.Before(d.clock.Now().Add(-oldest)) {
+		if d.cfg.App.Oldest != config.OldestUnlimited && item.PublishedParsed != nil && item.PublishedParsed.Before(d.clock.Now().Add(-oldest)) {
 			continue
 		}
 		state, err := d.st.GetItemState(cf, item)

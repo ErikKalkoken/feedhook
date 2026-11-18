@@ -39,8 +39,8 @@ func (rt realtime) Now() time.Time {
 }
 
 func main() {
-	cfgPathFlag := flag.String("config", ".", "path to configuration file")
-	dbPathFlag := flag.String("db", ".", "path to database file")
+	cfgPathFlag := flag.String("config", ".", "directory containing "+configFilename)
+	dbPathFlag := flag.String("db", ".", "directory for the database file "+dbFileName)
 	portFlag := flag.Int("port", portRPC, "port for RPC service")
 	versionFlag := flag.Bool("v", false, "show version")
 	offlineFlag := flag.Bool("offline", false, "run RPC service only")
@@ -82,7 +82,7 @@ func main() {
 
 	// start RPC service
 	if err := startRPC(*portFlag, d, st, cfg, configPath); err != nil {
-		slog.Error("Failed to start RPC service", "port", portRPC, "error", err)
+		slog.Error("Failed to start RPC service", "port", *portFlag, "error", err)
 		os.Exit(1)
 	}
 
@@ -109,7 +109,7 @@ func startRPC(port int, d *dispatcher.Dispatcher, st *storage.Storage, cfg confi
 
 // myUsage writes a custom usage message to configured output stream.
 func myUsage() {
-	s := "Usage: feedhook [options]:\n\n" +
+	s := "Usage: feedhooksrv [options]:\n\n" +
 		"A service for forwarding RSS and Atom feeds to Discord webhooks.\n" +
 		"For more information please see: https://github.com/ErikKalkoken/feedhook\n\n" +
 		"Options:\n"

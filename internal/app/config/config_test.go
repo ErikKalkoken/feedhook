@@ -1,12 +1,14 @@
 package config_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/ErikKalkoken/feedhook/internal/app/config"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var toml = `
@@ -15,7 +17,6 @@ timeout = 2
 oldest = 3
 ticker = 4
 loglevel = "DEBUG"
-db_path = "/path1/alpha"
 
 [[webhooks]]
 name = "hook-1"
@@ -38,11 +39,56 @@ func TestConfig(t *testing.T) {
 		assert.Equal(t, cf.App.Oldest, 3)
 		assert.Equal(t, cf.App.Ticker, 4)
 		assert.Equal(t, cf.App.LogLevel, "DEBUG")
-		assert.Equal(t, cf.App.DBPath, "/path1/alpha")
 		assert.Equal(t, cf.Webhooks[0].Name, "hook-1")
 		assert.Equal(t, cf.Webhooks[0].URL, "https://www.example.com/webhook")
 		assert.Equal(t, cf.Feeds[0].Name, "Feed 1")
 		assert.Equal(t, cf.Feeds[0].URL, "https://www.example.com/feed.rss")
 		assert.Equal(t, cf.Feeds[0].Webhooks, []string{"hook-1"})
 	}
+}
+
+func TestOldest(t *testing.T) {
+	cases := []struct {
+		oldest string
+		want   int
+	}{
+		{"oldest = 3600", 3600},
+		{"", 7200},
+		{"oldest = 0", 7200},
+		{"oldest = -1", config.OldestUnlimited},
+	}
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("should parse %q as %d", tc.oldest, tc.want), func(t *testing.T) {
+			cf, err := fromString(t, configWithOldest(tc.oldest))
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, cf.App.Oldest)
+		})
+	}
+	t.Run("should return error for values below -1", func(t *testing.T) {
+		_, err := fromString(t, configWithOldest("oldest = -60"))
+		assert.Error(t, err)
+	})
+}
+
+func configWithOldest(line string) string {
+	return fmt.Sprintf(`
+[app]
+%s
+
+[[webhooks]]
+name = "hook-1"
+url = "https://www.example.com/webhook"
+
+[[feeds]]
+name = "Feed 1"
+url = "https://www.example.com/feed.rss"
+webhooks = ["hook-1"]
+`, line)
+}
+
+func fromString(t *testing.T, s string) (config.Config, error) {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "config.toml")
+	require.NoError(t, os.WriteFile(p, []byte(s), 0644))
+	return config.FromFile(p)
 }

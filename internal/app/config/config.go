@@ -18,6 +18,9 @@ const (
 	logLevelDefault = slog.LevelInfo
 )
 
+// OldestUnlimited is the value for Oldest to forward items of any age.
+const OldestUnlimited = -1
+
 type Config struct {
 	App      ConfigApp
 	Feeds    []ConfigFeed
@@ -55,7 +58,6 @@ func (c *Config) WebhookByName(name string) (ConfigWebhook, bool) {
 
 type ConfigApp struct {
 	BrandingDisabled bool   `toml:"branding_disabled"`
-	DBPath           string `toml:"db_path"`
 	LogLevel         string `toml:"loglevel"`
 	Oldest           int    `toml:"oldest"`
 	Ticker           int    `toml:"ticker"`
@@ -108,11 +110,11 @@ func parseConfig(config *Config) error {
 			return fmt.Errorf("webhook %s has invalid url: %w", x.Name, err)
 		}
 		if webhookNames[x.Name] {
-			return fmt.Errorf("webhook name %s no unique", x.Name)
+			return fmt.Errorf("webhook name %s not unique", x.Name)
 		}
 		webhookNames[x.Name] = true
 		if webhookURLs[x.URL] {
-			return fmt.Errorf("webhook name %s no unique", x.Name)
+			return fmt.Errorf("webhook %s: url not unique", x.Name)
 		}
 		webhookURLs[x.URL] = true
 	}
@@ -158,9 +160,10 @@ func parseConfig(config *Config) error {
 	if config.App.Timeout <= 0 {
 		config.App.Timeout = timeoutDefault
 	}
-	if config.App.Oldest == -1 {
-		config.App.Oldest = 0
-	} else if config.App.Oldest == 0 {
+	if config.App.Oldest < OldestUnlimited {
+		return fmt.Errorf("oldest must be %d or greater, got %d", OldestUnlimited, config.App.Oldest)
+	}
+	if config.App.Oldest == 0 {
 		config.App.Oldest = oldestDefault
 	}
 	if config.App.Ticker <= 0 {
