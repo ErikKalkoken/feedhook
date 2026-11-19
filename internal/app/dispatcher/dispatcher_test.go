@@ -1,6 +1,7 @@
 package dispatcher_test
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/jarcoal/httpmock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	bolt "go.etcd.io/bbolt"
 
 	"github.com/ErikKalkoken/feedhook/internal/app/config"
@@ -173,6 +175,38 @@ func TestFetchFeedUsesConfiguredTimeout(t *testing.T) {
 	if assert.NoError(t, err) && assert.True(t, hasDeadline) {
 		assert.WithinDuration(t, start.Add(120*time.Second), deadline, 5*time.Second)
 	}
+}
+
+func TestPostLatestFeedItemRespectsBrandingDisabled(t *testing.T) {
+	cfg := config.Config{
+		App:      config.ConfigApp{BrandingDisabled: true},
+		Webhooks: []config.ConfigWebhook{{Name: "hook1", URL: "https://www.example.com/hook"}},
+		Feeds:    []config.ConfigFeed{{Name: "feed1", URL: "https://www.example.com/feed", Webhooks: []string{"hook1"}}},
+	}
+	st := newTestStorage(t, cfg)
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+	httpmock.RegisterResponder(
+		"GET",
+		"https://www.example.com/feed",
+		httpmock.NewXmlResponderOrPanic(200, httpmock.File("testdata/atomfeed.xml")),
+	)
+	var body map[string]any
+	httpmock.RegisterResponder(
+		"POST",
+		"https://www.example.com/hook",
+		func(req *http.Request) (*http.Response, error) {
+			if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+				return nil, err
+			}
+			return httpmock.NewStringResponse(204, ""), nil
+		},
+	)
+	d := dispatcher.New(st, cfg, fakeTime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
+	err := d.PostLatestFeedItem("feed1")
+	require.NoError(t, err)
+	assert.NotContains(t, body, "username")
+	assert.NotContains(t, body, "avatar_url")
 }
 
 func TestStopCancelsFeedFetch(t *testing.T) {

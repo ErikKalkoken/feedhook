@@ -292,7 +292,7 @@ func (d *Dispatcher) PostLatestFeedItem(feedName string) error {
 		return a.PublishedParsed.Compare(*b.PublishedParsed)
 	})
 	fi := messenger.NewFeedItem(feedName, feed, latest, false)
-	m, err := fi.ToDiscordMessage(false)
+	m, err := fi.ToDiscordMessage(d.cfg.App.BrandingDisabled)
 	if err != nil {
 		return fmt.Errorf("convert item to Discord message: %w", err)
 	}
