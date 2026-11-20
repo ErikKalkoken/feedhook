@@ -115,7 +115,10 @@ func (d *Dispatcher) Start() error {
 		if err != nil {
 			return err
 		}
-		messengers = append(messengers, messenger.NewMessenger(d.client, q, h.Name, h.URL, d.st, d.cfg))
+		messengers = append(
+			messengers,
+			messenger.NewMessenger(d.client, q, h.Name, h.URL, d.st, d.cfg.App.BrandingDisabled),
+		)
 	}
 	var ctx context.Context
 	err := func() error {

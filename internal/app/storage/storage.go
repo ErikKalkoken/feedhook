@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log/slog"
 
-	"github.com/ErikKalkoken/feedhook/internal/app/config"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -21,23 +20,21 @@ var (
 )
 
 type Storage struct {
-	db  *bolt.DB
-	cfg config.Config
+	db *bolt.DB
 }
 
-func New(db *bolt.DB, cfg config.Config) *Storage {
+func New(db *bolt.DB) *Storage {
 	st := &Storage{
-		db:  db,
-		cfg: cfg,
+		db: db,
 	}
 	return st
 }
 
 // Init creates all required buckets and deletes obsolete buckets.
-func (st *Storage) Init() error {
+func (st *Storage) Init(feedNames []string) error {
 	feeds := make(map[string]bool)
-	for _, f := range st.cfg.Feeds {
-		feeds[f.Name] = true
+	for _, n := range feedNames {
+		feeds[n] = true
 	}
 	err := st.db.Update(func(tx *bolt.Tx) error {
 		// feeds bucket

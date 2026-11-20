@@ -56,10 +56,9 @@ func TestStatisticsSortsByNameWithoutChangingConfig(t *testing.T) {
 			},
 		},
 	}
-	st := storage.New(db, cfg)
-	if err := st.Init(); err != nil {
-		t.Fatalf("Failed to init: %s", err)
-	}
+	st := storage.New(db)
+	err = st.Init(cfg.FeedNames())
+	require.NoError(t, err)
 	for _, cf := range cfg.Feeds {
 		if err := st.UpdateOrCreateFeedStats(cf.Name, func(fs *app.FeedStats) error { return nil }); err != nil {
 			t.Fatal(err)
@@ -120,8 +119,8 @@ func TestStatisticsListsFeedsAndWebhooksWithoutStats(t *testing.T) {
 			},
 		},
 	}
-	st := storage.New(db, cfg)
-	err = st.Init()
+	st := storage.New(db)
+	err = st.Init(cfg.FeedNames())
 	require.NoError(t, err)
 	// only feed1 and hook1 have stats
 	err = st.UpdateOrCreateFeedStats("feed1", func(fs *app.FeedStats) error { return nil })

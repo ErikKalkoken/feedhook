@@ -26,16 +26,20 @@ func (rt fakeTime) Now() time.Time {
 	return rt.now
 }
 
+const (
+	feedName = "feed1"
+)
+
 // newTestStorage returns an initialized storage backed by a temporary DB.
-func newTestStorage(t *testing.T, cfg config.Config) *storage.Storage {
+func newTestStorage(t *testing.T, names ...string) *storage.Storage {
 	t.Helper()
 	db, err := bolt.Open(filepath.Join(t.TempDir(), "test.db"), 0600, nil)
 	if err != nil {
 		t.Fatalf("Failed to open DB: %s", err)
 	}
 	t.Cleanup(func() { db.Close() })
-	st := storage.New(db, cfg)
-	if err := st.Init(); err != nil {
+	st := storage.New(db)
+	if err := st.Init(names); err != nil {
 		t.Fatalf("Failed to init: %s", err)
 	}
 	return st
@@ -52,14 +56,15 @@ func TestService(t *testing.T) {
 			URL:  "https://www.example.com/hook",
 		}},
 		Feeds: []config.ConfigFeed{{
-			Name:    "feed1",
+			Name:    feedName,
 			URL:     "https://www.example.com/feed",
 			Webhook: "hook1",
 		}},
 	}
-	st := newTestStorage(t, cfg)
+	st := newTestStorage(t, cfg.FeedNames()...)
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
+
 	t.Run("can receive item from feed and send it to configured hook", func(t *testing.T) {
 		httpmock.Reset()
 		httpmock.RegisterResponder(
@@ -81,7 +86,7 @@ func TestService(t *testing.T) {
 		info := httpmock.GetCallCountInfo()
 		assert.Equal(t, 1, info["POST https://www.example.com/hook"])
 		assert.LessOrEqual(t, 1, info["GET https://www.example.com/feed"])
-		fs, err := st.GetFeedStats("feed1")
+		fs, err := st.GetFeedStats(feedName)
 		require.NoError(t, err)
 		assert.Equal(t, 1, fs.ReceivedCount)
 	})
@@ -141,12 +146,12 @@ func TestFailedFeedIncrementsErrorCount(t *testing.T) {
 			URL:  "https://www.example.com/hook",
 		}},
 		Feeds: []config.ConfigFeed{{
-			Name:    "feed1",
+			Name:    feedName,
 			URL:     "https://www.example.com/feed",
 			Webhook: "hook1",
 		}},
 	}
-	st := newTestStorage(t, cfg)
+	st := newTestStorage(t, cfg.FeedNames()...)
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	httpmock.RegisterResponder(
@@ -156,9 +161,9 @@ func TestFailedFeedIncrementsErrorCount(t *testing.T) {
 	)
 	d := dispatcher.New(st, cfg, fakeTime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
 	require.NoError(t, d.Start())
-	waitForFeedError(t, st, "feed1")
+	waitForFeedError(t, st, feedName)
 	d.Stop()
-	fs, err := st.GetFeedStats("feed1")
+	fs, err := st.GetFeedStats(feedName)
 	require.NoError(t, err)
 	assert.Equal(t, 1, fs.ErrorCount)
 	assert.Equal(t, 0, fs.ReceivedCount)
@@ -176,16 +181,16 @@ func TestInvalidItemStateIsTreatedAsNew(t *testing.T) {
 			URL:  "https://www.example.com/hook",
 		}},
 		Feeds: []config.ConfigFeed{{
-			Name:    "feed1",
+			Name:    feedName,
 			URL:     "https://www.example.com/feed",
 			Webhook: "hook1",
 		}},
 	}
-	st := newTestStorage(t, cfg)
+	st := newTestStorage(t, cfg.FeedNames()...)
 	// store an invalid record for the feed's only item, so reading its state fails
 	const itemID = "tag:status.eveonline.com,2005:Incident/21848727"
 	err := st.DB().Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("feeds")).Bucket([]byte("feed1"))
+		b := tx.Bucket([]byte("feeds")).Bucket([]byte(feedName))
 		return b.Put([]byte(itemID), []byte("invalid"))
 	})
 	require.NoError(t, err)
@@ -207,13 +212,13 @@ func TestInvalidItemStateIsTreatedAsNew(t *testing.T) {
 		return httpmock.GetCallCountInfo()["POST https://www.example.com/hook"] > 0
 	}, 2*time.Second, 10*time.Millisecond, "item was not posted")
 	d.Stop()
-	fs, err := st.GetFeedStats("feed1")
+	fs, err := st.GetFeedStats(feedName)
 	require.NoError(t, err)
 	assert.Equal(t, 0, fs.ErrorCount)
 	assert.Equal(t, 1, fs.ReceivedCount)
 	assert.Equal(t, 1, httpmock.GetCallCountInfo()["POST https://www.example.com/hook"])
 	// invalid record was replaced by a valid one
-	items, err := st.ListItems("feed1")
+	items, err := st.ListItems(feedName)
 	require.NoError(t, err)
 	require.Len(t, items, 1)
 	assert.Equal(t, itemID, items[0].ID)
@@ -254,7 +259,7 @@ func TestStartFailure(t *testing.T) {
 			},
 		},
 	}
-	st := newTestStorage(t, cfg)
+	st := newTestStorage(t, cfg.FeedNames()...)
 	d := dispatcher.New(st, cfg, fakeTime{now: time.Now()})
 	err := d.Start()
 	assert.Error(t, err)
@@ -280,12 +285,12 @@ func TestFetchFeedUsesConfiguredTimeout(t *testing.T) {
 			URL:  "https://www.example.com/hook",
 		}},
 		Feeds: []config.ConfigFeed{{
-			Name:    "feed1",
+			Name:    feedName,
 			URL:     "https://www.example.com/feed",
 			Webhook: "hook1",
 		}},
 	}
-	st := newTestStorage(t, cfg)
+	st := newTestStorage(t, cfg.FeedNames()...)
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	var deadline time.Time
@@ -306,7 +311,7 @@ func TestFetchFeedUsesConfiguredTimeout(t *testing.T) {
 	)
 	d := dispatcher.New(st, cfg, fakeTime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
 	start := time.Now()
-	err := d.PostLatestFeedItem("feed1")
+	err := d.PostLatestFeedItem(feedName)
 	require.NoError(t, err)
 	require.True(t, hasDeadline)
 	assert.WithinDuration(t, start.Add(120*time.Second), deadline, 5*time.Second)
@@ -322,12 +327,12 @@ func TestPostLatestFeedItemRespectsBrandingDisabled(t *testing.T) {
 			URL:  "https://www.example.com/hook",
 		}},
 		Feeds: []config.ConfigFeed{{
-			Name:    "feed1",
+			Name:    feedName,
 			URL:     "https://www.example.com/feed",
 			Webhook: "hook1",
 		}},
 	}
-	st := newTestStorage(t, cfg)
+	st := newTestStorage(t, cfg.FeedNames()...)
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	httpmock.RegisterResponder(
@@ -347,7 +352,7 @@ func TestPostLatestFeedItemRespectsBrandingDisabled(t *testing.T) {
 		},
 	)
 	d := dispatcher.New(st, cfg, fakeTime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
-	err := d.PostLatestFeedItem("feed1")
+	err := d.PostLatestFeedItem(feedName)
 	require.NoError(t, err)
 	assert.NotContains(t, body, "username")
 	assert.NotContains(t, body, "avatar_url")
@@ -364,12 +369,12 @@ func TestStopCancelsFeedFetch(t *testing.T) {
 			URL:  "https://www.example.com/hook",
 		}},
 		Feeds: []config.ConfigFeed{{
-			Name:    "feed1",
+			Name:    feedName,
 			URL:     "https://www.example.com/feed",
 			Webhook: "hook1",
 		}},
 	}
-	st := newTestStorage(t, cfg)
+	st := newTestStorage(t, cfg.FeedNames()...)
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	started := make(chan struct{}, 1)
@@ -416,7 +421,7 @@ func TestSendPing(t *testing.T) {
 			URL:  "https://www.example.com/hook",
 		}},
 	}
-	st := newTestStorage(t, cfg)
+	st := newTestStorage(t, cfg.FeedNames()...)
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	d := dispatcher.New(st, cfg, fakeTime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})

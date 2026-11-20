@@ -10,7 +10,6 @@ import (
 	bolt "go.etcd.io/bbolt"
 
 	"github.com/ErikKalkoken/feedhook/internal/app"
-	"github.com/ErikKalkoken/feedhook/internal/app/config"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 )
 
@@ -33,25 +32,10 @@ func newTestStorageWithFeeds(t *testing.T, names ...string) *storage.Storage {
 	t.Cleanup(func() {
 		db.Close()
 	})
-	st := storage.New(db, newConfigWithFeeds(names...))
-	err = st.Init()
+	st := storage.New(db)
+	err = st.Init(names)
 	require.NoError(t, err)
 	return st
-}
-
-// newConfigWithFeeds returns a config with the given feeds.
-func newConfigWithFeeds(names ...string) config.Config {
-	var feeds []config.ConfigFeed
-	for _, n := range names {
-		feeds = append(feeds, config.ConfigFeed{
-			Name:    n,
-			URL:     "https://www.example.com/" + n,
-			Webhook: hookName,
-		})
-	}
-	return config.Config{
-		Feeds: feeds,
-	}
 }
 
 func TestStorage_Init(t *testing.T) {
@@ -84,7 +68,7 @@ func TestStorage_Init(t *testing.T) {
 		})
 		require.NoError(t, err)
 		// when
-		err = st.Init()
+		err = st.Init([]string{feedName})
 		// then
 		require.NoError(t, err)
 		n, err := st.CountItems(feedName)
@@ -98,9 +82,9 @@ func TestStorage_Init(t *testing.T) {
 	t.Run("should add buckets for new feeds", func(t *testing.T) {
 		// given
 		st := newTestStorageWithFeeds(t, "alpha")
-		st2 := storage.New(st.DB(), newConfigWithFeeds("alpha", "bravo"))
+		st2 := storage.New(st.DB())
 		// when
-		err := st2.Init()
+		err := st2.Init([]string{"alpha", "bravo"})
 		// then
 		require.NoError(t, err)
 		got, err := st2.ListFeeds()
@@ -116,9 +100,9 @@ func TestStorage_Init(t *testing.T) {
 			err := st.UpdateOrCreateItem(n, &gofeed.Item{GUID: "abc1"})
 			require.NoError(t, err)
 		}
-		st2 := storage.New(st.DB(), newConfigWithFeeds("bravo", "delta"))
+		st2 := storage.New(st.DB())
 		// when
-		err := st2.Init()
+		err := st2.Init([]string{"bravo", "delta"})
 		// then
 		require.NoError(t, err)
 		got, err := st2.ListFeeds()
@@ -136,9 +120,9 @@ func TestStorage_Init(t *testing.T) {
 	t.Run("should delete all feed buckets when no feeds are configured", func(t *testing.T) {
 		// given
 		st := newTestStorageWithFeeds(t, "alpha", "bravo")
-		st2 := storage.New(st.DB(), config.Config{})
+		st2 := storage.New(st.DB())
 		// when
-		err := st2.Init()
+		err := st2.Init(nil)
 		// then
 		require.NoError(t, err)
 		got, err := st2.ListFeeds()
@@ -155,7 +139,7 @@ func TestStorage_DB(t *testing.T) {
 		t.Cleanup(func() {
 			db.Close()
 		})
-		st := storage.New(db, config.Config{})
+		st := storage.New(db)
 		// when
 		got := st.DB()
 		// then

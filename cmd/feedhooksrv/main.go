@@ -64,8 +64,8 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
-	st := storage.New(db, cfg)
-	if err := st.Init(); err != nil {
+	st := storage.New(db)
+	if err := st.Init(cfg.FeedNames()); err != nil {
 		slog.Error("DB init failed", "error", err)
 		os.Exit(1)
 	}

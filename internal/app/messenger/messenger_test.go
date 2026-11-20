@@ -15,7 +15,6 @@ import (
 
 	bolt "go.etcd.io/bbolt"
 
-	"github.com/ErikKalkoken/feedhook/internal/app/config"
 	"github.com/ErikKalkoken/feedhook/internal/app/messenger"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 	"github.com/ErikKalkoken/feedhook/internal/pqueue"
@@ -33,12 +32,12 @@ func TestMessengerBacksOffOnQueueError(t *testing.T) {
 		require.NoError(t, err)
 		q, err := pqueue.New(db, "test")
 		require.NoError(t, err)
-		st := storage.New(db, config.Config{})
+		st := storage.New(db)
 		db.Close() // every queue access fails from now on
 		h := &countingHandler{prefix: "Failed to process queue item"}
 		defer slog.SetDefault(slog.Default())
 		slog.SetDefault(slog.New(h))
-		mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", "https://www.example.com", st, config.Config{})
+		mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", "https://www.example.com", st, false)
 		err = mg.Start()
 		require.NoError(t, err)
 		synctest.Wait()
@@ -85,7 +84,7 @@ func TestMessenger(t *testing.T) {
 		// given
 		st, q := newTestStorageAndQueue(t)
 		// when
-		mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", "https://www.example.com", st, config.Config{})
+		mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", "https://www.example.com", st, false)
 		// then
 		assert.Equal(t, "dummy", mg.Name())
 	})
@@ -99,7 +98,7 @@ func TestMessenger(t *testing.T) {
 				"https://www.example.com",
 				httpmock.NewStringResponder(204, ""),
 			)
-			mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", "https://www.example.com", st, config.Config{})
+			mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", "https://www.example.com", st, false)
 			err := mg.Start()
 			require.NoError(t, err)
 			t.Cleanup(func() { mg.Shutdown() })
@@ -121,7 +120,7 @@ func TestMessenger(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
 			st, q := newTestStorageAndQueue(t)
 			httpmock.Reset()
-			mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", "https://www.example.com", st, config.Config{})
+			mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", "https://www.example.com", st, false)
 			err := mg.Start()
 			require.NoError(t, err)
 			t.Cleanup(func() { mg.Shutdown() })
@@ -132,7 +131,7 @@ func TestMessenger(t *testing.T) {
 	t.Run("should return error when try to start twice", func(t *testing.T) {
 		st, q := newTestStorageAndQueue(t)
 		httpmock.Reset()
-		mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", "https://www.example.com", st, config.Config{})
+		mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", "https://www.example.com", st, false)
 		err := mg.Start()
 		require.NoError(t, err)
 		t.Cleanup(func() { mg.Shutdown() })
@@ -142,7 +141,7 @@ func TestMessenger(t *testing.T) {
 	t.Run("should report if shutdown was done", func(t *testing.T) {
 		st, q := newTestStorageAndQueue(t)
 		httpmock.Reset()
-		mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", "https://www.example.com", st, config.Config{})
+		mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", "https://www.example.com", st, false)
 		err := mg.Start()
 		require.NoError(t, err)
 		ok := mg.Shutdown()
@@ -155,7 +154,7 @@ func TestMessenger(t *testing.T) {
 			st, q := newTestStorageAndQueue(t)
 			httpmock.Reset()
 			httpmock.RegisterResponder("POST", "https://www.example.com", httpmock.NewStringResponder(204, ""))
-			mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", "https://www.example.com", st, config.Config{})
+			mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", "https://www.example.com", st, false)
 			err := mg.Start()
 			require.NoError(t, err)
 			assert.True(t, mg.Shutdown())
@@ -182,7 +181,7 @@ func TestMessenger(t *testing.T) {
 				url,
 				httpmock.NewStringResponder(429, `{"retry_after": 3600}`).HeaderSet(http.Header{"Retry-After": {"3600"}}),
 			)
-			mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", url, st, config.Config{})
+			mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", url, st, false)
 			err := mg.Start()
 			require.NoError(t, err)
 			feed := &gofeed.Feed{Title: "title"}
@@ -212,7 +211,7 @@ func TestMessenger(t *testing.T) {
 			httpmock.RegisterResponder("POST", url, httpmock.NewStringResponder(204, ""))
 			// allows one request only, so the second message waits for the limiter
 			c := dhook.NewClient(dhook.WithWebhookRateLimit(1, time.Hour))
-			mg := messenger.NewMessenger(c, q, "dummy", url, st, config.Config{})
+			mg := messenger.NewMessenger(c, q, "dummy", url, st, false)
 			err := mg.Start()
 			require.NoError(t, err)
 			feed := &gofeed.Feed{Title: "title"}
@@ -239,7 +238,7 @@ func TestMessenger(t *testing.T) {
 				httpmock.Reset()
 				const url = "https://www.example.com/rejected"
 				httpmock.RegisterResponder("POST", url, httpmock.NewStringResponder(status, `{"message": "rejected"}`))
-				mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", url, st, config.Config{})
+				mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", url, st, false)
 				err := mg.Start()
 				require.NoError(t, err)
 				feed := &gofeed.Feed{Title: "title"}
@@ -270,7 +269,7 @@ func TestMessenger(t *testing.T) {
 					httpmock.NewStringResponse(status, ""),
 					httpmock.NewStringResponse(204, ""),
 				}))
-				mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", url, st, config.Config{})
+				mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", url, st, false)
 				err := mg.Start()
 				require.NoError(t, err)
 				feed := &gofeed.Feed{Title: "title"}
@@ -301,8 +300,8 @@ func newTestStorageAndQueue(t *testing.T) (*storage.Storage, *pqueue.PQueue) {
 	})
 	q, err := pqueue.New(db, "test")
 	require.NoError(t, err)
-	st := storage.New(db, config.Config{})
-	err = st.Init()
+	st := storage.New(db)
+	err = st.Init(nil)
 	require.NoError(t, err)
 	return st, q
 }

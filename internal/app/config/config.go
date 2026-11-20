@@ -28,6 +28,15 @@ type Config struct {
 	Webhooks []ConfigWebhook
 }
 
+// FeedNames returns the names of all configured feeds.
+func (c *Config) FeedNames() []string {
+	names := make([]string, len(c.Feeds))
+	for i, f := range c.Feeds {
+		names[i] = f.Name
+	}
+	return names
+}
+
 // EnabledFeeds returns all feeds that are not disabled.
 func (c *Config) EnabledFeeds() []ConfigFeed {
 	feeds := make([]ConfigFeed, 0)

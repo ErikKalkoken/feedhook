@@ -267,6 +267,33 @@ func TestEnabledFeeds(t *testing.T) {
 	})
 }
 
+func TestFeedNames(t *testing.T) {
+	t.Run("should return names of all feeds including disabled ones", func(t *testing.T) {
+		cf := Config{
+			Feeds: []ConfigFeed{
+				{
+					Name:    "feed1",
+					URL:     "https://www.example.com/url1",
+					Webhook: "hook1",
+				},
+				{
+					Name:     "feed2",
+					URL:      "https://www.example.com/url2",
+					Webhook:  "hook1",
+					Disabled: true,
+				},
+			},
+		}
+		got := cf.FeedNames()
+		assert.Equal(t, []string{"feed1", "feed2"}, got)
+	})
+	t.Run("should return empty slice when no feeds are configured", func(t *testing.T) {
+		cf := Config{}
+		got := cf.FeedNames()
+		assert.Empty(t, got)
+	})
+}
+
 func TestFeedByName(t *testing.T) {
 	cf := Config{
 		Feeds: []ConfigFeed{
