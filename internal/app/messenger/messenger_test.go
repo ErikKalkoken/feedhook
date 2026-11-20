@@ -41,9 +41,8 @@ func TestMessengerBacksOffOnQueueError(t *testing.T) {
 	defer slog.SetDefault(slog.Default())
 	slog.SetDefault(slog.New(h))
 	mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", "https://www.example.com", st, config.Config{})
-	if err := mg.Start(); err != nil {
-		t.Fatal(err)
-	}
+	err = mg.Start()
+	require.NoError(t, err)
 	time.Sleep(300 * time.Millisecond)
 	done := make(chan bool)
 	go func() {
@@ -78,31 +77,23 @@ func (h *countingHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
 func (h *countingHandler) WithGroup(string) slog.Handler { return h }
 
 func TestMessenger(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "test.db")
-	db, err := bolt.Open(p, 0600, nil)
-	if err != nil {
-		t.Fatalf("Failed to open DB: %s", err)
-	}
-	defer db.Close()
-	q, err := pqueue.New(db, "test")
-	if err != nil {
-		t.Fatalf("Failed to create queue: %s", err)
-	}
-	st := storage.New(db, config.Config{})
-	if err := st.Init(); err != nil {
-		t.Fatalf("Failed to init: %s", err)
-	}
+
 	httpmock.Activate()
 	defer httpmock.DeactivateAndReset()
 	c := dhook.NewClient()
+
 	t.Run("can return name", func(t *testing.T) {
+		// given
+		st, q := newTestStorageAndQueue(t)
+		// when
 		mg := messenger.NewMessenger(c, q, "dummy", "https://www.example.com", st, config.Config{})
+		// then
 		assert.Equal(t, "dummy", mg.Name())
 
 	})
 	t.Run("can submit messages", func(t *testing.T) {
-		st.ClearWebhookStats()
-		q.Clear()
+		// given
+		st, q := newTestStorageAndQueue(t)
 		httpmock.Reset()
 		httpmock.RegisterResponder(
 			"POST",
@@ -110,77 +101,68 @@ func TestMessenger(t *testing.T) {
 			httpmock.NewStringResponder(204, ""),
 		)
 		mg := messenger.NewMessenger(c, q, "dummy", "https://www.example.com", st, config.Config{})
-		if err := mg.Start(); err != nil {
-			t.Fatal(err)
-		}
+		err := mg.Start()
+		require.NoError(t, err)
+		t.Cleanup(func() { mg.Shutdown() })
 		feed := &gofeed.Feed{Title: "title"}
 		now := time.Now()
 		item := &gofeed.Item{Content: "content", PublishedParsed: &now}
+		// when
 		err = mg.AddMessage("dummy", feed, item, false)
 		time.Sleep(2 * time.Second)
+		// then
 		require.NoError(t, err)
 		assert.Equal(t, 1, httpmock.GetTotalCallCount())
 		ws, err := st.GetWebhookStats("dummy")
 		require.NoError(t, err)
 		assert.Equal(t, 1, ws.SentCount)
-		mg.Shutdown()
 	})
 	t.Run("can submit messages 2", func(t *testing.T) {
-		st.ClearWebhookStats()
-		q.Clear()
+		st, q := newTestStorageAndQueue(t)
 		httpmock.Reset()
 		mg := messenger.NewMessenger(c, q, "dummy", "https://www.example.com", st, config.Config{})
-		if err := mg.Start(); err != nil {
-			t.Fatal(err)
-		}
+		err := mg.Start()
+		require.NoError(t, err)
+		t.Cleanup(func() { mg.Shutdown() })
 		time.Sleep(100 * time.Millisecond)
-		mg.Shutdown()
 		assert.Equal(t, 0, httpmock.GetTotalCallCount())
 	})
 	t.Run("should return error when try to start twice", func(t *testing.T) {
-		st.ClearWebhookStats()
-		q.Clear()
+		st, q := newTestStorageAndQueue(t)
 		httpmock.Reset()
 		mg := messenger.NewMessenger(c, q, "dummy", "https://www.example.com", st, config.Config{})
-		if err := mg.Start(); err != nil {
-			t.Fatal(err)
-		}
 		err := mg.Start()
+		require.NoError(t, err)
+		t.Cleanup(func() { mg.Shutdown() })
+		err = mg.Start()
 		assert.Error(t, err)
-		mg.Shutdown()
 	})
 	t.Run("should report if shutdown was done", func(t *testing.T) {
-		st.ClearWebhookStats()
-		q.Clear()
+		st, q := newTestStorageAndQueue(t)
 		httpmock.Reset()
 		mg := messenger.NewMessenger(c, q, "dummy", "https://www.example.com", st, config.Config{})
-		if err := mg.Start(); err != nil {
-			t.Fatal(err)
-		}
+		err := mg.Start()
+		require.NoError(t, err)
 		ok := mg.Shutdown()
 		assert.True(t, ok)
 		ok = mg.Shutdown()
 		assert.False(t, ok)
 	})
 	t.Run("can restart after shutdown", func(t *testing.T) {
-		st.ClearWebhookStats()
-		q.Clear()
+		st, q := newTestStorageAndQueue(t)
 		httpmock.Reset()
 		httpmock.RegisterResponder("POST", "https://www.example.com", httpmock.NewStringResponder(204, ""))
 		mg := messenger.NewMessenger(c, q, "dummy", "https://www.example.com", st, config.Config{})
-		if err := mg.Start(); err != nil {
-			t.Fatal(err)
-		}
+		err := mg.Start()
+		require.NoError(t, err)
 		assert.True(t, mg.Shutdown())
-		if err := mg.Start(); err != nil {
-			t.Fatal(err)
-		}
+		err = mg.Start()
+		require.NoError(t, err)
 		feed := &gofeed.Feed{Title: "title"}
 		now := time.Now()
 		item := &gofeed.Item{Content: "content", PublishedParsed: &now}
-		if err := mg.AddMessage("dummy", feed, item, false); err != nil {
-			t.Fatal(err)
-		}
+		err = mg.AddMessage("dummy", feed, item, false)
+		require.NoError(t, err)
 		for start := time.Now(); !q.IsEmpty(); {
 			if time.Since(start) > 2*time.Second {
 				t.Fatal("timed out waiting for message to be sent after restart")
@@ -191,8 +173,7 @@ func TestMessenger(t *testing.T) {
 		assert.Equal(t, 1, httpmock.GetTotalCallCount())
 	})
 	t.Run("should shut down promptly while rate limited", func(t *testing.T) {
-		st.ClearWebhookStats()
-		q.Clear()
+		st, q := newTestStorageAndQueue(t)
 		httpmock.Reset()
 		const url = "https://www.example.com/limited"
 		httpmock.RegisterResponder(
@@ -202,15 +183,13 @@ func TestMessenger(t *testing.T) {
 		)
 		// own client, so the rate limit state does not leak into other tests
 		mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", url, st, config.Config{})
-		if err := mg.Start(); err != nil {
-			t.Fatal(err)
-		}
+		err := mg.Start()
+		require.NoError(t, err)
 		feed := &gofeed.Feed{Title: "title"}
 		now := time.Now()
 		first := &gofeed.Item{Title: "first-item", Content: "content", PublishedParsed: &now}
-		if err := mg.AddMessage("dummy", feed, first, false); err != nil {
-			t.Fatal(err)
-		}
+		err = mg.AddMessage("dummy", feed, first, false)
+		require.NoError(t, err)
 		for start := time.Now(); httpmock.GetTotalCallCount() == 0; {
 			if time.Since(start) > 2*time.Second {
 				t.Fatal("timed out waiting for POST")
@@ -218,9 +197,8 @@ func TestMessenger(t *testing.T) {
 			time.Sleep(10 * time.Millisecond)
 		}
 		second := &gofeed.Item{Title: "second-item", Content: "content", PublishedParsed: &now}
-		if err := mg.AddMessage("dummy", feed, second, false); err != nil {
-			t.Fatal(err)
-		}
+		err = mg.AddMessage("dummy", feed, second, false)
+		require.NoError(t, err)
 		done := make(chan bool)
 		go func() {
 			done <- mg.Shutdown()
@@ -238,24 +216,21 @@ func TestMessenger(t *testing.T) {
 		q.Clear()
 	})
 	t.Run("should not count shutdown while waiting for rate limit as error", func(t *testing.T) {
-		st.ClearWebhookStats()
-		q.Clear()
+		st, q := newTestStorageAndQueue(t)
 		httpmock.Reset()
 		const url = "https://www.example.com/waiting"
 		httpmock.RegisterResponder("POST", url, httpmock.NewStringResponder(204, ""))
 		// allows one request only, so the second message waits for the limiter
 		c := dhook.NewClient(dhook.WithWebhookRateLimit(1, time.Hour))
 		mg := messenger.NewMessenger(c, q, "dummy", url, st, config.Config{})
-		if err := mg.Start(); err != nil {
-			t.Fatal(err)
-		}
+		err := mg.Start()
+		require.NoError(t, err)
 		feed := &gofeed.Feed{Title: "title"}
 		now := time.Now()
 		for _, title := range []string{"first-item", "second-item"} {
 			item := &gofeed.Item{Title: title, Content: "content", PublishedParsed: &now}
-			if err := mg.AddMessage("dummy", feed, item, false); err != nil {
-				t.Fatal(err)
-			}
+			err := mg.AddMessage("dummy", feed, item, false)
+			require.NoError(t, err)
 		}
 		for start := time.Now(); q.Size() != 1; {
 			if time.Since(start) > 2*time.Second {
@@ -274,21 +249,18 @@ func TestMessenger(t *testing.T) {
 	})
 	for _, status := range []int{400, 413} {
 		t.Run(fmt.Sprintf("should discard message on status %d without counting it as sent", status), func(t *testing.T) {
-			st.ClearWebhookStats()
-			q.Clear()
+			st, q := newTestStorageAndQueue(t)
 			httpmock.Reset()
 			const url = "https://www.example.com/rejected"
 			httpmock.RegisterResponder("POST", url, httpmock.NewStringResponder(status, `{"message": "rejected"}`))
 			mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", url, st, config.Config{})
-			if err := mg.Start(); err != nil {
-				t.Fatal(err)
-			}
+			err := mg.Start()
+			require.NoError(t, err)
 			feed := &gofeed.Feed{Title: "title"}
 			now := time.Now()
 			item := &gofeed.Item{Content: "content", PublishedParsed: &now}
-			if err := mg.AddMessage("dummy", feed, item, false); err != nil {
-				t.Fatal(err)
-			}
+			err = mg.AddMessage("dummy", feed, item, false)
+			require.NoError(t, err)
 			for start := time.Now(); !q.IsEmpty(); {
 				if time.Since(start) > 2*time.Second {
 					t.Fatal("timed out waiting for message to be discarded")
@@ -307,8 +279,7 @@ func TestMessenger(t *testing.T) {
 	}
 	for _, status := range []int{500, 401, 403, 404} {
 		t.Run(fmt.Sprintf("should retry message on status %d", status), func(t *testing.T) {
-			st.ClearWebhookStats()
-			q.Clear()
+			st, q := newTestStorageAndQueue(t)
 			httpmock.Reset()
 			const url = "https://www.example.com/flaky"
 			httpmock.RegisterResponder("POST", url, httpmock.ResponderFromMultipleResponses([]*http.Response{
@@ -316,15 +287,13 @@ func TestMessenger(t *testing.T) {
 				httpmock.NewStringResponse(204, ""),
 			}))
 			mg := messenger.NewMessenger(dhook.NewClient(), q, "dummy", url, st, config.Config{})
-			if err := mg.Start(); err != nil {
-				t.Fatal(err)
-			}
+			err := mg.Start()
+			require.NoError(t, err)
 			feed := &gofeed.Feed{Title: "title"}
 			now := time.Now()
 			item := &gofeed.Item{Content: "content", PublishedParsed: &now}
-			if err := mg.AddMessage("dummy", feed, item, false); err != nil {
-				t.Fatal(err)
-			}
+			err = mg.AddMessage("dummy", feed, item, false)
+			require.NoError(t, err)
 			for start := time.Now(); !q.IsEmpty(); {
 				if time.Since(start) > 2*time.Second {
 					t.Fatal("timed out waiting for message to be sent")
@@ -339,4 +308,20 @@ func TestMessenger(t *testing.T) {
 			assert.Equal(t, 1, ws.SentCount)
 		})
 	}
+}
+
+func newTestStorageAndQueue(t *testing.T) (*storage.Storage, *pqueue.PQueue) {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "test.db")
+	db, err := bolt.Open(p, 0600, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		db.Close()
+	})
+	q, err := pqueue.New(db, "test")
+	require.NoError(t, err)
+	st := storage.New(db, config.Config{})
+	err = st.Init()
+	require.NoError(t, err)
+	return st, q
 }

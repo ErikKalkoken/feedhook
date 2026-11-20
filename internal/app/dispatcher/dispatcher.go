@@ -277,13 +277,16 @@ func (d *Dispatcher) PostLatestFeedItem(feedName string) error {
 	latest := slices.MaxFunc(items, func(a, b *gofeed.Item) int {
 		return a.PublishedParsed.Compare(*b.PublishedParsed)
 	})
-	fi := messenger.NewFeedItem(feedName, feed, latest, false)
+	fi, err := messenger.NewFeedItem(feedName, feed, latest, false)
+	if err != nil {
+		return fmt.Errorf("PostLatestFeedItem: %w", err)
+	}
 	m, err := fi.ToDiscordMessage(d.cfg.App.BrandingDisabled)
 	if err != nil {
-		return fmt.Errorf("convert item to Discord message: %w", err)
+		return fmt.Errorf("PostLatestFeedItem: convert item to Discord message: %w", err)
 	}
 	if err := m.Validate(); err != nil {
-		return fmt.Errorf("convert item to Discord message: %w", err)
+		return fmt.Errorf("PostLatestFeedItem: validate: %w", err)
 	}
 	wh := d.client.NewWebhook(hook.URL)
 	if _, err := wh.Execute(m, nil); err != nil {

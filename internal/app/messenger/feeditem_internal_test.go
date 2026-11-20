@@ -5,9 +5,85 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mmcdole/gofeed"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestNewFeedItem(t *testing.T) {
+	t.Run("should create feed item from feed and item", func(t *testing.T) {
+		// given
+		published := time.Date(2026, 11, 20, 12, 30, 0, 0, time.UTC)
+		feed := &gofeed.Feed{
+			Title: "feedTitle",
+			Link:  "http://www.example.com/feed",
+			Image: &gofeed.Image{
+				URL: "http://www.example.com/icon",
+			},
+		}
+		item := &gofeed.Item{
+			Title:           "title",
+			Description:     "description",
+			Link:            "http://www.example.com/item",
+			PublishedParsed: &published,
+			Image: &gofeed.Image{
+				URL: "http://www.example.com/image",
+			},
+		}
+		// when
+		fi, err := NewFeedItem("feedName", feed, item, true)
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, "description", fi.Description)
+		assert.Equal(t, "feedName", fi.FeedName)
+		assert.Equal(t, "feedTitle", fi.FeedTitle)
+		assert.Equal(t, "http://www.example.com/feed", fi.FeedURL)
+		assert.Equal(t, "http://www.example.com/icon", fi.IconURL)
+		assert.Equal(t, "http://www.example.com/image", fi.ImageURL)
+		assert.True(t, fi.IsUpdated)
+		assert.Equal(t, "http://www.example.com/item", fi.ItemURL)
+		assert.True(t, published.Equal(fi.Published))
+		assert.Equal(t, "title", fi.Title)
+	})
+
+	t.Run("should prefer content over description", func(t *testing.T) {
+		// given
+		item := &gofeed.Item{
+			Content:     "content",
+			Description: "description",
+		}
+		// when
+		fi, err := NewFeedItem("feedName", &gofeed.Feed{}, item, false)
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, "content", fi.Description)
+	})
+
+	t.Run("should leave optional fields empty when not provided", func(t *testing.T) {
+		// given
+		item := &gofeed.Item{
+			Title: "title",
+		}
+		// when
+		fi, err := NewFeedItem("feedName", &gofeed.Feed{}, item, false)
+		// then
+		require.NoError(t, err)
+		assert.Equal(t, "", fi.IconURL)
+		assert.Equal(t, "", fi.ImageURL)
+		assert.True(t, fi.Published.IsZero())
+		assert.False(t, fi.IsUpdated)
+	})
+
+	t.Run("should return error when feed is nil", func(t *testing.T) {
+		_, err := NewFeedItem("feedName", nil, &gofeed.Item{}, false)
+		assert.Error(t, err)
+	})
+
+	t.Run("should return error when item is nil", func(t *testing.T) {
+		_, err := NewFeedItem("feedName", &gofeed.Feed{}, nil, false)
+		assert.Error(t, err)
+	})
+}
 
 func TestFeedItem(t *testing.T) {
 	t.Run("can generate webhook payload from item", func(t *testing.T) {

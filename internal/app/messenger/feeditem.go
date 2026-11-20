@@ -1,6 +1,7 @@
 package messenger
 
 import (
+	"errors"
 	"fmt"
 	"html"
 	"log/slog"
@@ -75,7 +76,11 @@ type FeedItem struct {
 	Title       string
 }
 
-func NewFeedItem(feedName string, feed *gofeed.Feed, item *gofeed.Item, isUpdated bool) FeedItem {
+// NewFeedItem returns a new FeedItem created from a feed and one of its items.
+func NewFeedItem(feedName string, feed *gofeed.Feed, item *gofeed.Item, isUpdated bool) (FeedItem, error) {
+	if feed == nil || item == nil {
+		return FeedItem{}, errors.New("feed and item must not be nil")
+	}
 	var description string
 	if item.Content != "" {
 		description = item.Content
@@ -100,7 +105,7 @@ func NewFeedItem(feedName string, feed *gofeed.Feed, item *gofeed.Item, isUpdate
 	if item.Image != nil {
 		fi.ImageURL = item.Image.URL
 	}
-	return fi
+	return fi, nil
 }
 
 // ToDiscordMessage generates a DiscordMessage from a FeedItem.

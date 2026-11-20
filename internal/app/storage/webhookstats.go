@@ -39,20 +39,6 @@ func (st *Storage) UpdateOrCreateWebhookStats(name string, f func(ws *app.Webhoo
 	return err
 }
 
-func (st *Storage) ClearWebhookStats() error {
-	err := st.db.Update(func(tx *bolt.Tx) error {
-		root := tx.Bucket([]byte(bucketStats))
-		b := root.Bucket([]byte(bucketWebhooks))
-		return b.ForEach(func(k, v []byte) error {
-			if err := b.Delete(k); err != nil {
-				return err
-			}
-			return nil
-		})
-	})
-	return err
-}
-
 // GetWebhookStats returns the stats for webhook by name.
 // It returns [ErrNotFound] when the webhook does not exist.
 func (st *Storage) GetWebhookStats(name string) (*app.WebhookStats, error) {
