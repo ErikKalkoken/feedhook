@@ -32,7 +32,7 @@ func TestParseConfig(t *testing.T) {
 		}
 		assert.Error(t, parseConfig(&cf))
 	})
-	t.Run("should return error when no hook has no https://www.example.com/url", func(t *testing.T) {
+	t.Run("should return error when hook has no URL", func(t *testing.T) {
 		cf := Config{
 			Webhooks: []ConfigWebhook{{
 				Name: "name",
@@ -40,7 +40,7 @@ func TestParseConfig(t *testing.T) {
 		}
 		assert.Error(t, parseConfig(&cf))
 	})
-	t.Run("should return error hook has no name", func(t *testing.T) {
+	t.Run("should return error when hook has no name", func(t *testing.T) {
 		cf := Config{
 			Webhooks: []ConfigWebhook{{
 				URL: "https://www.example.com/url",

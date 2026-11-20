@@ -247,7 +247,7 @@ func TestStartFailure(t *testing.T) {
 		App: config.ConfigApp{
 			Ticker: 1,
 		},
-		// the empty name is not a valid bucket name, so creating the second queue fails
+		// the second webhook has no name, so creating its queue fails
 		Webhooks: []config.ConfigWebhook{
 			{
 				Name: "hook1",
@@ -273,6 +273,22 @@ func TestStartFailure(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("stop did not return in time")
 	}
+}
+
+func TestStartFailsWithoutWebhooks(t *testing.T) {
+	// given
+	cfg := config.Config{
+		App: config.ConfigApp{
+			Ticker: 1,
+		},
+	}
+	st := newTestStorage(t)
+	d := dispatcher.New(st, cfg, fakeTime{now: time.Now()})
+	// when
+	err := d.Start()
+	// then
+	assert.ErrorContains(t, err, "no webhook defined")
+	assert.False(t, d.Stop(), "dispatcher was started")
 }
 
 func TestFetchFeedUsesConfiguredTimeout(t *testing.T) {
