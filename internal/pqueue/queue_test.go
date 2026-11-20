@@ -84,6 +84,26 @@ func TestClear(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, q.IsEmpty())
 	})
+	t.Run("should keep order of items put after clear", func(t *testing.T) {
+		// given
+		q := createQueue(t, db)
+		for _, x := range []string{"alpha", "bravo"} {
+			require.NoError(t, q.Put([]byte(x)))
+		}
+		require.NoError(t, q.Clear())
+		// when
+		for _, x := range []string{"charlie", "delta"} {
+			require.NoError(t, q.Put([]byte(x)))
+		}
+		// then
+		assert.Equal(t, 2, q.Size())
+		for _, want := range []string{"charlie", "delta"} {
+			v, err := q.Get(t.Context())
+			require.NoError(t, err)
+			assert.Equal(t, []byte(want), v)
+		}
+		assert.True(t, q.IsEmpty())
+	})
 }
 
 func TestIsEmpty(t *testing.T) {

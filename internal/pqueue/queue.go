@@ -45,10 +45,12 @@ func New(db *bolt.DB, name string) (*PQueue, error) {
 // Clear deletes all items from the queue.
 func (q *PQueue) Clear() error {
 	err := q.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(q.name))
-		b.ForEach(func(k, v []byte) error {
-			return b.Delete(k)
-		})
+		if err := tx.DeleteBucket([]byte(q.name)); err != nil {
+			return err
+		}
+		if _, err := tx.CreateBucketIfNotExists([]byte(q.name)); err != nil {
+			return err
+		}
 		return nil
 	})
 	return err
