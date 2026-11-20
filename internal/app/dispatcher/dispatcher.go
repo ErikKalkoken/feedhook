@@ -132,6 +132,7 @@ func (d *Dispatcher) Start() error {
 		d.messengers.Store(ms.Name(), ms)
 		ms.Start()
 	}
+
 	// process feeds until aborted
 	var wg sync.WaitGroup
 	ticker := time.NewTicker(time.Duration(d.cfg.App.Ticker) * time.Second)
@@ -141,26 +142,24 @@ func (d *Dispatcher) Start() error {
 	main:
 		for {
 			for _, cf := range feeds {
-				if len(cf.Webhooks) == 0 {
-					slog.Warn("Skipping feed without webhooks", "name", cf.Name)
-					continue
-				}
 				wg.Go(func() {
-					usedHooks := make([]*messenger.Messenger, 0)
-					for _, name := range cf.Webhooks {
-						wh, ok := d.messengers.Load(name)
-						if !ok {
-							panic("expected webhook not found: " + name)
-						}
-						usedHooks = append(usedHooks, wh)
+					m, ok := d.messengers.Load(cf.Webhook)
+					if !ok {
+						panic("messenger for webhook not found: " + cf.Webhook)
 					}
-					err := d.processFeed(ctx, cf, usedHooks)
-					if err == errUserAborted {
+					err := d.processFeed(ctx, cf, m)
+					if errors.Is(err, errUserAborted) {
 						slog.Debug("user aborted")
 						return
 					}
 					if err != nil {
 						slog.Error("Failed to process feed", "feed", cf.Name, "error", err)
+						if err := d.st.UpdateFeedStats(cf.Name, func(fs *app.FeedStats) error {
+							fs.ErrorCount++
+							return nil
+						}); err != nil {
+							slog.Error("failed to update stats for feed", "feed", cf.Name, "error", err)
+						}
 					}
 				})
 			}
@@ -179,15 +178,15 @@ func (d *Dispatcher) Start() error {
 	return nil
 }
 
-// processFeed checks a feed for new items and hands them over to configured messengers.
-func (d *Dispatcher) processFeed(ctx context.Context, cf config.ConfigFeed, hooks []*messenger.Messenger) error {
+// processFeed checks feed cf for new items and adds them to messenger m.
+func (d *Dispatcher) processFeed(ctx context.Context, cf config.ConfigFeed, m *messenger.Messenger) error {
 	myLog := slog.With("feed", cf.Name)
 	feed, err := d.fp.ParseURLWithContext(cf.URL, ctx)
 	if err != nil {
 		if ctx.Err() != nil {
 			return errUserAborted
 		}
-		return fmt.Errorf("parse URL for feed %s: %w ", cf.Name, err)
+		return fmt.Errorf("parse URL for feed %s: %w", cf.Name, err)
 	}
 	oldest := time.Duration(d.cfg.App.Oldest) * time.Second
 	sort.Sort(feed)
@@ -203,27 +202,13 @@ func (d *Dispatcher) processFeed(ctx context.Context, cf config.ConfigFeed, hook
 		}
 		state, err := d.st.GetItemState(cf, item)
 		if err != nil {
-			slog.Warn("Failed to read item state from DB. Assuming item is new.", "title", item.Title)
-			state = app.StateNew
-		} else if state == app.StateProcessed {
+			return fmt.Errorf("get state for item %q: %w", item.Title, err)
+		}
+		if state == app.StateProcessed {
 			continue
 		}
-		for _, hook := range hooks {
-			if err := hook.AddMessage(cf.Name, feed, item, state == app.StateUpdated); err != nil {
-				myLog.Error(
-					"Failed to add item to webhook queue. Item will not be delivered to this webhook",
-					slog.String("hook", hook.Name()),
-					slog.String("title", item.Title),
-					slog.Any("error", err),
-				)
-				err := d.st.UpdateFeedStats(cf.Name, func(fs *app.FeedStats) error {
-					fs.ErrorCount++
-					return nil
-				})
-				if err != nil {
-					myLog.Error("failed to update feed stats", "error", err)
-				}
-			}
+		if err := m.AddMessage(cf.Name, feed, item, state == app.StateUpdated); err != nil {
+			return fmt.Errorf("add item %q to messenger %s: %w", item.Title, m.Name(), err)
 		}
 		if err := d.st.RecordItem(cf, item); err != nil {
 			return fmt.Errorf("record item: %w", err)
@@ -266,18 +251,13 @@ func (d *Dispatcher) PostLatestFeedItem(feedName string) error {
 	if !ok {
 		return fmt.Errorf("feed \"%s\": %w", feedName, ErrNotFound)
 	}
-	hooks := make([]config.ConfigWebhook, 0)
-	for _, name := range cf.Webhooks {
-		if h, ok := d.cfg.WebhookByName(name); ok {
-			hooks = append(hooks, h)
-		}
-	}
-	if len(hooks) == 0 {
-		return fmt.Errorf("no webhooks configured for feed: %s ", feedName)
+	hook, ok := d.cfg.WebhookByName(cf.Webhook)
+	if !ok {
+		return fmt.Errorf("no webhook configured for feed: %s", feedName)
 	}
 	feed, err := d.fp.ParseURLWithContext(cf.URL, context.Background())
 	if err != nil {
-		return fmt.Errorf("parse URL for feed: %w ", err)
+		return fmt.Errorf("parse URL for feed: %w", err)
 	}
 	items := make([]*gofeed.Item, 0)
 	for _, i := range feed.Items {
@@ -299,11 +279,9 @@ func (d *Dispatcher) PostLatestFeedItem(feedName string) error {
 	if err := m.Validate(); err != nil {
 		return fmt.Errorf("convert item to Discord message: %w", err)
 	}
-	for _, hook := range hooks {
-		wh := d.client.NewWebhook(hook.URL)
-		if _, err := wh.Execute(m, nil); err != nil {
-			return fmt.Errorf("post item to webhook: %w", err)
-		}
+	wh := d.client.NewWebhook(hook.URL)
+	if _, err := wh.Execute(m, nil); err != nil {
+		return fmt.Errorf("post item to webhook: %w", err)
 	}
 	return nil
 }

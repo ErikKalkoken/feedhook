@@ -20,7 +20,11 @@ func TestFeedStats(t *testing.T) {
 		t.Fatalf("Failed to open DB: %s", err)
 	}
 	defer db.Close()
-	cf := config.ConfigFeed{Name: "feed1", URL: "https://www.example.com/feed", Webhooks: []string{"hook1"}}
+	cf := config.ConfigFeed{
+		Name:    "feed1",
+		URL:     "https://www.example.com/feed",
+		Webhook: "hook1",
+	}
 	cfg := config.Config{
 		Feeds: []config.ConfigFeed{cf},
 	}

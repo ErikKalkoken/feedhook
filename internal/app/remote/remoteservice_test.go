@@ -34,12 +34,26 @@ func TestStatisticsSortsByNameWithoutChangingConfig(t *testing.T) {
 	defer db.Close()
 	cfg := config.Config{
 		Webhooks: []config.ConfigWebhook{
-			{Name: "hook2", URL: "https://www.example.com/hook2"},
-			{Name: "hook1", URL: "https://www.example.com/hook1"},
+			{
+				Name: "hook2",
+				URL:  "https://www.example.com/hook2",
+			},
+			{
+				Name: "hook1",
+				URL:  "https://www.example.com/hook1",
+			},
 		},
 		Feeds: []config.ConfigFeed{
-			{Name: "feed2", URL: "https://www.example.com/feed2", Webhooks: []string{"hook2"}},
-			{Name: "feed1", URL: "https://www.example.com/feed1", Webhooks: []string{"hook1"}},
+			{
+				Name:    "feed2",
+				URL:     "https://www.example.com/feed2",
+				Webhook: "hook2",
+			},
+			{
+				Name:    "feed1",
+				URL:     "https://www.example.com/feed1",
+				Webhook: "hook1",
+			},
 		},
 	}
 	st := storage.New(db, cfg)

@@ -25,7 +25,7 @@ url = "https://www.example.com/webhook"
 [[feeds]]
 name = "Feed 1"
 url = "https://www.example.com/feed.rss"
-webhooks = ["hook-1"]
+webhook = "hook-1"
 `
 
 func TestConfig(t *testing.T) {
@@ -43,7 +43,7 @@ func TestConfig(t *testing.T) {
 	assert.Equal(t, "https://www.example.com/webhook", cf.Webhooks[0].URL)
 	assert.Equal(t, "Feed 1", cf.Feeds[0].Name)
 	assert.Equal(t, "https://www.example.com/feed.rss", cf.Feeds[0].URL)
-	assert.Equal(t, []string{"hook-1"}, cf.Feeds[0].Webhooks)
+	assert.Equal(t, "hook-1", cf.Feeds[0].Webhook)
 }
 
 func TestOldest(t *testing.T) {
@@ -81,7 +81,7 @@ url = "https://www.example.com/webhook"
 [[feeds]]
 name = "Feed 1"
 url = "https://www.example.com/feed.rss"
-webhooks = ["hook-1"]
+webhook = "hook-1"
 `, line)
 }
 

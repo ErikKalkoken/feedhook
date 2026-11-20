@@ -43,9 +43,19 @@ func newTestStorage(t *testing.T, cfg config.Config) *storage.Storage {
 
 func TestService(t *testing.T) {
 	cfg := config.Config{
-		App:      config.ConfigApp{Oldest: 3600 * 24, Ticker: 1},
-		Webhooks: []config.ConfigWebhook{{Name: "hook1", URL: "https://www.example.com/hook"}},
-		Feeds:    []config.ConfigFeed{{Name: "feed1", URL: "https://www.example.com/feed", Webhooks: []string{"hook1"}}},
+		App: config.ConfigApp{
+			Oldest: 3600 * 24,
+			Ticker: 1,
+		},
+		Webhooks: []config.ConfigWebhook{{
+			Name: "hook1",
+			URL:  "https://www.example.com/hook",
+		}},
+		Feeds: []config.ConfigFeed{{
+			Name:    "feed1",
+			URL:     "https://www.example.com/feed",
+			Webhook: "hook1",
+		}},
 	}
 	st := newTestStorage(t, cfg)
 	httpmock.Activate()
@@ -121,11 +131,118 @@ func TestService(t *testing.T) {
 	})
 }
 
+func TestFailedFeedIncrementsErrorCount(t *testing.T) {
+	cfg := config.Config{
+		App: config.ConfigApp{
+			Ticker: 60, // only the initial run happens during the test
+		},
+		Webhooks: []config.ConfigWebhook{{
+			Name: "hook1",
+			URL:  "https://www.example.com/hook",
+		}},
+		Feeds: []config.ConfigFeed{{
+			Name:    "feed1",
+			URL:     "https://www.example.com/feed",
+			Webhook: "hook1",
+		}},
+	}
+	st := newTestStorage(t, cfg)
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+	httpmock.RegisterResponder(
+		"GET",
+		"https://www.example.com/feed",
+		httpmock.NewStringResponder(500, ""),
+	)
+	d := dispatcher.New(st, cfg, fakeTime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
+	require.NoError(t, d.Start())
+	waitForFeedError(t, st, "feed1")
+	d.Stop()
+	fs, err := st.GetFeedStats("feed1")
+	require.NoError(t, err)
+	assert.Equal(t, 1, fs.ErrorCount)
+	assert.Equal(t, 0, fs.ReceivedCount)
+	assert.Equal(t, 1, httpmock.GetCallCountInfo()["GET https://www.example.com/feed"])
+}
+
+func TestFailedItemStateAbortsFeed(t *testing.T) {
+	cfg := config.Config{
+		App: config.ConfigApp{
+			Oldest: 3600 * 24,
+			Ticker: 60, // only the initial run happens during the test
+		},
+		Webhooks: []config.ConfigWebhook{{
+			Name: "hook1",
+			URL:  "https://www.example.com/hook",
+		}},
+		Feeds: []config.ConfigFeed{{
+			Name:    "feed1",
+			URL:     "https://www.example.com/feed",
+			Webhook: "hook1",
+		}},
+	}
+	st := newTestStorage(t, cfg)
+	// store an invalid record for the feed's only item, so reading its state fails
+	err := st.DB().Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("feeds")).Bucket([]byte("feed1"))
+		return b.Put([]byte("tag:status.eveonline.com,2005:Incident/21848727"), []byte("invalid"))
+	})
+	require.NoError(t, err)
+	httpmock.Activate()
+	defer httpmock.DeactivateAndReset()
+	httpmock.RegisterResponder(
+		"GET",
+		"https://www.example.com/feed",
+		httpmock.NewXmlResponderOrPanic(200, httpmock.File("testdata/atomfeed.xml")),
+	)
+	httpmock.RegisterResponder(
+		"POST",
+		"https://www.example.com/hook",
+		httpmock.NewStringResponder(204, ""),
+	)
+	d := dispatcher.New(st, cfg, fakeTime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
+	require.NoError(t, d.Start())
+	waitForFeedError(t, st, "feed1")
+	d.Stop()
+	fs, err := st.GetFeedStats("feed1")
+	require.NoError(t, err)
+	assert.Equal(t, 1, fs.ErrorCount)
+	assert.Equal(t, 0, fs.ReceivedCount)
+	assert.Equal(t, 0, httpmock.GetCallCountInfo()["POST https://www.example.com/hook"])
+}
+
+// waitForFeedError waits until the error count of a feed is above zero.
+func waitForFeedError(t *testing.T, st *storage.Storage, name string) {
+	t.Helper()
+	for start := time.Now(); ; {
+		fs, err := st.GetFeedStats(name)
+		require.NoError(t, err)
+		if fs.ErrorCount > 0 {
+			return
+		}
+		if time.Since(start) > 2*time.Second {
+			t.Fatal("timed out waiting for error count")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func TestStartFailure(t *testing.T) {
 	cfg := config.Config{
-		App: config.ConfigApp{Ticker: 1},
+		App: config.ConfigApp{
+			Ticker: 1,
+		},
 		// the empty name is not a valid bucket name, so creating the second queue fails
-		Webhooks: []config.ConfigWebhook{{Name: "hook1", URL: "https://www.example.com/hook1"}, {Name: "", URL: "https://www.example.com/hook2"}},
+		Webhooks: []config.ConfigWebhook{
+			{
+				Name: "hook1",
+				URL:  "https://www.example.com/hook1",
+			},
+			{
+				Name: "",
+				URL:  "https://www.example.com/hook2",
+			},
+		},
 	}
 	st := newTestStorage(t, cfg)
 	d := dispatcher.New(st, cfg, fakeTime{now: time.Now()})
@@ -145,9 +262,18 @@ func TestStartFailure(t *testing.T) {
 
 func TestFetchFeedUsesConfiguredTimeout(t *testing.T) {
 	cfg := config.Config{
-		App:      config.ConfigApp{Timeout: 120},
-		Webhooks: []config.ConfigWebhook{{Name: "hook1", URL: "https://www.example.com/hook"}},
-		Feeds:    []config.ConfigFeed{{Name: "feed1", URL: "https://www.example.com/feed", Webhooks: []string{"hook1"}}},
+		App: config.ConfigApp{
+			Timeout: 120,
+		},
+		Webhooks: []config.ConfigWebhook{{
+			Name: "hook1",
+			URL:  "https://www.example.com/hook",
+		}},
+		Feeds: []config.ConfigFeed{{
+			Name:    "feed1",
+			URL:     "https://www.example.com/feed",
+			Webhook: "hook1",
+		}},
 	}
 	st := newTestStorage(t, cfg)
 	httpmock.Activate()
@@ -178,9 +304,18 @@ func TestFetchFeedUsesConfiguredTimeout(t *testing.T) {
 
 func TestPostLatestFeedItemRespectsBrandingDisabled(t *testing.T) {
 	cfg := config.Config{
-		App:      config.ConfigApp{BrandingDisabled: true},
-		Webhooks: []config.ConfigWebhook{{Name: "hook1", URL: "https://www.example.com/hook"}},
-		Feeds:    []config.ConfigFeed{{Name: "feed1", URL: "https://www.example.com/feed", Webhooks: []string{"hook1"}}},
+		App: config.ConfigApp{
+			BrandingDisabled: true,
+		},
+		Webhooks: []config.ConfigWebhook{{
+			Name: "hook1",
+			URL:  "https://www.example.com/hook",
+		}},
+		Feeds: []config.ConfigFeed{{
+			Name:    "feed1",
+			URL:     "https://www.example.com/feed",
+			Webhook: "hook1",
+		}},
 	}
 	st := newTestStorage(t, cfg)
 	httpmock.Activate()
@@ -210,9 +345,19 @@ func TestPostLatestFeedItemRespectsBrandingDisabled(t *testing.T) {
 
 func TestStopCancelsFeedFetch(t *testing.T) {
 	cfg := config.Config{
-		App:      config.ConfigApp{Ticker: 1, Timeout: 120},
-		Webhooks: []config.ConfigWebhook{{Name: "hook1", URL: "https://www.example.com/hook"}},
-		Feeds:    []config.ConfigFeed{{Name: "feed1", URL: "https://www.example.com/feed", Webhooks: []string{"hook1"}}},
+		App: config.ConfigApp{
+			Ticker:  1,
+			Timeout: 120,
+		},
+		Webhooks: []config.ConfigWebhook{{
+			Name: "hook1",
+			URL:  "https://www.example.com/hook",
+		}},
+		Feeds: []config.ConfigFeed{{
+			Name:    "feed1",
+			URL:     "https://www.example.com/feed",
+			Webhook: "hook1",
+		}},
 	}
 	st := newTestStorage(t, cfg)
 	httpmock.Activate()
@@ -253,8 +398,13 @@ func TestStopCancelsFeedFetch(t *testing.T) {
 
 func TestSendPing(t *testing.T) {
 	cfg := config.Config{
-		App:      config.ConfigApp{Timeout: 120},
-		Webhooks: []config.ConfigWebhook{{Name: "hook1", URL: "https://www.example.com/hook"}},
+		App: config.ConfigApp{
+			Timeout: 120,
+		},
+		Webhooks: []config.ConfigWebhook{{
+			Name: "hook1",
+			URL:  "https://www.example.com/hook",
+		}},
 	}
 	st := newTestStorage(t, cfg)
 	httpmock.Activate()

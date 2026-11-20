@@ -68,7 +68,7 @@ func main() {
 			},
 			{
 				Name:      "post-latest",
-				Usage:     "posts the latest feed item to configured webhooks",
+				Usage:     "posts the latest feed item to its configured webhook",
 				ArgsUsage: "feed-name",
 				Action: func(cCtx *cli.Context) error {
 					feedName := cCtx.Args().First()

@@ -79,10 +79,10 @@ func (ca ConfigApp) LoggerLevel() slog.Level {
 
 // ConfigFeed is the configuration of a feed.
 type ConfigFeed struct {
-	Name     string   `toml:"name"`
-	URL      string   `toml:"url"`
-	Webhooks []string `toml:"webhooks"`
-	Disabled bool     `toml:"disabled"`
+	Name     string `toml:"name"`
+	URL      string `toml:"url"`
+	Webhook  string `toml:"webhook"`
+	Disabled bool   `toml:"disabled"`
 }
 
 // ConfigWebhook is the configuration of a webhook.
@@ -135,8 +135,8 @@ func parseConfig(config *Config) error {
 		if x.Name == "" {
 			return fmt.Errorf("feed has no name")
 		}
-		if len(x.Webhooks) == 0 {
-			return fmt.Errorf("feed %s has no webhooks", x.Name)
+		if x.Webhook == "" {
+			return fmt.Errorf("feed %s has no webhook", x.Name)
 		}
 		if x.URL == "" {
 			return fmt.Errorf("feed %s has no url", x.Name)
@@ -148,21 +148,14 @@ func parseConfig(config *Config) error {
 		if _, err := url.ParseRequestURI(x.URL); err != nil {
 			return fmt.Errorf("feed %s has invalid url: %w", x.Name, err)
 		}
-		feedWebhooks := make(map[string]bool)
-		for _, wh := range x.Webhooks {
-			if !webhookNames[wh] {
-				return fmt.Errorf("feed \"%s\": invalid webhook \"%s\"", x.Name, wh)
-			}
-			webhooksUsed[wh] = true
-			if feedWebhooks[wh] {
-				return fmt.Errorf("feed \"%s\": webhook \"%s\" used more then once", x.Name, wh)
-			}
-			feedWebhooks[wh] = true
+		if !webhookNames[x.Webhook] {
+			return fmt.Errorf("feed \"%s\": invalid webhook \"%s\"", x.Name, x.Webhook)
 		}
+		webhooksUsed[x.Webhook] = true
 	}
-	for k, v := range webhooksUsed {
-		if !v {
-			slog.Warn("Webhook defined, but not used", "name", k)
+	for _, wh := range config.Webhooks {
+		if !webhooksUsed[wh.Name] {
+			slog.Warn("Webhook defined, but not used", "name", wh.Name)
 		}
 	}
 	if config.App.Timeout <= 0 {
