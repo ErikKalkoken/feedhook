@@ -49,6 +49,42 @@ func TestNew(t *testing.T) {
 		_, err := pqueue.New(db, "")
 		assert.Error(t, err)
 	})
+	t.Run("should return error when db is nil", func(t *testing.T) {
+		_, err := pqueue.New(nil, "alpha")
+		assert.Error(t, err)
+	})
+	t.Run("should not touch existing bucket with same name as queue", func(t *testing.T) {
+		// given
+		db := createDB(t)
+		err := db.Update(func(tx *bolt.Tx) error {
+			b, err := tx.CreateBucket([]byte("feeds"))
+			if err != nil {
+				return err
+			}
+			if _, err := b.CreateBucket([]byte("feed1")); err != nil {
+				return err
+			}
+			return b.Put([]byte("key"), []byte("value"))
+		})
+		require.NoError(t, err)
+		// when
+		q, err := pqueue.New(db, "feeds")
+		require.NoError(t, err)
+		require.NoError(t, q.Put([]byte("alpha")))
+		require.NoError(t, q.Clear())
+		require.NoError(t, q.Put([]byte("bravo")))
+		// then
+		assert.Equal(t, 1, q.Size())
+		err = db.View(func(tx *bolt.Tx) error {
+			b := tx.Bucket([]byte("feeds"))
+			require.NotNil(t, b)
+			assert.NotNil(t, b.Bucket([]byte("feed1")))
+			assert.Equal(t, []byte("value"), b.Get([]byte("key")))
+			assert.Equal(t, 2, b.Stats().KeyN)
+			return nil
+		})
+		require.NoError(t, err)
+	})
 	t.Run("should keep queues with different names separate", func(t *testing.T) {
 		// given
 		q1, err := pqueue.New(db, "q1")
