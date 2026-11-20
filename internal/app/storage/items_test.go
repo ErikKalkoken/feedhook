@@ -111,6 +111,23 @@ func TestStorage_GetItemState(t *testing.T) {
 func TestStorage_UpdateOrCreateItem(t *testing.T) {
 	st := newTestStorage(t)
 
+	t.Run("should store item with zone offset of minus one minute", func(t *testing.T) {
+		// given
+		st := newTestStorage(t)
+		published := time.Date(2026, 1, 2, 3, 4, 5, 0, time.FixedZone("", -60))
+		i := &gofeed.Item{
+			GUID:            "abc1",
+			PublishedParsed: &published,
+		}
+		// when
+		err := st.UpdateOrCreateItem(feedName, i)
+		// then
+		require.NoError(t, err)
+		s, err := st.GetItemState(feedName, i)
+		require.NoError(t, err)
+		assert.Equal(t, app.StateProcessed, s)
+	})
+
 	t.Run("should return error when feed name is empty", func(t *testing.T) {
 		err := st.UpdateOrCreateItem("", &gofeed.Item{GUID: "abc1"})
 		require.ErrorIs(t, err, storage.ErrInvalid)

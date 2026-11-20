@@ -97,7 +97,7 @@ func NewFeedItem(feedName string, feed *gofeed.Feed, item *gofeed.Item, isUpdate
 		Title:       item.Title,
 	}
 	if item.PublishedParsed != nil {
-		fi.Published = *item.PublishedParsed
+		fi.Published = item.PublishedParsed.UTC()
 	}
 	if feed.Image != nil {
 		fi.IconURL = feed.Image.URL

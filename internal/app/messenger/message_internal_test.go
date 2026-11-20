@@ -40,4 +40,22 @@ func TestMessage(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, reflect.DeepEqual(m, m2))
 	})
+	t.Run("can serialize message for item with zone offset of minus one minute", func(t *testing.T) {
+		// given
+		feed := &gofeed.Feed{Title: "title"}
+		published := time.Date(2026, 1, 2, 3, 4, 5, 0, time.FixedZone("", -60))
+		item := &gofeed.Item{
+			Content:         "content",
+			PublishedParsed: &published,
+		}
+		m, err := newMessage("dummy", feed, item, false)
+		require.NoError(t, err)
+		// when
+		b, err := m.toBytes()
+		// then
+		require.NoError(t, err)
+		m2, err := newMessageFromBytes(b)
+		require.NoError(t, err)
+		assert.True(t, published.Equal(m2.Item.Published))
+	})
 }

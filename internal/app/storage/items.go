@@ -42,7 +42,7 @@ func (st *Storage) GetItemState(feedName string, item *gofeed.Item) (app.ItemSta
 			slog.Warn("GetItemState: invalid item record, treating as new", "feed", feedName, "item", string(k), "error", err)
 			return fmt.Errorf("decoding failed: %w: %w", ErrNotFound, err)
 		}
-		if pp := *item.PublishedParsed; pp.Equal(pi.Published) {
+		if pp := item.PublishedParsed; pp.Equal(pi.Published) {
 			s = app.StateProcessed
 			return nil
 		}
@@ -172,7 +172,7 @@ func (st *Storage) UpdateOrCreateItem(feedName string, item *gofeed.Item) error 
 func processedItemFromFeed(item *gofeed.Item) *app.ProcessedItem {
 	var t time.Time
 	if item.PublishedParsed != nil {
-		t = *item.PublishedParsed
+		t = item.PublishedParsed.UTC()
 	} else {
 		t = time.Now().UTC()
 	}
