@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	bolt "go.etcd.io/bbolt"
 
 	"github.com/ErikKalkoken/feedhook/internal/app"
@@ -35,13 +36,11 @@ func TestFeedStats(t *testing.T) {
 			fs.ReceivedCount++
 			return nil
 		})
-		if assert.NoError(t, err) {
-			got, err := st.GetFeedStats("feed1")
-			if assert.NoError(t, err) {
-				assert.Equal(t, "feed1", got.Name)
-				assert.Equal(t, 1, got.ReceivedCount)
-			}
-		}
+		require.NoError(t, err)
+		got, err := st.GetFeedStats("feed1")
+		require.NoError(t, err)
+		assert.Equal(t, "feed1", got.Name)
+		assert.Equal(t, 1, got.ReceivedCount)
 	})
 	t.Run("can update and read webhook stats", func(t *testing.T) {
 		if err := st.ClearFeeds(); err != nil {
@@ -51,12 +50,10 @@ func TestFeedStats(t *testing.T) {
 			fs.SentCount++
 			return nil
 		})
-		if assert.NoError(t, err) {
-			got, err := st.GetWebhookStats("hook1")
-			if assert.NoError(t, err) {
-				assert.Equal(t, "hook1", got.Name)
-				assert.Equal(t, 1, got.SentCount)
-			}
-		}
+		require.NoError(t, err)
+		got, err := st.GetWebhookStats("hook1")
+		require.NoError(t, err)
+		assert.Equal(t, "hook1", got.Name)
+		assert.Equal(t, 1, got.SentCount)
 	})
 }

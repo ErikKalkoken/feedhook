@@ -72,9 +72,8 @@ func TestService(t *testing.T) {
 		assert.Equal(t, 1, info["POST https://www.example.com/hook"])
 		assert.LessOrEqual(t, 1, info["GET https://www.example.com/feed"])
 		fs, err := st.GetFeedStats("feed1")
-		if assert.NoError(t, err) {
-			assert.Equal(t, 1, fs.ReceivedCount)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, 1, fs.ReceivedCount)
 	})
 	t.Run("should return error when trying to start an already running dispatcher", func(t *testing.T) {
 		httpmock.Reset()
@@ -172,9 +171,9 @@ func TestFetchFeedUsesConfiguredTimeout(t *testing.T) {
 	d := dispatcher.New(st, cfg, fakeTime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
 	start := time.Now()
 	err := d.PostLatestFeedItem("feed1")
-	if assert.NoError(t, err) && assert.True(t, hasDeadline) {
-		assert.WithinDuration(t, start.Add(120*time.Second), deadline, 5*time.Second)
-	}
+	require.NoError(t, err)
+	require.True(t, hasDeadline)
+	assert.WithinDuration(t, start.Add(120*time.Second), deadline, 5*time.Second)
 }
 
 func TestPostLatestFeedItemRespectsBrandingDisabled(t *testing.T) {
@@ -275,13 +274,11 @@ func TestSendPing(t *testing.T) {
 		)
 		start := time.Now()
 		err := d.SendPing("hook1")
-		if assert.NoError(t, err) {
-			info := httpmock.GetCallCountInfo()
-			assert.Equal(t, 1, info["POST https://www.example.com/hook"])
-			if assert.True(t, hasDeadline) {
-				assert.WithinDuration(t, start.Add(120*time.Second), deadline, 5*time.Second)
-			}
-		}
+		require.NoError(t, err)
+		info := httpmock.GetCallCountInfo()
+		assert.Equal(t, 1, info["POST https://www.example.com/hook"])
+		require.True(t, hasDeadline)
+		assert.WithinDuration(t, start.Add(120*time.Second), deadline, 5*time.Second)
 	})
 	t.Run("should return not found for unknown webhook", func(t *testing.T) {
 		httpmock.Reset()

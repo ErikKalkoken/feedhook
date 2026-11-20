@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	bolt "go.etcd.io/bbolt"
 
 	"github.com/ErikKalkoken/feedhook/internal/app"
@@ -59,21 +60,19 @@ func TestStatisticsSortsByNameWithoutChangingConfig(t *testing.T) {
 	s := remote.NewRemoteService(d, st, cfg, "")
 	var reply string
 	err = s.Statistics(&remote.EmptyArgs{}, &reply)
-	if assert.NoError(t, err) {
-		feedsOut, hooksOut, ok := strings.Cut(reply, "Webhooks:\n")
-		if assert.True(t, ok) {
-			for _, s := range []string{"    feed1", "    feed2"} {
-				assert.Contains(t, feedsOut, s)
-			}
-			for _, s := range []string{"    hook1", "    hook2"} {
-				assert.Contains(t, hooksOut, s)
-			}
-			assert.Less(t, strings.Index(feedsOut, "    feed1"), strings.Index(feedsOut, "    feed2"))
-			assert.Less(t, strings.Index(hooksOut, "    hook1"), strings.Index(hooksOut, "    hook2"))
-		}
-		assert.Equal(t, "feed2", cfg.Feeds[0].Name)
-		assert.Equal(t, "feed1", cfg.Feeds[1].Name)
-		assert.Equal(t, "hook2", cfg.Webhooks[0].Name)
-		assert.Equal(t, "hook1", cfg.Webhooks[1].Name)
+	require.NoError(t, err)
+	assert.Equal(t, "feed2", cfg.Feeds[0].Name)
+	assert.Equal(t, "feed1", cfg.Feeds[1].Name)
+	assert.Equal(t, "hook2", cfg.Webhooks[0].Name)
+	assert.Equal(t, "hook1", cfg.Webhooks[1].Name)
+	feedsOut, hooksOut, ok := strings.Cut(reply, "Webhooks:\n")
+	require.True(t, ok)
+	for _, s := range []string{"    feed1", "    feed2"} {
+		assert.Contains(t, feedsOut, s)
 	}
+	for _, s := range []string{"    hook1", "    hook2"} {
+		assert.Contains(t, hooksOut, s)
+	}
+	assert.Less(t, strings.Index(feedsOut, "    feed1"), strings.Index(feedsOut, "    feed2"))
+	assert.Less(t, strings.Index(hooksOut, "    hook1"), strings.Index(hooksOut, "    hook2"))
 }

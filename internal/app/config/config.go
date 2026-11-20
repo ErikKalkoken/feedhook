@@ -21,12 +21,14 @@ const (
 // OldestUnlimited is the value for Oldest to forward items of any age.
 const OldestUnlimited = -1
 
+// Config is the app's configuration.
 type Config struct {
 	App      ConfigApp
 	Feeds    []ConfigFeed
 	Webhooks []ConfigWebhook
 }
 
+// EnabledFeeds returns all feeds that are not disabled.
 func (c *Config) EnabledFeeds() []ConfigFeed {
 	feeds := make([]ConfigFeed, 0)
 	for _, f := range c.Feeds {
@@ -56,6 +58,7 @@ func (c *Config) WebhookByName(name string) (ConfigWebhook, bool) {
 	return c.Webhooks[i], true
 }
 
+// ConfigApp is the app-wide section of the configuration.
 type ConfigApp struct {
 	BrandingDisabled bool   `toml:"branding_disabled"`
 	LogLevel         string `toml:"loglevel"`
@@ -64,6 +67,7 @@ type ConfigApp struct {
 	Timeout          int    `toml:"timeout"`
 }
 
+// LoggerLevel returns the configured log level or the default if it is invalid.
 func (ca ConfigApp) LoggerLevel() slog.Level {
 	m := map[string]slog.Level{"DEBUG": slog.LevelDebug, "INFO": slog.LevelInfo, "WARN": slog.LevelWarn, "ERROR": slog.LevelError}
 	v, ok := m[strings.ToUpper(ca.LogLevel)]
@@ -73,6 +77,7 @@ func (ca ConfigApp) LoggerLevel() slog.Level {
 	return v
 }
 
+// ConfigFeed is the configuration of a feed.
 type ConfigFeed struct {
 	Name     string   `toml:"name"`
 	URL      string   `toml:"url"`
@@ -80,11 +85,14 @@ type ConfigFeed struct {
 	Disabled bool     `toml:"disabled"`
 }
 
+// ConfigWebhook is the configuration of a webhook.
 type ConfigWebhook struct {
 	Name string `toml:"name"`
 	URL  string `toml:"url"`
 }
 
+// FromFile reads, validates and returns the configuration from a TOML file.
+// Missing app settings are set to their defaults.
 func FromFile(path string) (Config, error) {
 	var config Config
 	if _, err := toml.DecodeFile(path, &config); err != nil {

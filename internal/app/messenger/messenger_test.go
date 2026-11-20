@@ -22,6 +22,7 @@ import (
 	"github.com/jarcoal/httpmock"
 	"github.com/mmcdole/gofeed"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMessengerBacksOffOnQueueError(t *testing.T) {
@@ -117,13 +118,11 @@ func TestMessenger(t *testing.T) {
 		item := &gofeed.Item{Content: "content", PublishedParsed: &now}
 		err = mg.AddMessage("dummy", feed, item, false)
 		time.Sleep(2 * time.Second)
-		if assert.NoError(t, err) {
-			assert.Equal(t, 1, httpmock.GetTotalCallCount())
-		}
+		require.NoError(t, err)
+		assert.Equal(t, 1, httpmock.GetTotalCallCount())
 		ws, err := st.GetWebhookStats("dummy")
-		if assert.NoError(t, err) {
-			assert.Equal(t, 1, ws.SentCount)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, 1, ws.SentCount)
 		mg.Shutdown()
 	})
 	t.Run("can submit messages 2", func(t *testing.T) {
@@ -234,9 +233,8 @@ func TestMessenger(t *testing.T) {
 		}
 		assert.Equal(t, 2, q.Size())
 		v, err := q.Get(context.Background())
-		if assert.NoError(t, err) {
-			assert.True(t, bytes.Contains(v, []byte("first-item")), "unsent message is no longer first")
-		}
+		require.NoError(t, err)
+		assert.True(t, bytes.Contains(v, []byte("first-item")), "unsent message is no longer first")
 		q.Clear()
 	})
 	t.Run("should not count shutdown while waiting for rate limit as error", func(t *testing.T) {
@@ -270,9 +268,8 @@ func TestMessenger(t *testing.T) {
 		assert.Equal(t, 0, mg.Status().ErrorCount)
 		assert.Equal(t, 1, httpmock.GetTotalCallCount())
 		v, err := q.Get(context.Background())
-		if assert.NoError(t, err) {
-			assert.True(t, bytes.Contains(v, []byte("second-item")))
-		}
+		require.NoError(t, err)
+		assert.True(t, bytes.Contains(v, []byte("second-item")))
 		q.Clear()
 	})
 	for _, status := range []int{400, 413} {
@@ -338,9 +335,8 @@ func TestMessenger(t *testing.T) {
 			assert.Equal(t, 2, httpmock.GetTotalCallCount())
 			assert.Equal(t, 1, mg.Status().ErrorCount)
 			ws, err := st.GetWebhookStats("dummy")
-			if assert.NoError(t, err) {
-				assert.Equal(t, 1, ws.SentCount)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, 1, ws.SentCount)
 		})
 	}
 }

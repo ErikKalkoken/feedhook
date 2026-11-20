@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseConfig(t *testing.T) {
@@ -88,11 +89,10 @@ func TestParseConfig(t *testing.T) {
 			Feeds:    []ConfigFeed{{Name: "feed1", URL: "https://www.example.com/url2", Webhooks: []string{"hook1"}}},
 		}
 		err := parseConfig(&cf)
-		if assert.NoError(t, err) {
-			assert.Equal(t, cf.App.Timeout, timeoutDefault)
-			assert.Equal(t, cf.App.Oldest, oldestDefault)
-			assert.Equal(t, cf.App.Ticker, tickerDefault)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, timeoutDefault, cf.App.Timeout)
+		assert.Equal(t, oldestDefault, cf.App.Oldest)
+		assert.Equal(t, tickerDefault, cf.App.Ticker)
 	})
 	t.Run("should return error when webhook names not unique", func(t *testing.T) {
 		cf := Config{
@@ -175,9 +175,8 @@ func TestFeedByName(t *testing.T) {
 	}
 	t.Run("should return existing feed", func(t *testing.T) {
 		f, ok := cf.FeedByName("feed2")
-		if assert.True(t, ok) {
-			assert.Equal(t, "https://www.example.com/url2", f.URL)
-		}
+		require.True(t, ok)
+		assert.Equal(t, "https://www.example.com/url2", f.URL)
 	})
 	t.Run("should report false for unknown feed", func(t *testing.T) {
 		_, ok := cf.FeedByName("unknown")
@@ -194,9 +193,8 @@ func TestWebhookByName(t *testing.T) {
 	}
 	t.Run("should return existing webhook", func(t *testing.T) {
 		w, ok := cf.WebhookByName("hook2")
-		if assert.True(t, ok) {
-			assert.Equal(t, "https://www.example.com/hook2", w.URL)
-		}
+		require.True(t, ok)
+		assert.Equal(t, "https://www.example.com/hook2", w.URL)
 	})
 	t.Run("should report false for unknown webhook", func(t *testing.T) {
 		_, ok := cf.WebhookByName("unknown")

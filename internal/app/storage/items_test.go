@@ -7,6 +7,7 @@ import (
 
 	"github.com/mmcdole/gofeed"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	bolt "go.etcd.io/bbolt"
 
 	"github.com/ErikKalkoken/feedhook/internal/app"
@@ -35,9 +36,8 @@ func TestItems(t *testing.T) {
 		}
 		i := &gofeed.Item{GUID: "abc1"}
 		s, err := st.GetItemState(cf, i)
-		if assert.NoError(t, err) {
-			assert.Equal(t, app.StateNew, s)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, app.StateNew, s)
 	})
 	t.Run("should report known item item with GUID and same publish date as processed", func(t *testing.T) {
 		if err := st.ClearFeeds(); err != nil {
@@ -50,9 +50,8 @@ func TestItems(t *testing.T) {
 		}
 		i2 := &gofeed.Item{GUID: "abc2", PublishedParsed: &t1}
 		s, err := st.GetItemState(cf, i2)
-		if assert.NoError(t, err) {
-			assert.Equal(t, app.StateProcessed, s)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, app.StateProcessed, s)
 	})
 	t.Run("should report known item with GUID and different publish data as updated", func(t *testing.T) {
 		if err := st.ClearFeeds(); err != nil {
@@ -66,9 +65,8 @@ func TestItems(t *testing.T) {
 		t2 := time.Now()
 		i2 := &gofeed.Item{GUID: "abc2", PublishedParsed: &t2}
 		s, err := st.GetItemState(cf, i2)
-		if assert.NoError(t, err) {
-			assert.Equal(t, app.StateUpdated, s)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, app.StateUpdated, s)
 	})
 	t.Run("should report unknown item without GUID as new", func(t *testing.T) {
 		if err := st.ClearFeeds(); err != nil {
@@ -76,9 +74,8 @@ func TestItems(t *testing.T) {
 		}
 		i := &gofeed.Item{Title: "title", Description: "description"}
 		s, err := st.GetItemState(cf, i)
-		if assert.NoError(t, err) {
-			assert.Equal(t, app.StateNew, s)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, app.StateNew, s)
 	})
 	t.Run("should report known item without GUID as processed", func(t *testing.T) {
 		if err := st.ClearFeeds(); err != nil {
@@ -89,9 +86,8 @@ func TestItems(t *testing.T) {
 			t.Fatal(err)
 		}
 		s, err := st.GetItemState(cf, i)
-		if assert.NoError(t, err) {
-			assert.Equal(t, app.StateProcessed, s)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, app.StateProcessed, s)
 	})
 	t.Run("should delete oldest items", func(t *testing.T) {
 		if err := st.ClearFeeds(); err != nil {
@@ -111,17 +107,15 @@ func TestItems(t *testing.T) {
 			t.Fatal(err)
 		}
 		err := st.CullItems(cf, 2)
-		if assert.NoError(t, err) {
-			assert.Equal(t, 2, st.ItemCount(cf))
-			ii, err := st.ListItems(cf.Name)
-			if assert.NoError(t, err) {
-				var ids []string
-				for _, i := range ii {
-					ids = append(ids, string(i.ID))
-				}
-				assert.Contains(t, ids, "1")
-				assert.Contains(t, ids, "3")
-			}
+		require.NoError(t, err)
+		assert.Equal(t, 2, st.ItemCount(cf))
+		ii, err := st.ListItems(cf.Name)
+		require.NoError(t, err)
+		var ids []string
+		for _, i := range ii {
+			ids = append(ids, string(i.ID))
 		}
+		assert.Contains(t, ids, "1")
+		assert.Contains(t, ids, "3")
 	})
 }

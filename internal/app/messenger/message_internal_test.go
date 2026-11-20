@@ -7,6 +7,7 @@ import (
 
 	"github.com/mmcdole/gofeed"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMessage(t *testing.T) {
@@ -15,9 +16,8 @@ func TestMessage(t *testing.T) {
 		now := time.Now()
 		item := &gofeed.Item{Content: "content", PublishedParsed: &now}
 		x, err := newMessage("dummy", feed, item, false)
-		if assert.NoError(t, err) {
-			assert.Equal(t, "content", x.Item.Description)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, "content", x.Item.Description)
 	})
 	t.Run("can serialize and de-serialize a message", func(t *testing.T) {
 		fi := FeedItem{
@@ -35,11 +35,9 @@ func TestMessage(t *testing.T) {
 			Item:      fi,
 		}
 		b, err := m.toBytes()
-		if assert.NoError(t, err) {
-			m2, err := newMessageFromBytes(b)
-			if assert.NoError(t, err) {
-				assert.True(t, reflect.DeepEqual(m, m2))
-			}
-		}
+		require.NoError(t, err)
+		m2, err := newMessageFromBytes(b)
+		require.NoError(t, err)
+		assert.True(t, reflect.DeepEqual(m, m2))
 	})
 }
