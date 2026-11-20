@@ -165,7 +165,7 @@ func TestFailedFeedIncrementsErrorCount(t *testing.T) {
 	assert.Equal(t, 1, httpmock.GetCallCountInfo()["GET https://www.example.com/feed"])
 }
 
-func TestFailedItemStateAbortsFeed(t *testing.T) {
+func TestInvalidItemStateIsTreatedAsNew(t *testing.T) {
 	cfg := config.Config{
 		App: config.ConfigApp{
 			Oldest: 3600 * 24,
@@ -183,9 +183,10 @@ func TestFailedItemStateAbortsFeed(t *testing.T) {
 	}
 	st := newTestStorage(t, cfg)
 	// store an invalid record for the feed's only item, so reading its state fails
+	const itemID = "tag:status.eveonline.com,2005:Incident/21848727"
 	err := st.DB().Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("feeds")).Bucket([]byte("feed1"))
-		return b.Put([]byte("tag:status.eveonline.com,2005:Incident/21848727"), []byte("invalid"))
+		return b.Put([]byte(itemID), []byte("invalid"))
 	})
 	require.NoError(t, err)
 	httpmock.Activate()
@@ -202,13 +203,20 @@ func TestFailedItemStateAbortsFeed(t *testing.T) {
 	)
 	d := dispatcher.New(st, cfg, fakeTime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
 	require.NoError(t, d.Start())
-	waitForFeedError(t, st, "feed1")
+	require.Eventually(t, func() bool {
+		return httpmock.GetCallCountInfo()["POST https://www.example.com/hook"] > 0
+	}, 2*time.Second, 10*time.Millisecond, "item was not posted")
 	d.Stop()
 	fs, err := st.GetFeedStats("feed1")
 	require.NoError(t, err)
-	assert.Equal(t, 1, fs.ErrorCount)
-	assert.Equal(t, 0, fs.ReceivedCount)
-	assert.Equal(t, 0, httpmock.GetCallCountInfo()["POST https://www.example.com/hook"])
+	assert.Equal(t, 0, fs.ErrorCount)
+	assert.Equal(t, 1, fs.ReceivedCount)
+	assert.Equal(t, 1, httpmock.GetCallCountInfo()["POST https://www.example.com/hook"])
+	// invalid record was replaced by a valid one
+	items, err := st.ListItems("feed1")
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, itemID, items[0].ID)
 }
 
 // waitForFeedError waits until the error count of a feed is above zero.
@@ -216,9 +224,11 @@ func waitForFeedError(t *testing.T, st *storage.Storage, name string) {
 	t.Helper()
 	for start := time.Now(); ; {
 		fs, err := st.GetFeedStats(name)
-		require.NoError(t, err)
-		if fs.ErrorCount > 0 {
-			return
+		if !errors.Is(err, storage.ErrNotFound) {
+			require.NoError(t, err)
+			if fs.ErrorCount > 0 {
+				return
+			}
 		}
 		if time.Since(start) > 2*time.Second {
 			t.Fatal("timed out waiting for error count")

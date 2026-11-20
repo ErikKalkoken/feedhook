@@ -105,6 +105,9 @@ func (d *Dispatcher) Restart() error {
 // User should call Close() subsequently to shut down dispatcher gracefully
 // and prevent any potential data loss.
 func (d *Dispatcher) Start() error {
+	if len(d.cfg.Webhooks) == 0 {
+		return fmt.Errorf("no webhook defined")
+	}
 	// Create all messengers first, so that nothing is started when one fails.
 	messengers := make([]*messenger.Messenger, 0, len(d.cfg.Webhooks))
 	for _, h := range d.cfg.Webhooks {
@@ -145,7 +148,8 @@ func (d *Dispatcher) Start() error {
 				wg.Go(func() {
 					m, ok := d.messengers.Load(cf.Webhook)
 					if !ok {
-						panic("messenger for webhook not found: " + cf.Webhook)
+						slog.Error("Messenger for webhook not found", "feed", cf.Name, "webhook", cf.Webhook)
+						return
 					}
 					err := d.processFeed(ctx, cf, m)
 					if errors.Is(err, errUserAborted) {
@@ -154,7 +158,7 @@ func (d *Dispatcher) Start() error {
 					}
 					if err != nil {
 						slog.Error("Failed to process feed", "feed", cf.Name, "error", err)
-						if err := d.st.UpdateFeedStats(cf.Name, func(fs *app.FeedStats) error {
+						if err := d.st.UpdateOrCreateFeedStats(cf.Name, func(fs *app.FeedStats) error {
 							fs.ErrorCount++
 							return nil
 						}); err != nil {
@@ -200,8 +204,10 @@ func (d *Dispatcher) processFeed(ctx context.Context, cf config.ConfigFeed, m *m
 		if d.cfg.App.Oldest != config.OldestUnlimited && item.PublishedParsed != nil && item.PublishedParsed.Before(d.clock.Now().Add(-oldest)) {
 			continue
 		}
-		state, err := d.st.GetItemState(cf, item)
-		if err != nil {
+		state, err := d.st.GetItemState(cf.Name, item)
+		if errors.Is(err, storage.ErrNotFound) {
+			state = app.StateNew
+		} else if err != nil {
 			return fmt.Errorf("get state for item %q: %w", item.Title, err)
 		}
 		if state == app.StateProcessed {
@@ -210,10 +216,10 @@ func (d *Dispatcher) processFeed(ctx context.Context, cf config.ConfigFeed, m *m
 		if err := m.AddMessage(cf.Name, feed, item, state == app.StateUpdated); err != nil {
 			return fmt.Errorf("add item %q to messenger %s: %w", item.Title, m.Name(), err)
 		}
-		if err := d.st.RecordItem(cf, item); err != nil {
+		if err := d.st.UpdateOrCreateItem(cf.Name, item); err != nil {
 			return fmt.Errorf("record item: %w", err)
 		}
-		if err := d.st.UpdateFeedStats(cf.Name, func(fs *app.FeedStats) error {
+		if err := d.st.UpdateOrCreateFeedStats(cf.Name, func(fs *app.FeedStats) error {
 			fs.ReceivedCount++
 			fs.ReceivedLast = time.Now().UTC()
 			return nil
@@ -222,7 +228,7 @@ func (d *Dispatcher) processFeed(ctx context.Context, cf config.ConfigFeed, m *m
 		}
 		myLog.Info("Received item", "title", item.Title)
 	}
-	err = d.st.CullItems(cf, 1000)
+	err = d.st.PruneOldestItems(cf.Name, 1000)
 	return err
 }
 

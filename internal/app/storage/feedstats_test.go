@@ -1,63 +1,66 @@
 package storage_test
 
 import (
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	bolt "go.etcd.io/bbolt"
 
 	"github.com/ErikKalkoken/feedhook/internal/app"
-	"github.com/ErikKalkoken/feedhook/internal/app/config"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 )
 
-func TestFeedStats(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "test.db")
-	db, err := bolt.Open(p, 0600, nil)
-	if err != nil {
-		t.Fatalf("Failed to open DB: %s", err)
-	}
-	defer db.Close()
-	cf := config.ConfigFeed{
-		Name:    "feed1",
-		URL:     "https://www.example.com/feed",
-		Webhook: "hook1",
-	}
-	cfg := config.Config{
-		Feeds: []config.ConfigFeed{cf},
-	}
-	st := storage.New(db, cfg)
-	if err := st.Init(); err != nil {
-		t.Fatalf("Failed to init: %s", err)
-	}
+func TestStorage_GetFeedStats(t *testing.T) {
 	t.Run("can update and read feed stats", func(t *testing.T) {
-		if err := st.ClearFeeds(); err != nil {
-			t.Fatal(err)
-		}
-		err := st.UpdateFeedStats("feed1", func(fs *app.FeedStats) error {
+		// given
+		st := newTestStorage(t)
+		err := st.UpdateOrCreateFeedStats(feedName, func(fs *app.FeedStats) error {
 			fs.ReceivedCount++
 			return nil
 		})
 		require.NoError(t, err)
-		got, err := st.GetFeedStats("feed1")
+		// when
+		got, err := st.GetFeedStats(feedName)
+		// then
 		require.NoError(t, err)
-		assert.Equal(t, "feed1", got.Name)
+		assert.Equal(t, feedName, got.Name)
 		assert.Equal(t, 1, got.ReceivedCount)
 	})
+
+	t.Run("reports not found when object does not exist", func(t *testing.T) {
+		// given
+		st := newTestStorage(t)
+		// when
+		_, err := st.GetFeedStats(feedName)
+		// then
+		assert.ErrorIs(t, err, storage.ErrNotFound)
+	})
+}
+
+func TestStorage_GetWebhookStats(t *testing.T) {
 	t.Run("can update and read webhook stats", func(t *testing.T) {
-		if err := st.ClearFeeds(); err != nil {
-			t.Fatal(err)
-		}
-		err := st.UpdateWebhookStats("hook1", func(fs *app.WebhookStats) error {
+		// given
+		st := newTestStorage(t)
+		err := st.UpdateOrCreateWebhookStats(hookName, func(fs *app.WebhookStats) error {
 			fs.SentCount++
 			return nil
 		})
 		require.NoError(t, err)
-		got, err := st.GetWebhookStats("hook1")
+		// when
+		got, err := st.GetWebhookStats(hookName)
+		// then
 		require.NoError(t, err)
-		assert.Equal(t, "hook1", got.Name)
+		assert.Equal(t, hookName, got.Name)
 		assert.Equal(t, 1, got.SentCount)
 	})
+
+	t.Run("reports not found when object does not exist", func(t *testing.T) {
+		// given
+		st := newTestStorage(t)
+		// when
+		_, err := st.GetWebhookStats(hookName)
+		// then
+		assert.ErrorIs(t, err, storage.ErrNotFound)
+	})
+
 }

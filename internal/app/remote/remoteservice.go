@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/ErikKalkoken/feedhook/internal/app"
 	"github.com/ErikKalkoken/feedhook/internal/app/config"
 	"github.com/ErikKalkoken/feedhook/internal/app/dispatcher"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
@@ -68,12 +69,11 @@ func (s *RemoteService) Statistics(args *EmptyArgs, reply *string) error {
 	for _, cf := range feeds {
 		o, err := s.st.GetFeedStats(cf.Name)
 		if errors.Is(err, storage.ErrNotFound) {
-			continue
-		}
-		if err != nil {
+			o = &app.FeedStats{}
+		} else if err != nil {
 			return err
 		}
-		feedsTable.AddRow([]any{o.Name, !cf.Disabled, cf.Webhook, o.ReceivedCount, o.ReceivedLast, o.ErrorCount})
+		feedsTable.AddRow([]any{cf.Name, !cf.Disabled, cf.Webhook, o.ReceivedCount, o.ReceivedLast, o.ErrorCount})
 	}
 	feedsTable.Print()
 	fmt.Fprintln(out)
@@ -87,16 +87,15 @@ func (s *RemoteService) Statistics(args *EmptyArgs, reply *string) error {
 	for _, cw := range webhooks {
 		o, err := s.st.GetWebhookStats(cw.Name)
 		if errors.Is(err, storage.ErrNotFound) {
-			continue
-		}
-		if err != nil {
+			o = &app.WebhookStats{}
+		} else if err != nil {
 			return err
 		}
 		ms, err := s.d.MessengerStatus(cw.Name)
 		if err != nil {
 			slog.Error("Failed to fetch queue size for webhook", "webhook", cw.Name)
 		}
-		whTable.AddRow([]any{o.Name, ms.QueueSize, o.SentCount, o.SentLast, ms.ErrorCount})
+		whTable.AddRow([]any{cw.Name, ms.QueueSize, o.SentCount, o.SentLast, ms.ErrorCount})
 	}
 	whTable.Print()
 	*reply = out.String()

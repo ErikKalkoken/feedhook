@@ -8,8 +8,11 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-// UpdateFeedStats executes a function that updates the stats for feed by name.
-func (st *Storage) UpdateFeedStats(name string, f func(fs *app.FeedStats) error) error {
+// UpdateOrCreateFeedStats executes a function that updates or creates the stats for feed by name.
+func (st *Storage) UpdateOrCreateFeedStats(name string, f func(fs *app.FeedStats) error) error {
+	if name == "" {
+		return ErrInvalid
+	}
 	err := st.db.Update(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketStats))
 		b := root.Bucket([]byte(bucketFeeds))
@@ -27,7 +30,7 @@ func (st *Storage) UpdateFeedStats(name string, f func(fs *app.FeedStats) error)
 		if err := f(fs); err != nil {
 			return err
 		}
-		v, err = dbFromFeedStats(fs)
+		v, err = feedStatsToDB(fs)
 		if err != nil {
 			return err
 		}
@@ -37,14 +40,18 @@ func (st *Storage) UpdateFeedStats(name string, f func(fs *app.FeedStats) error)
 }
 
 // GetFeedStats returns the stats for a feed.
+// It returns [ErrNotFound] when the feed does not exist.
 func (st *Storage) GetFeedStats(name string) (*app.FeedStats, error) {
+	if name == "" {
+		return nil, ErrInvalid
+	}
 	fs := &app.FeedStats{Name: name}
 	err := st.db.View(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketStats))
 		b := root.Bucket([]byte(bucketFeeds))
 		v := b.Get([]byte(name))
 		if v == nil {
-			return nil
+			return ErrNotFound
 		}
 		var err error
 		fs, err = feedStatsFromDB(v)
@@ -66,7 +73,7 @@ func feedStatsFromDB(v []byte) (*app.FeedStats, error) {
 	return &o, nil
 }
 
-func dbFromFeedStats(fs *app.FeedStats) ([]byte, error) {
+func feedStatsToDB(fs *app.FeedStats) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 	err := enc.Encode(*fs)

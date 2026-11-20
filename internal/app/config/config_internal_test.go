@@ -208,23 +208,6 @@ func TestParseConfig(t *testing.T) {
 		}
 		assert.Error(t, parseConfig(&cf))
 	})
-	t.Run("should return error when configured webhok is unused", func(t *testing.T) {
-		cf := Config{
-			Webhooks: []ConfigWebhook{{
-				Name: "hook1",
-				URL:  "https://www.example.com/url1",
-			}, {
-				Name: "hook2",
-				URL:  "https://www.example.com/url2",
-			}},
-			Feeds: []ConfigFeed{{
-				Name:    "feed1",
-				URL:     "https://www.example.com/url2",
-				Webhook: "hook1",
-			}},
-		}
-		assert.NoError(t, parseConfig(&cf))
-	})
 	t.Run("should return log level from config", func(t *testing.T) {
 		cases := []struct {
 			in   string

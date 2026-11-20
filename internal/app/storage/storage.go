@@ -15,7 +15,10 @@ const (
 	bucketWebhooks = "webhooks"
 )
 
-var ErrNotFound = errors.New("not found")
+var (
+	ErrNotFound = errors.New("not found")
+	ErrInvalid  = errors.New("invalid")
+)
 
 type Storage struct {
 	db  *bolt.DB
@@ -49,15 +52,19 @@ func (st *Storage) Init() error {
 			}
 		}
 		// Delete obsolete buckets
+		var obsolete [][]byte
 		bf.ForEach(func(k, v []byte) error {
-			if name := string(k); !feeds[name] {
-				if err := bf.DeleteBucket(k); err != nil {
-					return err
-				}
-				slog.Info("Deleted obsolete bucket for feed", "name", name)
+			if !feeds[string(k)] {
+				obsolete = append(obsolete, k)
 			}
 			return nil
 		})
+		for _, k := range obsolete {
+			if err := bf.DeleteBucket(k); err != nil {
+				return err
+			}
+			slog.Info("Deleted obsolete bucket for feed", "name", string(k))
+		}
 		// stats bucket
 		bs, err := tx.CreateBucketIfNotExists([]byte(bucketStats))
 		if err != nil {

@@ -8,8 +8,11 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-// UpdateWebhookStats executes a function that updates the stats for webhook by name.
-func (st *Storage) UpdateWebhookStats(name string, f func(ws *app.WebhookStats) error) error {
+// UpdateOrCreateWebhookStats executes a function that updates or creates the stats for webhook by name.
+func (st *Storage) UpdateOrCreateWebhookStats(name string, f func(ws *app.WebhookStats) error) error {
+	if name == "" {
+		return ErrInvalid
+	}
 	err := st.db.Update(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketStats))
 		b := root.Bucket([]byte(bucketWebhooks))
@@ -27,7 +30,7 @@ func (st *Storage) UpdateWebhookStats(name string, f func(ws *app.WebhookStats) 
 		if err := f(fs); err != nil {
 			return err
 		}
-		v, err = dbFromWebhookStats(fs)
+		v, err = webhookStatsToDB(fs)
 		if err != nil {
 			return err
 		}
@@ -50,14 +53,19 @@ func (st *Storage) ClearWebhookStats() error {
 	return err
 }
 
+// GetWebhookStats returns the stats for webhook by name.
+// It returns [ErrNotFound] when the webhook does not exist.
 func (st *Storage) GetWebhookStats(name string) (*app.WebhookStats, error) {
+	if name == "" {
+		return nil, ErrInvalid
+	}
 	fs := &app.WebhookStats{Name: name}
 	err := st.db.View(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketStats))
 		b := root.Bucket([]byte(bucketWebhooks))
 		v := b.Get([]byte(name))
 		if v == nil {
-			return nil
+			return ErrNotFound
 		}
 		var err error
 		fs, err = webhookStatsFromDB(v)
@@ -79,7 +87,7 @@ func webhookStatsFromDB(v []byte) (*app.WebhookStats, error) {
 	return &o, nil
 }
 
-func dbFromWebhookStats(fs *app.WebhookStats) ([]byte, error) {
+func webhookStatsToDB(fs *app.WebhookStats) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 	err := enc.Encode(*fs)

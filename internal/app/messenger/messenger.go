@@ -189,7 +189,7 @@ func (mg *Messenger) send(ctx context.Context, v []byte, myLog *slog.Logger) err
 			return ctx.Err()
 		}
 	}
-	err = mg.st.UpdateWebhookStats(mg.name, func(ws *app.WebhookStats) error {
+	err = mg.st.UpdateOrCreateWebhookStats(mg.name, func(ws *app.WebhookStats) error {
 		ws.SentCount++
 		ws.SentLast = time.Now().UTC()
 		return nil
