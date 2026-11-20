@@ -20,7 +20,7 @@ A self-hosted service that posts new items from RSS and Atom feeds to Discord we
 
 ## Key Features
 
-- Posts new items from RSS and Atom feeds to one or more Discord webhooks
+- Posts new items from RSS and Atom feeds to Discord webhooks
 - Respects Discord rate limits
 - Built for high throughput
 - Easy configuration
@@ -174,7 +174,7 @@ Each `[[feeds]]` section defines a RSS or Atom feed:
 | --- | --- |
 | `name` | Name of the feed. Must be unique. |
 | `url` | URL of the feed |
-| `webhooks` | Names of the webhooks this feed is forwarded to |
+| `webhook` | Name of the webhook this feed is forwarded to |
 | `disabled` | Set to `true` to stop polling this feed. Default is `false`. |
 
 Items without content and description are skipped. Items that change after being forwarded are forwarded again.

@@ -25,7 +25,7 @@ url = "https://www.example.com/webhook"
 [[feeds]]
 name = "Feed 1"
 url = "https://www.example.com/feed.rss"
-webhooks = ["hook-1"]
+webhook = "hook-1"
 `
 
 func TestConfig(t *testing.T) {
@@ -34,17 +34,16 @@ func TestConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	cf, err := config.FromFile(p)
-	if assert.NoError(t, err) {
-		assert.Equal(t, cf.App.Timeout, 2)
-		assert.Equal(t, cf.App.Oldest, 3)
-		assert.Equal(t, cf.App.Ticker, 4)
-		assert.Equal(t, cf.App.LogLevel, "DEBUG")
-		assert.Equal(t, cf.Webhooks[0].Name, "hook-1")
-		assert.Equal(t, cf.Webhooks[0].URL, "https://www.example.com/webhook")
-		assert.Equal(t, cf.Feeds[0].Name, "Feed 1")
-		assert.Equal(t, cf.Feeds[0].URL, "https://www.example.com/feed.rss")
-		assert.Equal(t, cf.Feeds[0].Webhooks, []string{"hook-1"})
-	}
+	require.NoError(t, err)
+	assert.Equal(t, 2, cf.App.Timeout)
+	assert.Equal(t, 3, cf.App.Oldest)
+	assert.Equal(t, 4, cf.App.Ticker)
+	assert.Equal(t, "DEBUG", cf.App.LogLevel)
+	assert.Equal(t, "hook-1", cf.Webhooks[0].Name)
+	assert.Equal(t, "https://www.example.com/webhook", cf.Webhooks[0].URL)
+	assert.Equal(t, "Feed 1", cf.Feeds[0].Name)
+	assert.Equal(t, "https://www.example.com/feed.rss", cf.Feeds[0].URL)
+	assert.Equal(t, "hook-1", cf.Feeds[0].Webhook)
 }
 
 func TestOldest(t *testing.T) {
@@ -82,7 +81,7 @@ url = "https://www.example.com/webhook"
 [[feeds]]
 name = "Feed 1"
 url = "https://www.example.com/feed.rss"
-webhooks = ["hook-1"]
+webhook = "hook-1"
 `, line)
 }
 

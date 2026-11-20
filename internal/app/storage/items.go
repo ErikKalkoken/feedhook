@@ -1,52 +1,48 @@
 package storage
 
 import (
+	"bytes"
 	"crypto/sha256"
+	"encoding/gob"
 	"encoding/hex"
+	"fmt"
+	"log/slog"
 	"slices"
 	"time"
 
 	"github.com/ErikKalkoken/feedhook/internal/app"
-	"github.com/ErikKalkoken/feedhook/internal/app/config"
 	"github.com/mmcdole/gofeed"
 	bolt "go.etcd.io/bbolt"
 )
 
-func (st *Storage) RecordItem(cf config.ConfigFeed, item *gofeed.Item) error {
-	err := st.db.Update(func(tx *bolt.Tx) error {
-		root := tx.Bucket([]byte(bucketFeeds))
-		b := root.Bucket([]byte(cf.Name))
-		i := processedItemFromFeed(item)
-		v, err := i.ToBytes()
-		if err != nil {
-			return err
-		}
-		return b.Put(i.Key(), v)
-	})
-	return err
-}
-
-// GetItemState return the state of an item.
-func (st *Storage) GetItemState(cf config.ConfigFeed, item *gofeed.Item) (app.ItemState, error) {
+// GetItemState returns the state of an item.
+// Returns [ErrNotFound] when the item does not exist.
+func (st *Storage) GetItemState(feedName string, item *gofeed.Item) (app.ItemState, error) {
 	var s app.ItemState
+	if feedName == "" || item == nil {
+		return s, ErrInvalid
+	}
 	err := st.db.View(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketFeeds))
-		b := root.Bucket([]byte(cf.Name))
+		b := root.Bucket([]byte(feedName))
+		if b == nil {
+			return ErrInvalid
+		}
 		k := processedItemFromFeed(item).Key()
 		v := b.Get(k)
 		if v == nil {
-			s = app.StateNew
-			return nil
+			return ErrNotFound
 		}
 		if item.PublishedParsed == nil {
 			s = app.StateProcessed
 			return nil
 		}
-		pi, err := app.NewProcessedItemFromBytes(v)
+		pi, err := processedItemFromDB(v)
 		if err != nil {
-			return err
+			slog.Warn("GetItemState: invalid item record, treating as new", "feed", feedName, "item", string(k), "error", err)
+			return fmt.Errorf("decoding failed: %w: %w", ErrNotFound, err)
 		}
-		if pp := *item.PublishedParsed; pp.Equal(pi.Published) {
+		if pp := item.PublishedParsed; pp.Equal(pi.Published) {
 			s = app.StateProcessed
 			return nil
 		}
@@ -56,20 +52,36 @@ func (st *Storage) GetItemState(cf config.ConfigFeed, item *gofeed.Item) (app.It
 	return s, err
 }
 
-// CullItems deletes the oldest items when there are more items then a limit
-func (st *Storage) CullItems(cf config.ConfigFeed, limit int) error {
+// PruneOldestItems deletes the oldest items when there are more items than a limit.
+func (st *Storage) PruneOldestItems(feedName string, limit int) error {
+	if feedName == "" || limit <= 0 {
+		return ErrInvalid
+	}
 	err := st.db.Update(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketFeeds))
-		b := root.Bucket([]byte(cf.Name))
+		b := root.Bucket([]byte(feedName))
+		if b == nil {
+			return ErrInvalid
+		}
 		items := make([]*app.ProcessedItem, 0)
+		var invalidItems [][]byte
 		b.ForEach(func(k, v []byte) error {
-			i, err := app.NewProcessedItemFromBytes(v)
+			i, err := processedItemFromDB(v)
 			if err != nil {
-				return err
+				invalidItems = append(invalidItems, k)
+				return nil
 			}
 			items = append(items, i)
 			return nil
 		})
+		if len(invalidItems) > 0 {
+			for _, k := range invalidItems {
+				if err := b.Delete(k); err != nil {
+					return err
+				}
+			}
+			slog.Warn("PruneOldestItems: removed invalid items", "feed", feedName, "count", len(invalidItems))
+		}
 		slices.SortFunc(items, func(a *app.ProcessedItem, b *app.ProcessedItem) int {
 			return a.Published.Compare(b.Published) * -1
 		})
@@ -86,42 +98,81 @@ func (st *Storage) CullItems(cf config.ConfigFeed, limit int) error {
 	return err
 }
 
-func (st *Storage) ListItems(feed string) ([]*app.ProcessedItem, error) {
+// ListItems returns a list of all items for a feed.
+func (st *Storage) ListItems(feedName string) ([]*app.ProcessedItem, error) {
+	if feedName == "" {
+		return nil, ErrInvalid
+	}
 	var items []*app.ProcessedItem
 	err := st.db.View(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketFeeds))
-		b := root.Bucket([]byte(feed))
-		b.ForEach(func(k, v []byte) error {
-			i, err := app.NewProcessedItemFromBytes(v)
+		b := root.Bucket([]byte(feedName))
+		if b == nil {
+			return ErrInvalid
+		}
+		err := b.ForEach(func(k, v []byte) error {
+			i, err := processedItemFromDB(v)
 			if err != nil {
-				return err
+				slog.Warn("ListItems: ignoring invalid item", "feed", feedName, "item", string(k), "error", err)
+				return nil
 			}
 			items = append(items, i)
 			return nil
 		})
-		return nil
+		return err
 	})
 	return items, err
 }
 
-func (st *Storage) ItemCount(cf config.ConfigFeed) int {
+// CountItems returns the count of items in a feed.
+func (st *Storage) CountItems(feedName string) (int, error) {
+	if feedName == "" {
+		return 0, ErrInvalid
+	}
 	var c int
-	st.db.View(func(tx *bolt.Tx) error {
+	err := st.db.View(func(tx *bolt.Tx) error {
 		root := tx.Bucket([]byte(bucketFeeds))
-		b := root.Bucket([]byte(cf.Name))
-		b.ForEach(func(k, v []byte) error {
+		b := root.Bucket([]byte(feedName))
+		if b == nil {
+			return ErrInvalid
+		}
+		err := b.ForEach(func(k, v []byte) error {
 			c++
 			return nil
 		})
-		return nil
+		return err
 	})
-	return c
+	if err != nil {
+		return 0, err
+	}
+	return c, nil
+}
+
+// UpdateOrCreateItem updates or creates an item.
+func (st *Storage) UpdateOrCreateItem(feedName string, item *gofeed.Item) error {
+	if feedName == "" || item == nil {
+		return ErrInvalid
+	}
+	err := st.db.Update(func(tx *bolt.Tx) error {
+		root := tx.Bucket([]byte(bucketFeeds))
+		b := root.Bucket([]byte(feedName))
+		if b == nil {
+			return ErrInvalid
+		}
+		i := processedItemFromFeed(item)
+		v, err := processedItemToDB(i)
+		if err != nil {
+			return err
+		}
+		return b.Put(i.Key(), v)
+	})
+	return err
 }
 
 func processedItemFromFeed(item *gofeed.Item) *app.ProcessedItem {
 	var t time.Time
 	if item.PublishedParsed != nil {
-		t = *item.PublishedParsed
+		t = item.PublishedParsed.UTC()
 	} else {
 		t = time.Now().UTC()
 	}
@@ -142,4 +193,23 @@ func makeHash(s string) string {
 	h := sha256.New()
 	h.Write([]byte(s))
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+func processedItemToDB(pi *app.ProcessedItem) ([]byte, error) {
+	b := bytes.Buffer{}
+	e := gob.NewEncoder(&b)
+	if err := e.Encode(*pi); err != nil {
+		return nil, err
+	}
+	return b.Bytes(), nil
+}
+
+func processedItemFromDB(byt []byte) (*app.ProcessedItem, error) {
+	b := bytes.NewBuffer(byt)
+	d := gob.NewDecoder(b)
+	var pi app.ProcessedItem
+	if err := d.Decode(&pi); err != nil {
+		return &pi, err
+	}
+	return &pi, nil
 }

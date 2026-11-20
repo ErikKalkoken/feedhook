@@ -21,12 +21,23 @@ const (
 // OldestUnlimited is the value for Oldest to forward items of any age.
 const OldestUnlimited = -1
 
+// Config is the app's configuration.
 type Config struct {
 	App      ConfigApp
 	Feeds    []ConfigFeed
 	Webhooks []ConfigWebhook
 }
 
+// FeedNames returns the names of all configured feeds.
+func (c *Config) FeedNames() []string {
+	names := make([]string, len(c.Feeds))
+	for i, f := range c.Feeds {
+		names[i] = f.Name
+	}
+	return names
+}
+
+// EnabledFeeds returns all feeds that are not disabled.
 func (c *Config) EnabledFeeds() []ConfigFeed {
 	feeds := make([]ConfigFeed, 0)
 	for _, f := range c.Feeds {
@@ -56,6 +67,7 @@ func (c *Config) WebhookByName(name string) (ConfigWebhook, bool) {
 	return c.Webhooks[i], true
 }
 
+// ConfigApp is the app-wide section of the configuration.
 type ConfigApp struct {
 	BrandingDisabled bool   `toml:"branding_disabled"`
 	LogLevel         string `toml:"loglevel"`
@@ -64,6 +76,7 @@ type ConfigApp struct {
 	Timeout          int    `toml:"timeout"`
 }
 
+// LoggerLevel returns the configured log level or the default if it is invalid.
 func (ca ConfigApp) LoggerLevel() slog.Level {
 	m := map[string]slog.Level{"DEBUG": slog.LevelDebug, "INFO": slog.LevelInfo, "WARN": slog.LevelWarn, "ERROR": slog.LevelError}
 	v, ok := m[strings.ToUpper(ca.LogLevel)]
@@ -73,18 +86,22 @@ func (ca ConfigApp) LoggerLevel() slog.Level {
 	return v
 }
 
+// ConfigFeed is the configuration of a feed.
 type ConfigFeed struct {
-	Name     string   `toml:"name"`
-	URL      string   `toml:"url"`
-	Webhooks []string `toml:"webhooks"`
-	Disabled bool     `toml:"disabled"`
+	Name     string `toml:"name"`
+	URL      string `toml:"url"`
+	Webhook  string `toml:"webhook"`
+	Disabled bool   `toml:"disabled"`
 }
 
+// ConfigWebhook is the configuration of a webhook.
 type ConfigWebhook struct {
 	Name string `toml:"name"`
 	URL  string `toml:"url"`
 }
 
+// FromFile reads, validates and returns the configuration from a TOML file.
+// Missing app settings are set to their defaults.
 func FromFile(path string) (Config, error) {
 	var config Config
 	if _, err := toml.DecodeFile(path, &config); err != nil {
@@ -127,8 +144,8 @@ func parseConfig(config *Config) error {
 		if x.Name == "" {
 			return fmt.Errorf("feed has no name")
 		}
-		if len(x.Webhooks) == 0 {
-			return fmt.Errorf("feed %s has no webhooks", x.Name)
+		if x.Webhook == "" {
+			return fmt.Errorf("feed %s has no webhook", x.Name)
 		}
 		if x.URL == "" {
 			return fmt.Errorf("feed %s has no url", x.Name)
@@ -140,21 +157,14 @@ func parseConfig(config *Config) error {
 		if _, err := url.ParseRequestURI(x.URL); err != nil {
 			return fmt.Errorf("feed %s has invalid url: %w", x.Name, err)
 		}
-		feedWebhooks := make(map[string]bool)
-		for _, wh := range x.Webhooks {
-			if !webhookNames[wh] {
-				return fmt.Errorf("feed \"%s\": invalid webhook \"%s\"", x.Name, wh)
-			}
-			webhooksUsed[wh] = true
-			if feedWebhooks[wh] {
-				return fmt.Errorf("feed \"%s\": webhook \"%s\" used more then once", x.Name, wh)
-			}
-			feedWebhooks[wh] = true
+		if !webhookNames[x.Webhook] {
+			return fmt.Errorf("feed \"%s\": invalid webhook \"%s\"", x.Name, x.Webhook)
 		}
+		webhooksUsed[x.Webhook] = true
 	}
-	for k, v := range webhooksUsed {
-		if !v {
-			slog.Warn("Webhook defined, but not used", "name", k)
+	for _, wh := range config.Webhooks {
+		if !webhooksUsed[wh.Name] {
+			slog.Warn("Webhook defined, but not used", "name", wh.Name)
 		}
 	}
 	if config.App.Timeout <= 0 {

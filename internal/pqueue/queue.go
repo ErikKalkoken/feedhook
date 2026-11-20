@@ -11,6 +11,8 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
+const queuePrefix = "queue-"
+
 var errEmpty = errors.New("empty queue")
 
 // PQueue represents a persistent FIFO queue.
@@ -23,17 +25,20 @@ type PQueue struct {
 	cond *sync.Cond
 }
 
-// New returns a new PQueue instance with the given name.
-// When a queue with that name already exists in the DB, it will be re-used.
+// New returns a new PQueue instance with a prefixed name.
+// When a queue with the prefixed name already exists in the DB, it will be re-used.
 func New(db *bolt.DB, name string) (*PQueue, error) {
+	if db == nil || name == "" {
+		return nil, errors.New("db and name are required")
+	}
 	q := &PQueue{
 		db:   db,
-		name: name,
+		name: queuePrefix + name,
 		proc: make(chan struct{}, 1),
 	}
 	q.cond = sync.NewCond(&q.mu)
 	err := db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte(name))
+		_, err := tx.CreateBucketIfNotExists([]byte(q.name))
 		return err
 	})
 	if err != nil {
@@ -45,10 +50,12 @@ func New(db *bolt.DB, name string) (*PQueue, error) {
 // Clear deletes all items from the queue.
 func (q *PQueue) Clear() error {
 	err := q.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(q.name))
-		b.ForEach(func(k, v []byte) error {
-			return b.Delete(k)
-		})
+		if err := tx.DeleteBucket([]byte(q.name)); err != nil {
+			return err
+		}
+		if _, err := tx.CreateBucketIfNotExists([]byte(q.name)); err != nil {
+			return err
+		}
 		return nil
 	})
 	return err

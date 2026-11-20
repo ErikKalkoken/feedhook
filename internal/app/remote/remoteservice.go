@@ -3,11 +3,13 @@ package remote
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"log/slog"
 	"slices"
 	"strings"
 
+	"github.com/ErikKalkoken/feedhook/internal/app"
 	"github.com/ErikKalkoken/feedhook/internal/app/config"
 	"github.com/ErikKalkoken/feedhook/internal/app/dispatcher"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
@@ -60,18 +62,18 @@ func (s *RemoteService) Statistics(args *EmptyArgs, reply *string) error {
 	// Feed stats
 	feedsTable := consoletable.New("Feeds", 6)
 	feedsTable.Target = out
-	feedsTable.AddRow([]any{"Name", "Enabled", "Webhooks", "Received", "Last", "Errors"})
+	feedsTable.AddRow([]any{"Name", "Enabled", "Webhook", "Received", "Last", "Errors"})
 	feeds := slices.SortedFunc(slices.Values(s.cfg.Feeds), func(a, b config.ConfigFeed) int {
 		return cmp.Compare(a.Name, b.Name)
 	})
 	for _, cf := range feeds {
 		o, err := s.st.GetFeedStats(cf.Name)
-		if err == storage.ErrNotFound {
-			continue
+		if errors.Is(err, storage.ErrNotFound) {
+			o = &app.FeedStats{}
 		} else if err != nil {
 			return err
 		}
-		feedsTable.AddRow([]any{o.Name, !cf.Disabled, cf.Webhooks, o.ReceivedCount, o.ReceivedLast, o.ErrorCount})
+		feedsTable.AddRow([]any{cf.Name, !cf.Disabled, cf.Webhook, o.ReceivedCount, o.ReceivedLast, o.ErrorCount})
 	}
 	feedsTable.Print()
 	fmt.Fprintln(out)
@@ -84,8 +86,8 @@ func (s *RemoteService) Statistics(args *EmptyArgs, reply *string) error {
 	})
 	for _, cw := range webhooks {
 		o, err := s.st.GetWebhookStats(cw.Name)
-		if err == storage.ErrNotFound {
-			continue
+		if errors.Is(err, storage.ErrNotFound) {
+			o = &app.WebhookStats{}
 		} else if err != nil {
 			return err
 		}
@@ -93,7 +95,7 @@ func (s *RemoteService) Statistics(args *EmptyArgs, reply *string) error {
 		if err != nil {
 			slog.Error("Failed to fetch queue size for webhook", "webhook", cw.Name)
 		}
-		whTable.AddRow([]any{o.Name, ms.QueueSize, o.SentCount, o.SentLast, ms.ErrorCount})
+		whTable.AddRow([]any{cw.Name, ms.QueueSize, o.SentCount, o.SentLast, ms.ErrorCount})
 	}
 	whTable.Print()
 	*reply = out.String()

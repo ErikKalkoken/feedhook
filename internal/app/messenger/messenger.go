@@ -16,7 +16,6 @@ import (
 	"github.com/mmcdole/gofeed"
 
 	"github.com/ErikKalkoken/feedhook/internal/app"
-	"github.com/ErikKalkoken/feedhook/internal/app/config"
 	"github.com/ErikKalkoken/feedhook/internal/app/storage"
 	"github.com/ErikKalkoken/feedhook/internal/pqueue"
 	"github.com/ErikKalkoken/go-dhook"
@@ -25,35 +24,35 @@ import (
 const queueRetryDelay = 10 * time.Second
 
 type Status struct {
-	QueueSize  int
 	ErrorCount int
+	QueueSize  int
 }
 
 // A Messenger handles posting messages to a webhook.
 // Failed messages are automatically retried and rate limits are respected.
 // Unsent messages are queued and will be picked up again after a process restart.
 type Messenger struct {
-	cfg      config.Config
-	dwh      *dhook.Webhook
-	errCount atomic.Int64
-	name     string
-	queue    *pqueue.PQueue
-	st       *storage.Storage
+	dwh                *dhook.Webhook
+	errCount           atomic.Int64
+	isBrandingDisabled bool
+	name               string
+	queue              *pqueue.PQueue
+	st                 *storage.Storage
 
-	mu        sync.Mutex // serializes Start and Shutdown
-	isRunning bool
+	mu        sync.Mutex         // serializes Start and Shutdown
 	cancel    context.CancelFunc // commence shutdown
 	done      chan struct{}      // closed when shutdown is complete
+	isRunning bool
 }
 
 // NewMessenger returns a new Messenger.
-func NewMessenger(client *dhook.Client, queue *pqueue.PQueue, name, url string, st *storage.Storage, cfg config.Config) *Messenger {
+func NewMessenger(client *dhook.Client, queue *pqueue.PQueue, name, url string, st *storage.Storage, isBrandingDisabled bool) *Messenger {
 	mg := &Messenger{
-		cfg:   cfg,
-		dwh:   client.NewWebhook(url),
-		name:  name,
-		queue: queue,
-		st:    st,
+		dwh:                client.NewWebhook(url),
+		isBrandingDisabled: isBrandingDisabled,
+		name:               name,
+		queue:              queue,
+		st:                 st,
 	}
 	return mg
 }
@@ -148,7 +147,7 @@ func (mg *Messenger) send(ctx context.Context, v []byte, myLog *slog.Logger) err
 		myLog.Error("Failed to de-serialize message. Discarding", "error", err, "data", string(v))
 		return nil
 	}
-	dm, err := m.Item.ToDiscordMessage(mg.cfg.App.BrandingDisabled)
+	dm, err := m.Item.ToDiscordMessage(mg.isBrandingDisabled)
 	if err != nil {
 		myLog.Error("Failed to convert message for Discord. Discarding", "error", err, "message", m)
 		return nil
@@ -189,7 +188,7 @@ func (mg *Messenger) send(ctx context.Context, v []byte, myLog *slog.Logger) err
 			return ctx.Err()
 		}
 	}
-	err = mg.st.UpdateWebhookStats(mg.name, func(ws *app.WebhookStats) error {
+	err = mg.st.UpdateOrCreateWebhookStats(mg.name, func(ws *app.WebhookStats) error {
 		ws.SentCount++
 		ws.SentLast = time.Now().UTC()
 		return nil

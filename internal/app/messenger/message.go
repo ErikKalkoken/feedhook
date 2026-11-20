@@ -17,7 +17,10 @@ type Message struct {
 
 // newMessage returns a new message from a feed item.
 func newMessage(feedName string, feed *gofeed.Feed, item *gofeed.Item, isUpdated bool) (Message, error) {
-	fi := NewFeedItem(feedName, feed, item, isUpdated)
+	fi, err := NewFeedItem(feedName, feed, item, isUpdated)
+	if err != nil {
+		return Message{}, err
+	}
 	m := Message{
 		Item:      fi,
 		Timestamp: time.Now().UTC(),

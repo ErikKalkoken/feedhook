@@ -14,19 +14,3 @@ func (st *Storage) ListFeeds() ([]string, error) {
 	})
 	return nn, err
 }
-
-func (st *Storage) ClearFeeds() error {
-	err := st.db.Update(func(tx *bolt.Tx) error {
-		root := tx.Bucket([]byte(bucketFeeds))
-		return root.ForEachBucket(func(k []byte) error {
-			b := root.Bucket(k)
-			return b.ForEach(func(k, v []byte) error {
-				if err := b.Delete(k); err != nil {
-					return err
-				}
-				return nil
-			})
-		})
-	})
-	return err
-}

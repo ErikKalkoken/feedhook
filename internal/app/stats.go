@@ -4,7 +4,7 @@ import "time"
 
 type FeedStats struct {
 	Name          string
-	ErrorCount    int
+	ErrorCount    int // failed feed runs, e.g. fetch errors
 	ReceivedCount int
 	ReceivedLast  time.Time
 }
