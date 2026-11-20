@@ -3,6 +3,8 @@ package storage
 import (
 	"bytes"
 	"encoding/gob"
+	"fmt"
+	"log/slog"
 
 	"github.com/ErikKalkoken/feedhook/internal/app"
 	bolt "go.etcd.io/bbolt"
@@ -22,9 +24,11 @@ func (st *Storage) UpdateOrCreateFeedStats(name string, f func(fs *app.FeedStats
 		if v != nil {
 			fs, err = feedStatsFromDB(v)
 			if err != nil {
-				return err
+				slog.Warn("UpdateOrCreateFeedStats: invalid stats record, starting fresh", "feed", name, "error", err)
+				fs = nil
 			}
-		} else {
+		}
+		if fs == nil {
 			fs = &app.FeedStats{Name: name}
 		}
 		if err := f(fs); err != nil {
@@ -56,7 +60,8 @@ func (st *Storage) GetFeedStats(name string) (*app.FeedStats, error) {
 		var err error
 		fs, err = feedStatsFromDB(v)
 		if err != nil {
-			return err
+			slog.Warn("GetFeedStats: invalid stats record, treating as not found", "feed", name, "error", err)
+			return fmt.Errorf("decoding failed: %w: %w", ErrNotFound, err)
 		}
 		return nil
 	})

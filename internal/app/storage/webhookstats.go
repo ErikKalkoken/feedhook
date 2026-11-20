@@ -3,6 +3,8 @@ package storage
 import (
 	"bytes"
 	"encoding/gob"
+	"fmt"
+	"log/slog"
 
 	"github.com/ErikKalkoken/feedhook/internal/app"
 	bolt "go.etcd.io/bbolt"
@@ -22,9 +24,11 @@ func (st *Storage) UpdateOrCreateWebhookStats(name string, f func(ws *app.Webhoo
 		if v != nil {
 			fs, err = webhookStatsFromDB(v)
 			if err != nil {
-				return err
+				slog.Warn("UpdateOrCreateWebhookStats: invalid stats record, starting fresh", "webhook", name, "error", err)
+				fs = nil
 			}
-		} else {
+		}
+		if fs == nil {
 			fs = &app.WebhookStats{Name: name}
 		}
 		if err := f(fs); err != nil {
@@ -56,7 +60,8 @@ func (st *Storage) GetWebhookStats(name string) (*app.WebhookStats, error) {
 		var err error
 		fs, err = webhookStatsFromDB(v)
 		if err != nil {
-			return err
+			slog.Warn("GetWebhookStats: invalid stats record, treating as not found", "webhook", name, "error", err)
+			return fmt.Errorf("decoding failed: %w: %w", ErrNotFound, err)
 		}
 		return nil
 	})
