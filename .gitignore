@@ -9,3 +9,4 @@ feedhooksrv
 !cmd/*
 feedhook.zip
 *.bak
+.claude/settings.json

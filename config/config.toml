@@ -1,7 +1,7 @@
 # App related configuration
 # [app]
 # timeout = 30
-# oldest = 3600
+# oldest = 7200
 # ticker = 30
 # loglevel = "INFO"
 # branding_disabled = false

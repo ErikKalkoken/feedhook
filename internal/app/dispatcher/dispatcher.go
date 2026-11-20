@@ -2,6 +2,7 @@
 package dispatcher
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -36,14 +37,14 @@ type Dispatcher struct {
 	cfg        config.Config
 	client     *dhook.Client
 	clock      Clock
-	stopped    chan struct{} // shutdown is complete
-	fp         *gofeed.Parser
+	stopped    chan struct{}  // shutdown is complete
+	fp         *gofeed.Parser // use ParseURLWithContext: ParseURL has a fixed 30s timeout
 	messengers *syncedmap.SyncedMap[string, *messenger.Messenger]
 	st         *storage.Storage
 
 	mu        sync.Mutex
 	isRunning bool
-	shutdown  chan struct{} // commence shutdown
+	cancel    context.CancelFunc // commence shutdown
 }
 
 // New creates a new App instance and returns it.
@@ -53,7 +54,12 @@ func New(st *storage.Storage, cfg config.Config, clock Clock) *Dispatcher {
 	}
 	fp := gofeed.NewParser()
 	fp.Client = httpClient
-	client := dhook.NewClient(dhook.WithHTTPClient(httpClient))
+	opts := []dhook.ClientOption{dhook.WithHTTPClient(httpClient)}
+	if cfg.App.Timeout > 0 {
+		// dhook applies its own 30s default otherwise.
+		opts = append(opts, dhook.WithHTTPTimeout(time.Duration(cfg.App.Timeout)*time.Second))
+	}
+	client := dhook.NewClient(opts...)
 	d := &Dispatcher{
 		client:     client,
 		cfg:        cfg,
@@ -75,16 +81,14 @@ func (d *Dispatcher) Stop() bool {
 	if !d.isRunning {
 		return false
 	}
-	close(d.shutdown)
+	d.cancel()
 	<-d.stopped
 	slog.Info("Dispatcher stopped")
 	var wg sync.WaitGroup
 	for _, mg := range d.messengers.All() {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			mg.Shutdown()
-		}()
+		})
 	}
 	wg.Wait()
 	slog.Info("shutdown completed")
@@ -101,26 +105,31 @@ func (d *Dispatcher) Restart() error {
 // User should call Close() subsequently to shut down dispatcher gracefully
 // and prevent any potential data loss.
 func (d *Dispatcher) Start() error {
-	if err := func() error {
+	// Create all messengers first, so that nothing is started when one fails.
+	messengers := make([]*messenger.Messenger, 0, len(d.cfg.Webhooks))
+	for _, h := range d.cfg.Webhooks {
+		q, err := pqueue.New(d.st.DB(), h.Name)
+		if err != nil {
+			return err
+		}
+		messengers = append(messengers, messenger.NewMessenger(d.client, q, h.Name, h.URL, d.st, d.cfg))
+	}
+	var ctx context.Context
+	err := func() error {
 		d.mu.Lock()
 		defer d.mu.Unlock()
 		if d.isRunning {
 			return fmt.Errorf("dispatcher already running")
 		}
 		d.isRunning = true
-		d.shutdown = make(chan struct{})
+		ctx, d.cancel = context.WithCancel(context.Background())
 		return nil
-	}(); err != nil {
+	}()
+	if err != nil {
 		return err
 	}
-	// Create and start webhooks
-	for _, h := range d.cfg.Webhooks {
-		q, err := pqueue.New(d.st.DB(), h.Name)
-		if err != nil {
-			return err
-		}
-		ms := messenger.NewMessenger(d.client, q, h.Name, h.URL, d.st, d.cfg)
-		d.messengers.Store(h.Name, ms)
+	for _, ms := range messengers {
+		d.messengers.Store(ms.Name(), ms)
 		ms.Start()
 	}
 	// process feeds until aborted
@@ -136,9 +145,7 @@ func (d *Dispatcher) Start() error {
 					slog.Warn("Skipping feed without webhooks", "name", cf.Name)
 					continue
 				}
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
+				wg.Go(func() {
 					usedHooks := make([]*messenger.Messenger, 0)
 					for _, name := range cf.Webhooks {
 						wh, ok := d.messengers.Load(name)
@@ -147,18 +154,20 @@ func (d *Dispatcher) Start() error {
 						}
 						usedHooks = append(usedHooks, wh)
 					}
-					if err := d.processFeed(cf, usedHooks); err == errUserAborted {
+					err := d.processFeed(ctx, cf, usedHooks)
+					if err == errUserAborted {
 						slog.Debug("user aborted")
 						return
-					} else if err != nil {
+					}
+					if err != nil {
 						slog.Error("Failed to process feed", "feed", cf.Name, "error", err)
 					}
-				}()
+				})
 			}
 			wg.Wait()
 			slog.Info("Finished processing feeds", "feeds", len(feeds))
 			select {
-			case <-d.shutdown:
+			case <-ctx.Done():
 				break main
 			case <-ticker.C:
 			}
@@ -171,10 +180,13 @@ func (d *Dispatcher) Start() error {
 }
 
 // processFeed checks a feed for new items and hands them over to configured messengers.
-func (d *Dispatcher) processFeed(cf config.ConfigFeed, hooks []*messenger.Messenger) error {
+func (d *Dispatcher) processFeed(ctx context.Context, cf config.ConfigFeed, hooks []*messenger.Messenger) error {
 	myLog := slog.With("feed", cf.Name)
-	feed, err := d.fp.ParseURL(cf.URL)
+	feed, err := d.fp.ParseURLWithContext(cf.URL, ctx)
 	if err != nil {
+		if ctx.Err() != nil {
+			return errUserAborted
+		}
 		return fmt.Errorf("parse URL for feed %s: %w ", cf.Name, err)
 	}
 	oldest := time.Duration(d.cfg.App.Oldest) * time.Second
@@ -183,12 +195,10 @@ func (d *Dispatcher) processFeed(cf config.ConfigFeed, hooks []*messenger.Messen
 		if item.Content == "" && item.Description == "" {
 			continue
 		}
-		select {
-		case <-d.shutdown:
+		if ctx.Err() != nil {
 			return errUserAborted
-		default:
 		}
-		if oldest != 0 && item.PublishedParsed != nil && item.PublishedParsed.Before(d.clock.Now().Add(-oldest)) {
+		if d.cfg.App.Oldest != config.OldestUnlimited && item.PublishedParsed != nil && item.PublishedParsed.Before(d.clock.Now().Add(-oldest)) {
 			continue
 		}
 		state, err := d.st.GetItemState(cf, item)
@@ -200,14 +210,19 @@ func (d *Dispatcher) processFeed(cf config.ConfigFeed, hooks []*messenger.Messen
 		}
 		for _, hook := range hooks {
 			if err := hook.AddMessage(cf.Name, feed, item, state == app.StateUpdated); err != nil {
-				myLog.Error("Failed to add item to webhook queue", "hook", hook.Name(), "error", err)
-				if err := d.st.UpdateFeedStats(cf.Name, func(fs *app.FeedStats) error {
+				myLog.Error(
+					"Failed to add item to webhook queue. Item will not be delivered to this webhook",
+					slog.String("hook", hook.Name()),
+					slog.String("title", item.Title),
+					slog.Any("error", err),
+				)
+				err := d.st.UpdateFeedStats(cf.Name, func(fs *app.FeedStats) error {
 					fs.ErrorCount++
 					return nil
-				}); err != nil {
+				})
+				if err != nil {
 					myLog.Error("failed to update feed stats", "error", err)
 				}
-				continue
 			}
 		}
 		if err := d.st.RecordItem(cf, item); err != nil {
@@ -236,29 +251,31 @@ func (d *Dispatcher) MessengerStatus(webhookName string) (messenger.Status, erro
 	return wh.Status(), nil
 }
 
-func (d *Dispatcher) PostLatestFeedItem(feedName string) error {
-	var cf config.ConfigFeed
-	for _, f := range d.cfg.Feeds {
-		if f.Name == feedName {
-			cf = f
-			break
-		}
+// SendPing sends a ping message to a configured webhook.
+func (d *Dispatcher) SendPing(webhookName string) error {
+	wh, ok := d.cfg.WebhookByName(webhookName)
+	if !ok {
+		return fmt.Errorf("webhook \"%s\": %w", webhookName, ErrNotFound)
 	}
-	if cf.Name == "" {
+	_, err := d.client.NewWebhook(wh.URL).Execute(dhook.Message{Content: "Ping from feedhook"}, nil)
+	return err
+}
+
+func (d *Dispatcher) PostLatestFeedItem(feedName string) error {
+	cf, ok := d.cfg.FeedByName(feedName)
+	if !ok {
 		return fmt.Errorf("feed \"%s\": %w", feedName, ErrNotFound)
 	}
 	hooks := make([]config.ConfigWebhook, 0)
 	for _, name := range cf.Webhooks {
-		for _, h := range d.cfg.Webhooks {
-			if h.Name == name {
-				hooks = append(hooks, h)
-			}
+		if h, ok := d.cfg.WebhookByName(name); ok {
+			hooks = append(hooks, h)
 		}
 	}
 	if len(hooks) == 0 {
 		return fmt.Errorf("no webhooks configured for feed: %s ", feedName)
 	}
-	feed, err := d.fp.ParseURL(cf.URL)
+	feed, err := d.fp.ParseURLWithContext(cf.URL, context.Background())
 	if err != nil {
 		return fmt.Errorf("parse URL for feed: %w ", err)
 	}
@@ -275,7 +292,7 @@ func (d *Dispatcher) PostLatestFeedItem(feedName string) error {
 		return a.PublishedParsed.Compare(*b.PublishedParsed)
 	})
 	fi := messenger.NewFeedItem(feedName, feed, latest, false)
-	m, err := fi.ToDiscordMessage(false)
+	m, err := fi.ToDiscordMessage(d.cfg.App.BrandingDisabled)
 	if err != nil {
 		return fmt.Errorf("convert item to Discord message: %w", err)
 	}

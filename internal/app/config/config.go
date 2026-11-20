@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -17,15 +18,18 @@ const (
 	logLevelDefault = slog.LevelInfo
 )
 
+// OldestUnlimited is the value for Oldest to forward items of any age.
+const OldestUnlimited = -1
+
 type Config struct {
 	App      ConfigApp
 	Feeds    []ConfigFeed
 	Webhooks []ConfigWebhook
 }
 
-func (mc *Config) EnabledFeeds() []ConfigFeed {
+func (c *Config) EnabledFeeds() []ConfigFeed {
 	feeds := make([]ConfigFeed, 0)
-	for _, f := range mc.Feeds {
+	for _, f := range c.Feeds {
 		if f.Disabled {
 			continue
 		}
@@ -34,9 +38,26 @@ func (mc *Config) EnabledFeeds() []ConfigFeed {
 	return feeds
 }
 
+// FeedByName returns the feed with the given name and reports whether it was found.
+func (c *Config) FeedByName(name string) (ConfigFeed, bool) {
+	i := slices.IndexFunc(c.Feeds, func(f ConfigFeed) bool { return f.Name == name })
+	if i == -1 {
+		return ConfigFeed{}, false
+	}
+	return c.Feeds[i], true
+}
+
+// WebhookByName returns the webhook with the given name and reports whether it was found.
+func (c *Config) WebhookByName(name string) (ConfigWebhook, bool) {
+	i := slices.IndexFunc(c.Webhooks, func(w ConfigWebhook) bool { return w.Name == name })
+	if i == -1 {
+		return ConfigWebhook{}, false
+	}
+	return c.Webhooks[i], true
+}
+
 type ConfigApp struct {
 	BrandingDisabled bool   `toml:"branding_disabled"`
-	DBPath           string `toml:"db_path"`
 	LogLevel         string `toml:"loglevel"`
 	Oldest           int    `toml:"oldest"`
 	Ticker           int    `toml:"ticker"`
@@ -89,11 +110,11 @@ func parseConfig(config *Config) error {
 			return fmt.Errorf("webhook %s has invalid url: %w", x.Name, err)
 		}
 		if webhookNames[x.Name] {
-			return fmt.Errorf("webhook name %s no unique", x.Name)
+			return fmt.Errorf("webhook name %s not unique", x.Name)
 		}
 		webhookNames[x.Name] = true
 		if webhookURLs[x.URL] {
-			return fmt.Errorf("webhook name %s no unique", x.Name)
+			return fmt.Errorf("webhook %s: url not unique", x.Name)
 		}
 		webhookURLs[x.URL] = true
 	}
@@ -139,9 +160,10 @@ func parseConfig(config *Config) error {
 	if config.App.Timeout <= 0 {
 		config.App.Timeout = timeoutDefault
 	}
-	if config.App.Oldest == -1 {
-		config.App.Oldest = 0
-	} else if config.App.Oldest == 0 {
+	if config.App.Oldest < OldestUnlimited {
+		return fmt.Errorf("oldest must be %d or greater, got %d", OldestUnlimited, config.App.Oldest)
+	}
+	if config.App.Oldest == 0 {
 		config.App.Oldest = oldestDefault
 	}
 	if config.App.Ticker <= 0 {

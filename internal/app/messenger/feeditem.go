@@ -18,7 +18,7 @@ const (
 	// contentMaxLength = 2000
 	embedMaxFieldLength       = 256 // title, author name, field names
 	embedDescriptionMaxLength = 4096
-	avatarURL                 = "https://cdn.imgpile.com/f/aQ1yR7t_xl.png"
+	avatarURL                 = "https://cdn.jsdelivr.net/gh/ErikKalkoken/feedhook@main/assets/icon.png"
 	username                  = "Feedhook"
 )
 
@@ -28,13 +28,13 @@ func init() {
 	removeImgTags := md.Rule{
 		Filter: []string{"img"},
 		Replacement: func(_ string, _ *goquery.Selection, _ *md.Options) *string {
-			return md.String("")
+			return new("")
 		},
 	}
 	removeFigureTags := md.Rule{
 		Filter: []string{"figure"},
 		Replacement: func(_ string, _ *goquery.Selection, _ *md.Options) *string {
-			return md.String("")
+			return new("")
 		},
 	}
 	sanitizeMailToLinks := md.Rule{
@@ -42,7 +42,7 @@ func init() {
 		Replacement: func(content string, selec *goquery.Selection, options *md.Options) *string {
 			href := selec.AttrOr("href", "#")
 			if strings.HasPrefix(href, "mailto:") {
-				return md.String(content)
+				return new(content)
 			}
 			return nil
 		},
@@ -53,7 +53,7 @@ func init() {
 			_, err := url.ParseRequestURI(content)
 			if err == nil {
 				href := selec.AttrOr("href", "#")
-				return md.String("[Link](" + href + ")")
+				return new("[Link](" + href + ")")
 			}
 			return nil
 		},
