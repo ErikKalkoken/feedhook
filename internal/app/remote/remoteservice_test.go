@@ -26,6 +26,7 @@ func (rt fakeTime) Now() time.Time {
 }
 
 func TestStatisticsSortsByNameWithoutChangingConfig(t *testing.T) {
+	// given
 	p := filepath.Join(t.TempDir(), "test.db")
 	db, err := bolt.Open(p, 0600, nil)
 	if err != nil {
@@ -60,19 +61,19 @@ func TestStatisticsSortsByNameWithoutChangingConfig(t *testing.T) {
 	err = st.Init(cfg.FeedNames())
 	require.NoError(t, err)
 	for _, cf := range cfg.Feeds {
-		if err := st.UpdateOrCreateFeedStats(cf.Name, func(fs *app.FeedStats) error { return nil }); err != nil {
-			t.Fatal(err)
-		}
+		err := st.UpdateOrCreateFeedStats(cf.Name, func(fs *app.FeedStats) error { return nil })
+		require.NoError(t, err)
 	}
 	for _, cw := range cfg.Webhooks {
-		if err := st.UpdateOrCreateWebhookStats(cw.Name, func(ws *app.WebhookStats) error { return nil }); err != nil {
-			t.Fatal(err)
-		}
+		err := st.UpdateOrCreateWebhookStats(cw.Name, func(ws *app.WebhookStats) error { return nil })
+		require.NoError(t, err)
 	}
 	d := dispatcher.New(st, cfg, fakeTime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
-	s := remote.NewRemoteService(d, st, cfg, "")
+	s := remote.NewRemoteService(d, st, cfg)
+	// when
 	var reply string
 	err = s.Statistics(&remote.EmptyArgs{}, &reply)
+	// then
 	require.NoError(t, err)
 	assert.Equal(t, "feed2", cfg.Feeds[0].Name)
 	assert.Equal(t, "feed1", cfg.Feeds[1].Name)
@@ -91,6 +92,7 @@ func TestStatisticsSortsByNameWithoutChangingConfig(t *testing.T) {
 }
 
 func TestStatisticsListsFeedsAndWebhooksWithoutStats(t *testing.T) {
+	// given
 	p := filepath.Join(t.TempDir(), "test.db")
 	db, err := bolt.Open(p, 0600, nil)
 	require.NoError(t, err)
@@ -128,11 +130,13 @@ func TestStatisticsListsFeedsAndWebhooksWithoutStats(t *testing.T) {
 	err = st.UpdateOrCreateWebhookStats("hook1", func(ws *app.WebhookStats) error { return nil })
 	require.NoError(t, err)
 	d := dispatcher.New(st, cfg, fakeTime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
-	s := remote.NewRemoteService(d, st, cfg, "")
+	s := remote.NewRemoteService(d, st, cfg)
+	// when
 	var reply string
 	assert.NotPanics(t, func() {
 		err = s.Statistics(&remote.EmptyArgs{}, &reply)
 	})
+	// then
 	require.NoError(t, err)
 	feedsOut, hooksOut, ok := strings.Cut(reply, "Webhooks:\n")
 	require.True(t, ok)

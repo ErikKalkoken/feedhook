@@ -2,11 +2,11 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
 	"net"
-	"net/http"
 	"net/rpc"
 	"os"
 	"os/signal"
@@ -26,11 +26,10 @@ const (
 	configFilename  = "config.toml"
 	dbFileName      = "feedhook.db"
 	boltOpenTimeout = 5 * time.Second
-	portRPC         = 2233
 )
 
 // Version is overwritten via build tag when released.
-var Version = "0.3.0"
+var Version = "0.0.0"
 
 type realtime struct{}
 
@@ -41,7 +40,7 @@ func (rt realtime) Now() time.Time {
 func main() {
 	cfgPathFlag := flag.String("config", ".", "directory containing "+configFilename)
 	dbPathFlag := flag.String("db", ".", "directory for the database file "+dbFileName)
-	portFlag := flag.Int("port", portRPC, "port for RPC service")
+	portFlag := flag.Int("port", remote.DefaultPort, "port for RPC service")
 	versionFlag := flag.Bool("v", false, "show version")
 	offlineFlag := flag.Bool("offline", false, "run RPC service only")
 	flag.Usage = myUsage
@@ -51,9 +50,15 @@ func main() {
 		os.Exit(0)
 	}
 	configPath := filepath.Join(*cfgPathFlag, configFilename)
-	cfg, err := config.FromFile(configPath)
+	cfg, warnings, failures, err := config.FromFile(configPath)
+	for _, w := range warnings {
+		slog.Warn("Config validation", "warning", w)
+	}
+	for _, f := range failures {
+		slog.Error("Config validation", "failure", f)
+	}
 	if err != nil {
-		slog.Error("Invalid config", "error", err)
+		slog.Error("Invalid configuration", "error", err)
 		os.Exit(1)
 	}
 	slog.SetLogLoggerLevel(cfg.App.LoggerLevel())
@@ -81,7 +86,7 @@ func main() {
 	}
 
 	// start RPC service
-	if err := startRPC(*portFlag, d, st, cfg, configPath); err != nil {
+	if err := startRPC(*portFlag, d, st, cfg); err != nil {
 		slog.Error("Failed to start RPC service", "port", *portFlag, "error", err)
 		os.Exit(1)
 	}
@@ -92,17 +97,30 @@ func main() {
 	<-sc
 }
 
-func startRPC(port int, d *dispatcher.Dispatcher, st *storage.Storage, cfg config.Config, configPath string) error {
-	rpc.Register(remote.NewRemoteService(d, st, cfg, configPath))
-	rpc.HandleHTTP()
-	l, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
+func startRPC(port int, d *dispatcher.Dispatcher, st *storage.Storage, cfg config.Config) error {
+	server := rpc.NewServer()
+	if err := server.Register(remote.NewRemoteService(d, st, cfg)); err != nil {
+		return fmt.Errorf("register: %w", err)
+	}
+	l, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
 	if err != nil {
-		return err
+		return fmt.Errorf("listen: %w", err)
 	}
 	go func() {
 		slog.Info("RPC service running", "port", port)
-		err := http.Serve(l, nil)
-		slog.Error("RPC service aborted", "error", err)
+		for {
+			conn, err := l.Accept()
+			if errors.Is(err, net.ErrClosed) {
+				slog.Info("RPC service closed")
+				return
+			}
+			if err != nil {
+				slog.Error("RPC service: Failed to accept connection", "error", err)
+				time.Sleep(time.Second) // transient error delay
+				continue
+			}
+			go server.ServeConn(conn)
+		}
 	}()
 	return nil
 }

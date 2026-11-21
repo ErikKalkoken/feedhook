@@ -16,47 +16,52 @@ import (
 	"github.com/ErikKalkoken/feedhook/internal/consoletable"
 )
 
+const (
+	// DefaultPort is the default port of the RPC service.
+	DefaultPort = 2233
+)
+
+// EmptyArgs are the args for RPC methods without parameters.
 type EmptyArgs struct{}
 
+// SendPingArgs are the args for SendPing.
 type SendPingArgs struct {
 	WebhookName string
 }
 
+// SendLatestArgs are the args for PostLatestFeedItem.
 type SendLatestArgs struct {
 	FeedName string
 }
 
 // RemoteService is a service for providing remote access to the app via RPC.
 type RemoteService struct {
-	cfg        config.Config
-	configPath string
-	d          *dispatcher.Dispatcher
-	st         *storage.Storage
+	cfg config.Config
+	d   *dispatcher.Dispatcher
+	st  *storage.Storage
 }
 
-func NewRemoteService(d *dispatcher.Dispatcher, st *storage.Storage, cfg config.Config, configPath string) *RemoteService {
+// NewRemoteService returns a new RemoteService.
+func NewRemoteService(d *dispatcher.Dispatcher, st *storage.Storage, cfg config.Config) *RemoteService {
 	x := &RemoteService{
-		cfg:        cfg,
-		d:          d,
-		st:         st,
-		configPath: configPath,
+		cfg: cfg,
+		d:   d,
+		st:  st,
 	}
 	return x
 }
 
-func (s *RemoteService) CheckConfig(args *EmptyArgs, reply *bool) error {
-	_, err := config.FromFile(s.configPath)
-	return err
-}
-
+// PostLatestFeedItem posts the latest item of a feed to its webhook.
 func (s *RemoteService) PostLatestFeedItem(args *SendLatestArgs, reply *bool) error {
 	return s.d.PostLatestFeedItem(args.FeedName)
 }
 
+// Restart restarts the dispatcher.
 func (s *RemoteService) Restart(args *EmptyArgs, reply *bool) error {
 	return s.d.Restart()
 }
 
+// Statistics returns feed and webhook statistics as text tables.
 func (s *RemoteService) Statistics(args *EmptyArgs, reply *string) error {
 	out := &strings.Builder{}
 	// Feed stats
@@ -102,6 +107,7 @@ func (s *RemoteService) Statistics(args *EmptyArgs, reply *string) error {
 	return nil
 }
 
+// SendPing sends a test message to a webhook.
 func (s *RemoteService) SendPing(args *SendPingArgs, reply *bool) error {
 	return s.d.SendPing(args.WebhookName)
 }

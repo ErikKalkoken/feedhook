@@ -1,74 +1,93 @@
 package remote
 
 import (
+	"errors"
 	"fmt"
+	"net"
 	"net/rpc"
+	"time"
 )
+
+// DefaultTimeout is the default timeout for calls to the remote service.
+const DefaultTimeout = 120 * time.Second
 
 // Client represents a convenience client for accessing the remote service.
 type Client struct {
-	port int
+	port    int
+	timeout time.Duration
 }
 
-func NewClient(port int) Client {
-	c := Client{port: port}
-	return c
+// NewClient returns a new client using the default port and timeout.
+func NewClient() *Client {
+	return &Client{port: DefaultPort, timeout: DefaultTimeout}
 }
 
-func (c Client) CheckConfig() error {
-	rc, err := c.dial()
-	if err != nil {
-		return err
+// SetPort sets the port of the remote service. It reports an error for invalid ports.
+func (c *Client) SetPort(port int) error {
+	if port <= 0 || port > 65535 {
+		return fmt.Errorf("invalid port: %d", port)
 	}
+	c.port = port
+	return nil
+}
+
+// SetTimeout sets the timeout for calls. It reports an error for invalid timeouts.
+func (c *Client) SetTimeout(d time.Duration) error {
+	if d <= 0 {
+		return fmt.Errorf("invalid timeout: %s", d)
+	}
+	c.timeout = d
+	return nil
+}
+
+// PostLatestFeedItem posts the latest item of a feed to its webhook.
+func (c *Client) PostLatestFeedItem(feedName string) error {
 	var reply bool
-	return rc.Call("RemoteService.CheckConfig", EmptyArgs{}, &reply)
+	return c.call("RemoteService.PostLatestFeedItem", SendLatestArgs{FeedName: feedName}, &reply)
 }
 
-func (c Client) PostLatestFeedItem(feedName string) error {
-	rc, err := c.dial()
-	if err != nil {
-		return err
-	}
-	args := SendLatestArgs{FeedName: feedName}
+// Restart restarts the service.
+func (c *Client) Restart() error {
 	var reply bool
-	return rc.Call("RemoteService.PostLatestFeedItem", args, &reply)
+	return c.call("RemoteService.Restart", EmptyArgs{}, &reply)
 }
 
-func (c Client) Restart() error {
-	rc, err := c.dial()
-	if err != nil {
-		return err
-	}
-	var reply bool
-	return rc.Call("RemoteService.Restart", EmptyArgs{}, &reply)
-}
-
-func (c Client) Statistics() (string, error) {
-	rc, err := c.dial()
-	if err != nil {
-		return "", err
-	}
+// Statistics returns the service's statistics as text tables.
+func (c *Client) Statistics() (string, error) {
 	var reply string
-	if err := rc.Call("RemoteService.Statistics", EmptyArgs{}, &reply); err != nil {
-		return "", fmt.Errorf("call: %w", err)
+	if err := c.call("RemoteService.Statistics", EmptyArgs{}, &reply); err != nil {
+		return "", err
 	}
 	return reply, nil
 }
 
-func (c Client) SendPing(webhookName string) error {
-	rc, err := c.dial()
-	if err != nil {
-		return err
-	}
-	args := SendPingArgs{WebhookName: webhookName}
+// SendPing sends a test message to a webhook.
+func (c *Client) SendPing(webhookName string) error {
 	var reply bool
-	return rc.Call("RemoteService.SendPing", args, &reply)
+	return c.call("RemoteService.SendPing", SendPingArgs{WebhookName: webhookName}, &reply)
 }
 
-func (c Client) dial() (*rpc.Client, error) {
-	rc, err := rpc.DialHTTP("tcp", fmt.Sprintf("localhost:%d", c.port))
+// call calls a method of the remote service and reports timeouts with a clear error.
+func (c *Client) call(method string, args any, reply any) error {
+	deadline := time.Now().Add(c.timeout)
+	d := net.Dialer{Deadline: deadline}
+	conn, err := d.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", c.port))
 	if err != nil {
-		return nil, fmt.Errorf("dialing: %w", err)
+		return c.replaceTimeoutError(fmt.Errorf("dialing: %w", err))
 	}
-	return rc, nil
+	if err := conn.SetDeadline(deadline); err != nil {
+		conn.Close()
+		return err
+	}
+	rc := rpc.NewClient(conn)
+	defer rc.Close()
+	return c.replaceTimeoutError(rc.Call(method, args, reply))
+}
+
+// replaceTimeoutError returns a custom error when err is a timeout, else err unchanged.
+func (c *Client) replaceTimeoutError(err error) error {
+	if ne, ok := errors.AsType[net.Error](err); ok && ne.Timeout() {
+		return fmt.Errorf("no answer from feedhook service on port %d within %s", c.port, c.timeout)
+	}
+	return err
 }

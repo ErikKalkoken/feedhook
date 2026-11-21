@@ -110,6 +110,14 @@ touch feedhook.log
 
 Setup your initial feeds and webhooks by adding them to `config.toml`.
 
+Check that your configuration is valid:
+
+```sh
+./feedhookcli check-config config.toml
+```
+
+The check also shows warnings, e.g. for unknown keys (often a typo) or webhooks no feed uses. Warnings do not prevent the service from starting.
+
 Switch back to your sudo user:
 
 ```sh
@@ -140,6 +148,7 @@ We also recommend running a test ping to ensure the webhooks are setup correctly
 
 > [!NOTE]
 > Whenever you make changes to the configuration you need to restart the service to activate them.
+> We recommend checking the configuration for errors and warnings before restarting: `/home/feedhook/feedhookcli check-config /home/feedhook/config.toml`
 
 ## Configuration
 
@@ -191,7 +200,7 @@ Items without content and description are skipped. Items that change after being
 | `-offline` | | Run only the RPC service, without fetching feeds or posting messages |
 | `-v` | | Show the version and exit |
 
-The RPC service only listens on `localhost`.
+The RPC service only listens on `127.0.0.1`.
 
 Example:
 
@@ -230,9 +239,9 @@ sudo supervisorctl start feedhook
 
 ## CLI tool
 
-Feedhook comes with a CLI tool for interacting with the running service. With it you can:
+Feedhook comes with a CLI tool. With it you can:
 
-- Check if the configuration is valid
+- Check if a config file is valid (works without the service running)
 - See live statistics (e.g. how many items have been received from each feed)
 - Make pings to configured webhooks (useful for testing)
 - Force a re-send of the latest feed item (useful for testing)
@@ -240,6 +249,13 @@ Feedhook comes with a CLI tool for interacting with the running service. With it
 To see all commands please run the tool with the help flag: `feedhookcli -h`.
 
 You can also get help for a specific command with the help flag: `feedhookcli COMMAND -h`.
+
+Commands that talk to the service accept these options. Options must come before arguments, e.g. `feedhookcli ping --port 2234 Hook-1`.
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--port`, `-p` | `2233` | Port of the RPC service of `feedhooksrv` |
+| `--timeout`, `-t` | `2m` | Max time to wait for `feedhooksrv` to respond, e.g. `90s` |
 
 ## Attributions
 

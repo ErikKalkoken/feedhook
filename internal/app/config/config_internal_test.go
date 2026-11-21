@@ -21,113 +21,67 @@ func TestParseConfig(t *testing.T) {
 				Webhook: "hook1",
 			}},
 		}
-		assert.NoError(t, parseConfig(&cf))
+		warnings, failures := parseConfig(&cf)
+		assert.Empty(t, failures)
+		assert.Empty(t, warnings)
 	})
-	t.Run("should return error when no feeds defined", func(t *testing.T) {
+	t.Run("should warn about unused webhook when config is valid", func(t *testing.T) {
 		cf := Config{
-			Webhooks: []ConfigWebhook{{
-				Name: "name",
-				URL:  "https://www.example.com/url",
-			}},
-		}
-		assert.Error(t, parseConfig(&cf))
-	})
-	t.Run("should return error when hook has no URL", func(t *testing.T) {
-		cf := Config{
-			Webhooks: []ConfigWebhook{{
-				Name: "name",
-			}},
-		}
-		assert.Error(t, parseConfig(&cf))
-	})
-	t.Run("should return error when hook has no name", func(t *testing.T) {
-		cf := Config{
-			Webhooks: []ConfigWebhook{{
-				URL: "https://www.example.com/url",
-			}},
-		}
-		assert.Error(t, parseConfig(&cf))
-	})
-	t.Run("should return error when feed has no name", func(t *testing.T) {
-		cf := Config{
-			Webhooks: []ConfigWebhook{{
-				Name: "hook",
-				URL:  "https://www.example.com/url1",
-			}},
+			Webhooks: []ConfigWebhook{
+				{
+					Name: "hook1",
+					URL:  "https://www.example.com/url1",
+				},
+				{
+					Name: "hook2",
+					URL:  "https://www.example.com/url3",
+				},
+			},
 			Feeds: []ConfigFeed{{
+				Name:    "feed1",
 				URL:     "https://www.example.com/url2",
-				Webhook: "hook",
+				Webhook: "hook1",
 			}},
 		}
-		assert.Error(t, parseConfig(&cf))
+		warnings, failures := parseConfig(&cf)
+		require.Empty(t, failures)
+		assert.Equal(t, []string{`webhook "hook2" defined, but not used`}, warnings)
 	})
-	t.Run("should return error when feed has no webhook", func(t *testing.T) {
+	t.Run("should warn about unused webhook when config is invalid", func(t *testing.T) {
 		cf := Config{
 			Webhooks: []ConfigWebhook{{
-				Name: "hook",
+				Name: "hook1",
 				URL:  "https://www.example.com/url1",
 			}},
 			Feeds: []ConfigFeed{{
-				Name: "feed",
+				Name: "feed1",
 				URL:  "https://www.example.com/url2",
 			}},
 		}
-		assert.Error(t, parseConfig(&cf))
+		warnings, failures := parseConfig(&cf)
+		assert.Equal(t, []string{`feed "feed1" has no webhook`}, failures)
+		assert.Equal(t, []string{`webhook "hook1" defined, but not used`}, warnings)
 	})
-	t.Run("should return error when feed has no URL", func(t *testing.T) {
+	t.Run("should not warn about unused webhook without name", func(t *testing.T) {
 		cf := Config{
-			Webhooks: []ConfigWebhook{{
-				Name: "hook",
-				URL:  "https://www.example.com/url1",
-			}},
-			Feeds: []ConfigFeed{{
-				Name:    "name",
-				Webhook: "hook",
-			}},
-		}
-		assert.Error(t, parseConfig(&cf))
-	})
-	t.Run("should return error when feed defines unknown hook", func(t *testing.T) {
-		cf := Config{
-			Webhooks: []ConfigWebhook{{
-				Name: "name",
-				URL:  "https://www.example.com/url1",
-			}},
-			Feeds: []ConfigFeed{{
-				Name:    "dummy",
-				URL:     "https://www.example.com/url2",
-				Webhook: "unknown",
-			}},
-		}
-		assert.Error(t, parseConfig(&cf))
-	})
-	t.Run("should return error when a webhook URL is invalid", func(t *testing.T) {
-		cf := Config{
-			Webhooks: []ConfigWebhook{{
-				Name: "hook1",
-				URL:  "invalid",
-			}},
+			Webhooks: []ConfigWebhook{
+				{
+					Name: "hook1",
+					URL:  "https://www.example.com/url1",
+				},
+				{
+					URL: "https://www.example.com/url3",
+				},
+			},
 			Feeds: []ConfigFeed{{
 				Name:    "feed1",
 				URL:     "https://www.example.com/url2",
 				Webhook: "hook1",
 			}},
 		}
-		assert.Error(t, parseConfig(&cf))
-	})
-	t.Run("should return error when a feed URL is invalid", func(t *testing.T) {
-		cf := Config{
-			Webhooks: []ConfigWebhook{{
-				Name: "hook1",
-				URL:  "https://www.example.com/url1",
-			}},
-			Feeds: []ConfigFeed{{
-				Name:    "feed1",
-				URL:     "invalid",
-				Webhook: "hook1",
-			}},
-		}
-		assert.Error(t, parseConfig(&cf))
+		warnings, failures := parseConfig(&cf)
+		assert.Equal(t, []string{"webhook #2 has no name"}, failures)
+		assert.Empty(t, warnings)
 	})
 	t.Run("should set app defaults when missing", func(t *testing.T) {
 		cf := Config{
@@ -141,72 +95,11 @@ func TestParseConfig(t *testing.T) {
 				Webhook: "hook1",
 			}},
 		}
-		err := parseConfig(&cf)
-		require.NoError(t, err)
+		_, failures := parseConfig(&cf)
+		require.Empty(t, failures)
 		assert.Equal(t, timeoutDefault, cf.App.Timeout)
 		assert.Equal(t, oldestDefault, cf.App.Oldest)
 		assert.Equal(t, tickerDefault, cf.App.Ticker)
-	})
-	t.Run("should return error when webhook names are not unique", func(t *testing.T) {
-		cf := Config{
-			Webhooks: []ConfigWebhook{
-				{
-					Name: "hook1",
-					URL:  "https://www.example.com/url1",
-				},
-				{
-					Name: "hook1",
-					URL:  "https://www.example.com/url2",
-				},
-			},
-			Feeds: []ConfigFeed{{
-				Name:    "feed1",
-				URL:     "https://www.example.com/url2",
-				Webhook: "hook1",
-			}},
-		}
-		assert.ErrorContains(t, parseConfig(&cf), "webhook name hook1 not unique")
-	})
-	t.Run("should return error when webhook URLs are not unique", func(t *testing.T) {
-		cf := Config{
-			Webhooks: []ConfigWebhook{
-				{
-					Name: "hook1",
-					URL:  "https://www.example.com/url1",
-				},
-				{
-					Name: "hook2",
-					URL:  "https://www.example.com/url1",
-				},
-			},
-			Feeds: []ConfigFeed{{
-				Name:    "feed1",
-				URL:     "https://www.example.com/url2",
-				Webhook: "hook1",
-			}},
-		}
-		assert.ErrorContains(t, parseConfig(&cf), "webhook hook2: url not unique")
-	})
-	t.Run("should return error when feed names are not unique", func(t *testing.T) {
-		cf := Config{
-			Webhooks: []ConfigWebhook{{
-				Name: "hook1",
-				URL:  "https://www.example.com/url1",
-			}},
-			Feeds: []ConfigFeed{
-				{
-					Name:    "feed1",
-					URL:     "https://www.example.com/url2",
-					Webhook: "hook1",
-				},
-				{
-					Name:    "feed1",
-					URL:     "https://www.example.com/url3",
-					Webhook: "hook1",
-				},
-			},
-		}
-		assert.Error(t, parseConfig(&cf))
 	})
 	t.Run("should return log level from config", func(t *testing.T) {
 		cases := []struct {

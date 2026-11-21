@@ -2,10 +2,13 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
+	"os"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -76,10 +79,11 @@ type ConfigApp struct {
 	Timeout          int    `toml:"timeout"`
 }
 
+var logLevels = map[string]slog.Level{"DEBUG": slog.LevelDebug, "INFO": slog.LevelInfo, "WARN": slog.LevelWarn, "ERROR": slog.LevelError}
+
 // LoggerLevel returns the configured log level or the default if it is invalid.
 func (ca ConfigApp) LoggerLevel() slog.Level {
-	m := map[string]slog.Level{"DEBUG": slog.LevelDebug, "INFO": slog.LevelInfo, "WARN": slog.LevelWarn, "ERROR": slog.LevelError}
-	v, ok := m[strings.ToUpper(ca.LogLevel)]
+	v, ok := logLevels[strings.ToUpper(ca.LogLevel)]
 	if !ok {
 		return logLevelDefault
 	}
@@ -101,83 +105,114 @@ type ConfigWebhook struct {
 }
 
 // FromFile reads, validates and returns the configuration from a TOML file.
+// Failures make the config invalid and are reported with a general error. Warnings never do.
 // Missing app settings are set to their defaults.
-func FromFile(path string) (Config, error) {
+func FromFile(path string) (cfg Config, warnings []string, failures []string, err error) {
+	s, err := os.Stat(path)
+	if err != nil {
+		return Config{}, nil, nil, err
+	}
+	if s.IsDir() {
+		return Config{}, nil, nil, fmt.Errorf("%s is a directory, expected path to config file", path)
+	}
 	var config Config
-	if _, err := toml.DecodeFile(path, &config); err != nil {
-		return config, err
+	md, err := toml.DecodeFile(path, &config)
+	if err != nil {
+		return Config{}, nil, nil, err
 	}
-	if err := parseConfig(&config); err != nil {
-		return config, err
+	for _, k := range md.Undecoded() {
+		warnings = append(warnings, fmt.Sprintf("unknown key: %s", k))
 	}
-	return config, nil
+	w, failures := parseConfig(&config)
+	warnings = append(warnings, w...)
+	if len(failures) > 0 {
+		return Config{}, warnings, failures, errors.New("invalid config")
+	}
+	return config, warnings, nil, nil
 }
 
-func parseConfig(config *Config) error {
+// parseConfig validates config and sets defaults.
+// It returns detected configuration issues as warnings and failures.
+func parseConfig(config *Config) (warnings []string, failures []string) {
+	makeName := func(i int, name string) string {
+		if name == "" {
+			return fmt.Sprintf("#%d", i+1)
+		}
+		return strconv.Quote(name)
+	}
 	webhookNames := make(map[string]bool)
 	webhookURLs := make(map[string]bool)
-	for _, x := range config.Webhooks {
-		if x.Name == "" {
-			return fmt.Errorf("one webhook has no name")
+	for i, h := range config.Webhooks {
+		name := makeName(i, h.Name)
+		if h.Name == "" {
+			failures = append(failures, fmt.Sprintf("webhook %s has no name", name))
+		} else if webhookNames[h.Name] {
+			failures = append(failures, fmt.Sprintf("webhook name %s not unique", name))
 		}
-		if x.URL == "" {
-			return fmt.Errorf("webhook %s has no url", x.Name)
+		webhookNames[h.Name] = true
+
+		if h.URL == "" {
+			failures = append(failures, fmt.Sprintf("webhook %s has no url", name))
+		} else if _, err := url.ParseRequestURI(h.URL); err != nil {
+			failures = append(failures, fmt.Sprintf("webhook %s has invalid url: %s", name, err))
+		} else if webhookURLs[h.URL] {
+			failures = append(failures, fmt.Sprintf("webhook %s: url not unique", name))
 		}
-		if _, err := url.ParseRequestURI(x.URL); err != nil {
-			return fmt.Errorf("webhook %s has invalid url: %w", x.Name, err)
-		}
-		if webhookNames[x.Name] {
-			return fmt.Errorf("webhook name %s not unique", x.Name)
-		}
-		webhookNames[x.Name] = true
-		if webhookURLs[x.URL] {
-			return fmt.Errorf("webhook %s: url not unique", x.Name)
-		}
-		webhookURLs[x.URL] = true
+		webhookURLs[h.URL] = true
 	}
 	if len(config.Feeds) == 0 {
-		return fmt.Errorf("no feeds defined")
+		failures = append(failures, "no feeds defined")
 	}
+
 	feedNames := make(map[string]bool)
 	webhooksUsed := make(map[string]bool)
-	for _, x := range config.Feeds {
-		if x.Name == "" {
-			return fmt.Errorf("feed has no name")
+	for i, f := range config.Feeds {
+		name := makeName(i, f.Name)
+		if f.Name == "" {
+			failures = append(failures, fmt.Sprintf("feed %s has no name", name))
+		} else if feedNames[f.Name] {
+			failures = append(failures, fmt.Sprintf("feed name %s not unique", name))
 		}
-		if x.Webhook == "" {
-			return fmt.Errorf("feed %s has no webhook", x.Name)
+		feedNames[f.Name] = true
+
+		if f.Webhook == "" {
+			failures = append(failures, fmt.Sprintf("feed %s has no webhook", name))
+		} else if !webhookNames[f.Webhook] {
+			failures = append(failures, fmt.Sprintf("feed %s: invalid webhook: %q", name, f.Webhook))
 		}
-		if x.URL == "" {
-			return fmt.Errorf("feed %s has no url", x.Name)
+		webhooksUsed[f.Webhook] = true
+
+		if f.URL == "" {
+			failures = append(failures, fmt.Sprintf("feed %s has no url", name))
+		} else if _, err := url.ParseRequestURI(f.URL); err != nil {
+			failures = append(failures, fmt.Sprintf("feed %s has invalid url: %s", name, err))
 		}
-		if feedNames[x.Name] {
-			return fmt.Errorf("feed name %s not unique", x.Name)
-		}
-		feedNames[x.Name] = true
-		if _, err := url.ParseRequestURI(x.URL); err != nil {
-			return fmt.Errorf("feed %s has invalid url: %w", x.Name, err)
-		}
-		if !webhookNames[x.Webhook] {
-			return fmt.Errorf("feed \"%s\": invalid webhook \"%s\"", x.Name, x.Webhook)
-		}
-		webhooksUsed[x.Webhook] = true
 	}
-	for _, wh := range config.Webhooks {
-		if !webhooksUsed[wh.Name] {
-			slog.Warn("Webhook defined, but not used", "name", wh.Name)
-		}
+	if config.App.Timeout < 0 {
+		warnings = append(warnings, fmt.Sprintf("timeout must be 0 or greater, got %d, using %d", config.App.Timeout, timeoutDefault))
 	}
 	if config.App.Timeout <= 0 {
 		config.App.Timeout = timeoutDefault
 	}
 	if config.App.Oldest < OldestUnlimited {
-		return fmt.Errorf("oldest must be %d or greater, got %d", OldestUnlimited, config.App.Oldest)
+		failures = append(failures, fmt.Sprintf("oldest must be %d or greater, got %d", OldestUnlimited, config.App.Oldest))
 	}
 	if config.App.Oldest == 0 {
 		config.App.Oldest = oldestDefault
 	}
+	if config.App.Ticker < 0 {
+		warnings = append(warnings, fmt.Sprintf("ticker must be 0 or greater, got %d, using %d", config.App.Ticker, tickerDefault))
+	}
 	if config.App.Ticker <= 0 {
 		config.App.Ticker = tickerDefault
 	}
-	return nil
+	if _, ok := logLevels[strings.ToUpper(config.App.LogLevel)]; !ok && config.App.LogLevel != "" {
+		warnings = append(warnings, fmt.Sprintf("unknown loglevel %q, using %s", config.App.LogLevel, logLevelDefault))
+	}
+	for i, h := range config.Webhooks {
+		if h.Name != "" && !webhooksUsed[h.Name] {
+			warnings = append(warnings, fmt.Sprintf("webhook %s defined, but not used", makeName(i, h.Name)))
+		}
+	}
+	return warnings, failures
 }
