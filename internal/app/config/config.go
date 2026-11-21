@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -105,12 +106,27 @@ type ConfigWebhook struct {
 // FromFile reads, validates and returns the configuration from a TOML file.
 // Missing app settings are set to their defaults.
 func FromFile(path string) (Config, error) {
+	s, err := os.Stat(path)
+	if err != nil {
+		return Config{}, err
+	}
+	if s.IsDir() {
+		return Config{}, fmt.Errorf("%s is a directory, expected path to config file", path)
+	}
 	var config Config
-	if _, err := toml.DecodeFile(path, &config); err != nil {
-		return config, err
+	md, err := toml.DecodeFile(path, &config)
+	if err != nil {
+		return Config{}, err
+	}
+	if keys := md.Undecoded(); len(keys) > 0 {
+		s := make([]string, len(keys))
+		for i, k := range keys {
+			s[i] = k.String()
+		}
+		return Config{}, fmt.Errorf("invalid keys: %s", strings.Join(s, ", "))
 	}
 	if err := parseConfig(&config); err != nil {
-		return config, err
+		return Config{}, err
 	}
 	return config, nil
 }
@@ -175,10 +191,11 @@ func parseConfig(config *Config) error {
 			errs = append(errs, fmt.Errorf("feed %s has invalid url: %w", name, err))
 		}
 	}
-
-	for _, wh := range config.Webhooks {
-		if !webhooksUsed[wh.Name] {
-			slog.Warn("Webhook defined, but not used", "name", wh.Name)
+	if len(errs) == 0 {
+		for _, wh := range config.Webhooks {
+			if !webhooksUsed[wh.Name] {
+				slog.Warn("Webhook defined, but not used", "name", wh.Name)
+			}
 		}
 	}
 	if config.App.Timeout <= 0 {

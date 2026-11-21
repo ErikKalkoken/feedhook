@@ -61,14 +61,12 @@ func TestStatisticsSortsByNameWithoutChangingConfig(t *testing.T) {
 	err = st.Init(cfg.FeedNames())
 	require.NoError(t, err)
 	for _, cf := range cfg.Feeds {
-		if err := st.UpdateOrCreateFeedStats(cf.Name, func(fs *app.FeedStats) error { return nil }); err != nil {
-			t.Fatal(err)
-		}
+		err := st.UpdateOrCreateFeedStats(cf.Name, func(fs *app.FeedStats) error { return nil })
+		require.NoError(t, err)
 	}
 	for _, cw := range cfg.Webhooks {
-		if err := st.UpdateOrCreateWebhookStats(cw.Name, func(ws *app.WebhookStats) error { return nil }); err != nil {
-			t.Fatal(err)
-		}
+		err := st.UpdateOrCreateWebhookStats(cw.Name, func(ws *app.WebhookStats) error { return nil })
+		require.NoError(t, err)
 	}
 	d := dispatcher.New(st, cfg, fakeTime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
 	s := remote.NewRemoteService(d, st, cfg)
