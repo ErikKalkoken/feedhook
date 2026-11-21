@@ -10,15 +10,11 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-const (
-	portRPC = 2233
-)
-
 // Version is overwritten via build tag when released.
 var Version = "0.0.0"
 
 func main() {
-	var client remote.Client
+	client := remote.NewClient()
 	app := &cli.App{
 		Name:  "feedhookcli",
 		Usage: "CLI tool for interacting with a running service",
@@ -31,12 +27,11 @@ func main() {
 			&cli.IntFlag{
 				Name:  "port",
 				Usage: "port where the RPC service of feedhooksrv is running",
-				Value: portRPC,
+				Value: remote.DefaultPort,
 			},
 		},
 		Before: func(ctx *cli.Context) error {
-			client = remote.NewClient(ctx.Int("port"))
-			return nil
+			return client.SetPort(ctx.Int("port"))
 		},
 		Commands: []*cli.Command{
 			{

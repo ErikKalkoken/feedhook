@@ -26,7 +26,6 @@ const (
 	configFilename  = "config.toml"
 	dbFileName      = "feedhook.db"
 	boltOpenTimeout = 5 * time.Second
-	portRPC         = 2233
 )
 
 // Version is overwritten via build tag when released.
@@ -41,7 +40,7 @@ func (rt realtime) Now() time.Time {
 func main() {
 	cfgPathFlag := flag.String("config", ".", "directory containing "+configFilename)
 	dbPathFlag := flag.String("db", ".", "directory for the database file "+dbFileName)
-	portFlag := flag.Int("port", portRPC, "port for RPC service")
+	portFlag := flag.Int("port", remote.DefaultPort, "port for RPC service")
 	versionFlag := flag.Bool("v", false, "show version")
 	offlineFlag := flag.Bool("offline", false, "run RPC service only")
 	flag.Usage = myUsage

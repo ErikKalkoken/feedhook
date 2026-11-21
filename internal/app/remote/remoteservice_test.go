@@ -1,6 +1,7 @@
 package remote_test
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -26,6 +27,7 @@ func (rt fakeTime) Now() time.Time {
 }
 
 func TestStatisticsSortsByNameWithoutChangingConfig(t *testing.T) {
+	// given
 	p := filepath.Join(t.TempDir(), "test.db")
 	db, err := bolt.Open(p, 0600, nil)
 	if err != nil {
@@ -71,8 +73,10 @@ func TestStatisticsSortsByNameWithoutChangingConfig(t *testing.T) {
 	}
 	d := dispatcher.New(st, cfg, fakeTime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
 	s := remote.NewRemoteService(d, st, cfg, "")
+	// when
 	var reply string
 	err = s.Statistics(&remote.EmptyArgs{}, &reply)
+	// then
 	require.NoError(t, err)
 	assert.Equal(t, "feed2", cfg.Feeds[0].Name)
 	assert.Equal(t, "feed1", cfg.Feeds[1].Name)
@@ -91,6 +95,7 @@ func TestStatisticsSortsByNameWithoutChangingConfig(t *testing.T) {
 }
 
 func TestStatisticsListsFeedsAndWebhooksWithoutStats(t *testing.T) {
+	// given
 	p := filepath.Join(t.TempDir(), "test.db")
 	db, err := bolt.Open(p, 0600, nil)
 	require.NoError(t, err)
@@ -129,10 +134,12 @@ func TestStatisticsListsFeedsAndWebhooksWithoutStats(t *testing.T) {
 	require.NoError(t, err)
 	d := dispatcher.New(st, cfg, fakeTime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
 	s := remote.NewRemoteService(d, st, cfg, "")
+	// when
 	var reply string
 	assert.NotPanics(t, func() {
 		err = s.Statistics(&remote.EmptyArgs{}, &reply)
 	})
+	// then
 	require.NoError(t, err)
 	feedsOut, hooksOut, ok := strings.Cut(reply, "Webhooks:\n")
 	require.True(t, ok)
@@ -140,4 +147,50 @@ func TestStatisticsListsFeedsAndWebhooksWithoutStats(t *testing.T) {
 	assert.Contains(t, feedsOut, "    feed2")
 	assert.Contains(t, hooksOut, "    hook1")
 	assert.Contains(t, hooksOut, "    hook2")
+}
+
+func TestCheckConfig(t *testing.T) {
+	t.Run("returns no error for valid config", func(t *testing.T) {
+		// given
+		s := remote.NewRemoteService(nil, nil, config.Config{}, writeFile(t, validConfig))
+		// when
+		err := s.CheckConfig(&remote.EmptyArgs{}, new(bool))
+		// then
+		assert.NoError(t, err)
+	})
+	t.Run("returns error when config file is missing", func(t *testing.T) {
+		// given
+		p := filepath.Join(t.TempDir(), "config.toml")
+		s := remote.NewRemoteService(nil, nil, config.Config{}, p)
+		// when
+		err := s.CheckConfig(&remote.EmptyArgs{}, new(bool))
+		// then
+		assert.ErrorIs(t, err, os.ErrNotExist)
+	})
+	t.Run("returns error when config file is not valid TOML", func(t *testing.T) {
+		// given
+		s := remote.NewRemoteService(nil, nil, config.Config{}, writeFile(t, "[[feeds]\nname ="))
+		// when
+		err := s.CheckConfig(&remote.EmptyArgs{}, new(bool))
+		// then
+		assert.Error(t, err)
+	})
+	t.Run("returns error when config is invalid", func(t *testing.T) {
+		// given
+		const cfg = `
+[[webhooks]]
+name = "hook1"
+url = "https://www.example.com/hook1"
+
+[[feeds]]
+name = "feed1"
+url = "https://www.example.com/feed1"
+webhook = "unknown"
+`
+		s := remote.NewRemoteService(nil, nil, config.Config{}, writeFile(t, cfg))
+		// when
+		err := s.CheckConfig(&remote.EmptyArgs{}, new(bool))
+		// then
+		assert.ErrorContains(t, err, `invalid webhook "unknown"`)
+	})
 }
