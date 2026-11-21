@@ -24,17 +24,6 @@ func (c *Client) SetPort(port int) error {
 	return nil
 }
 
-// CheckConfig reports an error when the service's config file is invalid.
-func (c *Client) CheckConfig() error {
-	rc, err := c.dial()
-	if err != nil {
-		return err
-	}
-	defer rc.Close()
-	var reply bool
-	return rc.Call("RemoteService.CheckConfig", EmptyArgs{}, &reply)
-}
-
 // PostLatestFeedItem posts the latest item of a feed to its webhook.
 func (c *Client) PostLatestFeedItem(feedName string) error {
 	rc, err := c.dial()

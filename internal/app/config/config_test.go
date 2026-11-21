@@ -69,6 +69,195 @@ func TestOldest(t *testing.T) {
 	})
 }
 
+func TestValidation(t *testing.T) {
+	const webhook = `
+[[webhooks]]
+name = "hook-1"
+url = "https://www.example.com/webhook"
+`
+	const feed = `
+[[feeds]]
+name = "Feed 1"
+url = "https://www.example.com/feed.rss"
+webhook = "hook-1"
+`
+	cases := []struct {
+		name     string
+		toml     string
+		wantErrs []string
+	}{
+		{
+			name: "webhook has no name",
+			toml: `
+[[webhooks]]
+url = "https://www.example.com/webhook"
+` + feed,
+			wantErrs: []string{
+				"webhook #1 has no name",
+				`feed "Feed 1": invalid webhook: "hook-1"`,
+			},
+		},
+		{
+			name: "multiple webhooks have no name",
+			toml: webhook + `
+[[webhooks]]
+url = "https://www.example.com/webhook-2"
+
+[[webhooks]]
+url = "https://www.example.com/webhook-3"
+` + feed,
+			wantErrs: []string{
+				"webhook #2 has no name",
+				"webhook #3 has no name",
+			},
+		},
+		{
+			name: "multiple webhooks have no url",
+			toml: `
+[[webhooks]]
+name = "hook-1"
+
+[[webhooks]]
+name = "hook-2"
+` + feed,
+			wantErrs: []string{
+				`webhook "hook-1" has no url`,
+				`webhook "hook-2" has no url`,
+			},
+		},
+		{
+			name: "webhook has no url",
+			toml: `
+[[webhooks]]
+name = "hook-1"
+` + feed,
+			wantErrs: []string{`webhook "hook-1" has no url`},
+		},
+		{
+			name: "webhook has invalid url",
+			toml: `
+[[webhooks]]
+name = "hook-1"
+url = "invalid"
+` + feed,
+			wantErrs: []string{`webhook "hook-1" has invalid url`},
+		},
+		{
+			name: "webhook name not unique",
+			toml: webhook + `
+[[webhooks]]
+name = "hook-1"
+url = "https://www.example.com/webhook-2"
+` + feed,
+			wantErrs: []string{`webhook name "hook-1" not unique`},
+		},
+		{
+			name: "webhook url not unique",
+			toml: webhook + `
+[[webhooks]]
+name = "hook-2"
+url = "https://www.example.com/webhook"
+` + feed,
+			wantErrs: []string{`webhook "hook-2": url not unique`},
+		},
+		{
+			name:     "no feeds defined",
+			toml:     webhook,
+			wantErrs: []string{"no feeds defined"},
+		},
+		{
+			name: "feed has no name",
+			toml: webhook + `
+[[feeds]]
+url = "https://www.example.com/feed.rss"
+webhook = "hook-1"
+`,
+			wantErrs: []string{"feed #1 has no name"},
+		},
+		{
+			name: "feed name not unique",
+			toml: webhook + feed + `
+[[feeds]]
+name = "Feed 1"
+url = "https://www.example.com/feed-2.rss"
+webhook = "hook-1"
+`,
+			wantErrs: []string{`feed name "Feed 1" not unique`},
+		},
+		{
+			name: "feed has no webhook",
+			toml: webhook + `
+[[feeds]]
+name = "Feed 1"
+url = "https://www.example.com/feed.rss"
+`,
+			wantErrs: []string{`feed "Feed 1" has no webhook`},
+		},
+		{
+			name: "feed has invalid webhook",
+			toml: webhook + `
+[[feeds]]
+name = "Feed 1"
+url = "https://www.example.com/feed.rss"
+webhook = "unknown"
+`,
+			wantErrs: []string{`feed "Feed 1": invalid webhook: "unknown"`},
+		},
+		{
+			name: "feed has no url",
+			toml: webhook + `
+[[feeds]]
+name = "Feed 1"
+webhook = "hook-1"
+`,
+			wantErrs: []string{`feed "Feed 1" has no url`},
+		},
+		{
+			name: "feed has invalid url",
+			toml: webhook + `
+[[feeds]]
+name = "Feed 1"
+url = "invalid"
+webhook = "hook-1"
+`,
+			wantErrs: []string{`feed "Feed 1" has invalid url`},
+		},
+		{
+			name: "multiple errors",
+			toml: `
+[app]
+oldest = -60
+
+[[webhooks]]
+name = "hook-1"
+
+[[feeds]]
+name = "Feed 1"
+url = "invalid"
+webhook = "unknown"
+`,
+			wantErrs: []string{
+				`webhook "hook-1" has no url`,
+				`feed "Feed 1": invalid webhook: "unknown"`,
+				`feed "Feed 1" has invalid url`,
+				"oldest must be -1 or greater, got -60",
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := fromString(t, tc.toml)
+			require.Error(t, err)
+			for _, want := range tc.wantErrs {
+				assert.ErrorContains(t, err, want)
+			}
+			var joined interface{ Unwrap() []error }
+			require.ErrorAs(t, err, &joined)
+			assert.Len(t, joined.Unwrap(), len(tc.wantErrs))
+		})
+	}
+}
+
 func configWithOldest(line string) string {
 	return fmt.Sprintf(`
 [app]

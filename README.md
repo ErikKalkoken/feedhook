@@ -110,6 +110,12 @@ touch feedhook.log
 
 Setup your initial feeds and webhooks by adding them to `config.toml`.
 
+Check that your configuration is valid:
+
+```sh
+./feedhookcli check-config config.toml
+```
+
 Switch back to your sudo user:
 
 ```sh
@@ -140,6 +146,7 @@ We also recommend running a test ping to ensure the webhooks are setup correctly
 
 > [!NOTE]
 > Whenever you make changes to the configuration you need to restart the service to activate them.
+> We recommend checking the configuration before restarting: `/home/feedhook/feedhookcli check-config /home/feedhook/config.toml`
 
 ## Configuration
 
@@ -230,9 +237,9 @@ sudo supervisorctl start feedhook
 
 ## CLI tool
 
-Feedhook comes with a CLI tool for interacting with the running service. With it you can:
+Feedhook comes with a CLI tool. With it you can:
 
-- Check if the configuration is valid
+- Check if a config file is valid (works without the service running)
 - See live statistics (e.g. how many items have been received from each feed)
 - Make pings to configured webhooks (useful for testing)
 - Force a re-send of the latest feed item (useful for testing)

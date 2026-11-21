@@ -29,7 +29,7 @@ const (
 )
 
 // Version is overwritten via build tag when released.
-var Version = "0.3.0"
+var Version = "0.0.0"
 
 type realtime struct{}
 
@@ -52,7 +52,7 @@ func main() {
 	configPath := filepath.Join(*cfgPathFlag, configFilename)
 	cfg, err := config.FromFile(configPath)
 	if err != nil {
-		slog.Error("Invalid config", "error", err)
+		fmt.Fprintf(os.Stderr, "ERROR: %s\n", err)
 		os.Exit(1)
 	}
 	slog.SetLogLoggerLevel(cfg.App.LoggerLevel())
@@ -80,7 +80,7 @@ func main() {
 	}
 
 	// start RPC service
-	if err := startRPC(*portFlag, d, st, cfg, configPath); err != nil {
+	if err := startRPC(*portFlag, d, st, cfg); err != nil {
 		slog.Error("Failed to start RPC service", "port", *portFlag, "error", err)
 		os.Exit(1)
 	}
@@ -91,8 +91,8 @@ func main() {
 	<-sc
 }
 
-func startRPC(port int, d *dispatcher.Dispatcher, st *storage.Storage, cfg config.Config, configPath string) error {
-	rpc.Register(remote.NewRemoteService(d, st, cfg, configPath))
+func startRPC(port int, d *dispatcher.Dispatcher, st *storage.Storage, cfg config.Config) error {
+	rpc.Register(remote.NewRemoteService(d, st, cfg))
 	rpc.HandleHTTP()
 	l, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
 	if err != nil {

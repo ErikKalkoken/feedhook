@@ -2,10 +2,12 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -114,54 +116,66 @@ func FromFile(path string) (Config, error) {
 }
 
 func parseConfig(config *Config) error {
+	var errs []error
 	webhookNames := make(map[string]bool)
 	webhookURLs := make(map[string]bool)
-	for _, x := range config.Webhooks {
+	for i, x := range config.Webhooks {
+		var name string
 		if x.Name == "" {
-			return fmt.Errorf("one webhook has no name")
+			name = fmt.Sprintf("#%d", i+1)
+		} else {
+			name = strconv.Quote(x.Name)
 		}
-		if x.URL == "" {
-			return fmt.Errorf("webhook %s has no url", x.Name)
-		}
-		if _, err := url.ParseRequestURI(x.URL); err != nil {
-			return fmt.Errorf("webhook %s has invalid url: %w", x.Name, err)
-		}
-		if webhookNames[x.Name] {
-			return fmt.Errorf("webhook name %s not unique", x.Name)
+		if x.Name == "" {
+			errs = append(errs, fmt.Errorf("webhook %s has no name", name))
+		} else if webhookNames[x.Name] {
+			errs = append(errs, fmt.Errorf("webhook name %s not unique", name))
 		}
 		webhookNames[x.Name] = true
-		if webhookURLs[x.URL] {
-			return fmt.Errorf("webhook %s: url not unique", x.Name)
+
+		if x.URL == "" {
+			errs = append(errs, fmt.Errorf("webhook %s has no url", name))
+		} else if _, err := url.ParseRequestURI(x.URL); err != nil {
+			errs = append(errs, fmt.Errorf("webhook %s has invalid url: %w", name, err))
+		} else if webhookURLs[x.URL] {
+			errs = append(errs, fmt.Errorf("webhook %s: url not unique", name))
 		}
 		webhookURLs[x.URL] = true
 	}
 	if len(config.Feeds) == 0 {
-		return fmt.Errorf("no feeds defined")
+		errs = append(errs, fmt.Errorf("no feeds defined"))
 	}
+
 	feedNames := make(map[string]bool)
 	webhooksUsed := make(map[string]bool)
-	for _, x := range config.Feeds {
+	for i, x := range config.Feeds {
+		var name string
 		if x.Name == "" {
-			return fmt.Errorf("feed has no name")
+			name = fmt.Sprintf("#%d", i+1)
+		} else {
+			name = strconv.Quote(x.Name)
 		}
-		if x.Webhook == "" {
-			return fmt.Errorf("feed %s has no webhook", x.Name)
-		}
-		if x.URL == "" {
-			return fmt.Errorf("feed %s has no url", x.Name)
-		}
-		if feedNames[x.Name] {
-			return fmt.Errorf("feed name %s not unique", x.Name)
+		if x.Name == "" {
+			errs = append(errs, fmt.Errorf("feed %s has no name", name))
+		} else if feedNames[x.Name] {
+			errs = append(errs, fmt.Errorf("feed name %s not unique", name))
 		}
 		feedNames[x.Name] = true
-		if _, err := url.ParseRequestURI(x.URL); err != nil {
-			return fmt.Errorf("feed %s has invalid url: %w", x.Name, err)
-		}
-		if !webhookNames[x.Webhook] {
-			return fmt.Errorf("feed \"%s\": invalid webhook \"%s\"", x.Name, x.Webhook)
+
+		if x.Webhook == "" {
+			errs = append(errs, fmt.Errorf("feed %s has no webhook", name))
+		} else if !webhookNames[x.Webhook] {
+			errs = append(errs, fmt.Errorf("feed %s: invalid webhook: %q", name, x.Webhook))
 		}
 		webhooksUsed[x.Webhook] = true
+
+		if x.URL == "" {
+			errs = append(errs, fmt.Errorf("feed %s has no url", name))
+		} else if _, err := url.ParseRequestURI(x.URL); err != nil {
+			errs = append(errs, fmt.Errorf("feed %s has invalid url: %w", name, err))
+		}
 	}
+
 	for _, wh := range config.Webhooks {
 		if !webhooksUsed[wh.Name] {
 			slog.Warn("Webhook defined, but not used", "name", wh.Name)
@@ -171,13 +185,18 @@ func parseConfig(config *Config) error {
 		config.App.Timeout = timeoutDefault
 	}
 	if config.App.Oldest < OldestUnlimited {
-		return fmt.Errorf("oldest must be %d or greater, got %d", OldestUnlimited, config.App.Oldest)
+		errs = append(
+			errs,
+			fmt.Errorf("oldest must be %d or greater, got %d", OldestUnlimited, config.App.Oldest))
 	}
 	if config.App.Oldest == 0 {
 		config.App.Oldest = oldestDefault
 	}
 	if config.App.Ticker <= 0 {
 		config.App.Ticker = tickerDefault
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("invalid config:\n%w", errors.Join(errs...))
 	}
 	return nil
 }

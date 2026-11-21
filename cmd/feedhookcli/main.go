@@ -1,4 +1,4 @@
-// Feedhookcli is a CLI tool for interacting with a running service.
+// Feedhookcli is a CLI tool for feedhook.
 package main
 
 import (
@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/ErikKalkoken/feedhook/internal/app/config"
 	"github.com/ErikKalkoken/feedhook/internal/app/remote"
 	"github.com/urfave/cli/v2"
 )
@@ -17,7 +18,7 @@ func main() {
 	client := remote.NewClient()
 	app := &cli.App{
 		Name:  "feedhookcli",
-		Usage: "CLI tool for interacting with a running service",
+		Usage: "CLI tool for feedhook",
 		Action: func(*cli.Context) error {
 			fmt.Println("Command not found")
 			return nil
@@ -35,13 +36,18 @@ func main() {
 		},
 		Commands: []*cli.Command{
 			{
-				Name:  "check-config",
-				Usage: "checks whether the config is valid",
+				Name:      "check-config",
+				Usage:     "checks whether a config file is valid",
+				ArgsUsage: "path",
 				Action: func(cCtx *cli.Context) error {
-					if err := client.CheckConfig(); err != nil {
+					path := cCtx.Args().First()
+					if path == "" {
+						return errors.New("no path specified")
+					}
+					if _, err := config.FromFile(path); err != nil {
 						return err
 					}
-					fmt.Println("Config is valid")
+					fmt.Printf("%s is valid\n", path)
 					return nil
 				},
 			},

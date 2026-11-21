@@ -36,27 +36,19 @@ type SendLatestArgs struct {
 
 // RemoteService is a service for providing remote access to the app via RPC.
 type RemoteService struct {
-	cfg        config.Config
-	configPath string
-	d          *dispatcher.Dispatcher
-	st         *storage.Storage
+	cfg config.Config
+	d   *dispatcher.Dispatcher
+	st  *storage.Storage
 }
 
 // NewRemoteService returns a new RemoteService.
-func NewRemoteService(d *dispatcher.Dispatcher, st *storage.Storage, cfg config.Config, configPath string) *RemoteService {
+func NewRemoteService(d *dispatcher.Dispatcher, st *storage.Storage, cfg config.Config) *RemoteService {
 	x := &RemoteService{
-		cfg:        cfg,
-		d:          d,
-		st:         st,
-		configPath: configPath,
+		cfg: cfg,
+		d:   d,
+		st:  st,
 	}
 	return x
-}
-
-// CheckConfig reports an error when the config file is invalid.
-func (s *RemoteService) CheckConfig(args *EmptyArgs, reply *bool) error {
-	_, err := config.FromFile(s.configPath)
-	return err
 }
 
 // PostLatestFeedItem posts the latest item of a feed to its webhook.
