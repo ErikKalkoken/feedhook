@@ -116,6 +116,8 @@ Check that your configuration is valid:
 ./feedhookcli check-config config.toml
 ```
 
+The check also shows warnings, e.g. for unknown keys (often a typo) or webhooks no feed uses. Warnings do not prevent the service from starting.
+
 Switch back to your sudo user:
 
 ```sh
@@ -146,7 +148,7 @@ We also recommend running a test ping to ensure the webhooks are setup correctly
 
 > [!NOTE]
 > Whenever you make changes to the configuration you need to restart the service to activate them.
-> We recommend checking the configuration before restarting: `/home/feedhook/feedhookcli check-config /home/feedhook/config.toml`
+> We recommend checking the configuration for errors and warnings before restarting: `/home/feedhook/feedhookcli check-config /home/feedhook/config.toml`
 
 ## Configuration
 
@@ -198,7 +200,7 @@ Items without content and description are skipped. Items that change after being
 | `-offline` | | Run only the RPC service, without fetching feeds or posting messages |
 | `-v` | | Show the version and exit |
 
-The RPC service only listens on `localhost`.
+The RPC service only listens on `127.0.0.1`.
 
 Example:
 
@@ -253,7 +255,7 @@ Commands that talk to the service accept these options. Options must come before
 | Option | Default | Description |
 | --- | --- | --- |
 | `--port`, `-p` | `2233` | Port of the RPC service of `feedhooksrv` |
-| `--timeout`, `-t` | `1m` | Max time to wait for `feedhooksrv` to respond, e.g. `90s` |
+| `--timeout`, `-t` | `2m` | Max time to wait for `feedhooksrv` to respond, e.g. `90s` |
 
 ## Attributions
 

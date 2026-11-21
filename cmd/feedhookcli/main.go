@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/ErikKalkoken/feedhook/internal/app/config"
@@ -18,7 +19,7 @@ var Version = "0.0.0"
 func main() {
 	app := newApp(remote.NewClient())
 	if err := app.Run(os.Args); err != nil {
-		fmt.Printf("ERROR: %s\n", err)
+		fmt.Fprintf(os.Stderr, "fatal: %s\n", err)
 		os.Exit(1)
 	}
 }
@@ -28,27 +29,35 @@ func newApp(client *remote.Client) *cli.App {
 		Name:  "feedhookcli",
 		Usage: "CLI tool for feedhook",
 		Action: func(cCtx *cli.Context) error {
-			cli.ShowAppHelp(cCtx)
-			fmt.Fprintln(cCtx.App.Writer)
+			showHelpOnError(cCtx, cli.ShowAppHelp)
 			if cCtx.NArg() > 0 {
 				return fmt.Errorf("unknown command: %s", cCtx.Args().First())
 			}
 			return errors.New("missing command")
 		},
-		Version: Version,
+		OnUsageError: onAppUsageError,
+		Version:      Version,
 		Commands: []*cli.Command{
 			{
 				Name:            "check-config",
 				Usage:           "checks whether a config file is valid",
 				ArgsUsage:       "path",
+				OnUsageError:    onUsageError,
 				HideHelpCommand: true,
 				Before:          requireOneArg,
 				Action: func(cCtx *cli.Context) error {
 					path := cCtx.Args().First()
-					if _, err := config.FromFile(path); err != nil {
+					_, warnings, failures, err := config.FromFile(path)
+					for _, w := range warnings {
+						fmt.Fprintf(cCtx.App.ErrWriter, "warning: %s\n", w)
+					}
+					for _, f := range failures {
+						fmt.Fprintf(cCtx.App.ErrWriter, "error: %s\n", f)
+					}
+					if err != nil {
 						return err
 					}
-					fmt.Printf("%s is valid\n", path)
+					fmt.Fprintf(cCtx.App.Writer, "%s is valid\n", path)
 					return nil
 				},
 			},
@@ -57,6 +66,7 @@ func newApp(client *remote.Client) *cli.App {
 				Usage:           "send a test message to a webhook",
 				ArgsUsage:       "webhook-name",
 				Flags:           makeClientFlags(client),
+				OnUsageError:    onUsageError,
 				HideHelpCommand: true,
 				Before:          requireOneArg,
 				Action: func(cCtx *cli.Context) error {
@@ -64,7 +74,7 @@ func newApp(client *remote.Client) *cli.App {
 					if err := client.SendPing(hookName); err != nil {
 						return err
 					}
-					fmt.Printf("Ping sent to %s\n", hookName)
+					fmt.Fprintf(cCtx.App.Writer, "Ping sent to %s\n", hookName)
 					return nil
 				},
 			},
@@ -73,6 +83,7 @@ func newApp(client *remote.Client) *cli.App {
 				Usage:           "posts the latest feed item to its configured webhook",
 				ArgsUsage:       "feed-name",
 				Flags:           makeClientFlags(client),
+				OnUsageError:    onUsageError,
 				HideHelpCommand: true,
 				Before:          requireOneArg,
 				Action: func(cCtx *cli.Context) error {
@@ -80,7 +91,7 @@ func newApp(client *remote.Client) *cli.App {
 					if err := client.PostLatestFeedItem(feedName); err != nil {
 						return err
 					}
-					fmt.Printf("Posted latest item from \"%s\"\n", feedName)
+					fmt.Fprintf(cCtx.App.Writer, "Posted latest item from \"%s\"\n", feedName)
 					return nil
 				},
 			},
@@ -88,13 +99,14 @@ func newApp(client *remote.Client) *cli.App {
 				Name:            "restart",
 				Usage:           "restarts the service",
 				Flags:           makeClientFlags(client),
+				OnUsageError:    onUsageError,
 				HideHelpCommand: true,
 				Before:          requireNoArgs,
 				Action: func(cCtx *cli.Context) error {
 					if err := client.Restart(); err != nil {
 						return err
 					}
-					fmt.Println("Restarted")
+					fmt.Fprintln(cCtx.App.Writer, "Restarted")
 					return nil
 				},
 			},
@@ -102,6 +114,7 @@ func newApp(client *remote.Client) *cli.App {
 				Name:            "stats",
 				Usage:           "show current statistics",
 				Flags:           makeClientFlags(client),
+				OnUsageError:    onUsageError,
 				HideHelpCommand: true,
 				Before:          requireNoArgs,
 				Action: func(cCtx *cli.Context) error {
@@ -109,7 +122,7 @@ func newApp(client *remote.Client) *cli.App {
 					if err != nil {
 						return err
 					}
-					fmt.Println(text)
+					fmt.Fprintln(cCtx.App.Writer, text)
 					return nil
 				},
 			},
@@ -144,19 +157,37 @@ func requireOneArg(cCtx *cli.Context) error {
 	if cCtx.NArg() == 1 {
 		return nil
 	}
-	_ = cli.ShowSubcommandHelp(cCtx)
-	fmt.Fprintln(cCtx.App.Writer)
+	showHelpOnError(cCtx, cli.ShowSubcommandHelp)
 	if cCtx.NArg() == 0 {
 		return fmt.Errorf("expected one argument: %s", cCtx.Command.ArgsUsage)
 	}
-	return fmt.Errorf("expected one argument: %s (options must come before arguments)", cCtx.Command.ArgsUsage)
+	return fmt.Errorf("expected one argument: %s, got: %s", cCtx.Command.ArgsUsage, strings.Join(cCtx.Args().Slice(), " "))
 }
 
 func requireNoArgs(cCtx *cli.Context) error {
 	if cCtx.NArg() == 0 {
 		return nil
 	}
-	_ = cli.ShowSubcommandHelp(cCtx)
-	fmt.Fprintln(cCtx.App.Writer)
-	return errors.New("expected no arguments (options must come before arguments)")
+	showHelpOnError(cCtx, cli.ShowSubcommandHelp)
+	return fmt.Errorf("expected no arguments, got: %s", strings.Join(cCtx.Args().Slice(), " "))
+}
+
+// onUsageError shows help on the error output and returns the flag error.
+func onUsageError(cCtx *cli.Context, err error, _ bool) error {
+	showHelpOnError(cCtx, cli.ShowSubcommandHelp)
+	return err
+}
+
+func onAppUsageError(cCtx *cli.Context, err error, _ bool) error {
+	showHelpOnError(cCtx, cli.ShowAppHelp)
+	return err
+}
+
+// showHelpOnError shows help on the error output, followed by an empty line.
+func showHelpOnError(cCtx *cli.Context, show func(*cli.Context) error) {
+	w := cCtx.App.Writer
+	cCtx.App.Writer = cCtx.App.ErrWriter
+	defer func() { cCtx.App.Writer = w }()
+	_ = show(cCtx)
+	fmt.Fprintln(cCtx.App.ErrWriter)
 }

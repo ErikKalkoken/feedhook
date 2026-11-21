@@ -9,7 +9,7 @@ import (
 )
 
 // DefaultTimeout is the default timeout for calls to the remote service.
-const DefaultTimeout = 60 * time.Second
+const DefaultTimeout = 120 * time.Second
 
 // Client represents a convenience client for accessing the remote service.
 type Client struct {
@@ -69,11 +69,13 @@ func (c *Client) SendPing(webhookName string) error {
 
 // call calls a method of the remote service and reports timeouts with a clear error.
 func (c *Client) call(method string, args any, reply any) error {
-	conn, err := net.DialTimeout("tcp", fmt.Sprintf("localhost:%d", c.port), c.timeout)
+	deadline := time.Now().Add(c.timeout)
+	d := net.Dialer{Deadline: deadline}
+	conn, err := d.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", c.port))
 	if err != nil {
 		return c.replaceTimeoutError(fmt.Errorf("dialing: %w", err))
 	}
-	if err := conn.SetDeadline(time.Now().Add(c.timeout)); err != nil {
+	if err := conn.SetDeadline(deadline); err != nil {
 		conn.Close()
 		return err
 	}

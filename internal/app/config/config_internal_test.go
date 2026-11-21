@@ -21,7 +21,67 @@ func TestParseConfig(t *testing.T) {
 				Webhook: "hook1",
 			}},
 		}
-		assert.NoError(t, parseConfig(&cf))
+		warnings, failures := parseConfig(&cf)
+		assert.Empty(t, failures)
+		assert.Empty(t, warnings)
+	})
+	t.Run("should warn about unused webhook when config is valid", func(t *testing.T) {
+		cf := Config{
+			Webhooks: []ConfigWebhook{
+				{
+					Name: "hook1",
+					URL:  "https://www.example.com/url1",
+				},
+				{
+					Name: "hook2",
+					URL:  "https://www.example.com/url3",
+				},
+			},
+			Feeds: []ConfigFeed{{
+				Name:    "feed1",
+				URL:     "https://www.example.com/url2",
+				Webhook: "hook1",
+			}},
+		}
+		warnings, failures := parseConfig(&cf)
+		require.Empty(t, failures)
+		assert.Equal(t, []string{`webhook "hook2" defined, but not used`}, warnings)
+	})
+	t.Run("should warn about unused webhook when config is invalid", func(t *testing.T) {
+		cf := Config{
+			Webhooks: []ConfigWebhook{{
+				Name: "hook1",
+				URL:  "https://www.example.com/url1",
+			}},
+			Feeds: []ConfigFeed{{
+				Name: "feed1",
+				URL:  "https://www.example.com/url2",
+			}},
+		}
+		warnings, failures := parseConfig(&cf)
+		assert.Equal(t, []string{`feed "feed1" has no webhook`}, failures)
+		assert.Equal(t, []string{`webhook "hook1" defined, but not used`}, warnings)
+	})
+	t.Run("should not warn about unused webhook without name", func(t *testing.T) {
+		cf := Config{
+			Webhooks: []ConfigWebhook{
+				{
+					Name: "hook1",
+					URL:  "https://www.example.com/url1",
+				},
+				{
+					URL: "https://www.example.com/url3",
+				},
+			},
+			Feeds: []ConfigFeed{{
+				Name:    "feed1",
+				URL:     "https://www.example.com/url2",
+				Webhook: "hook1",
+			}},
+		}
+		warnings, failures := parseConfig(&cf)
+		assert.Equal(t, []string{"webhook #2 has no name"}, failures)
+		assert.Empty(t, warnings)
 	})
 	t.Run("should set app defaults when missing", func(t *testing.T) {
 		cf := Config{
@@ -35,8 +95,8 @@ func TestParseConfig(t *testing.T) {
 				Webhook: "hook1",
 			}},
 		}
-		err := parseConfig(&cf)
-		require.NoError(t, err)
+		_, failures := parseConfig(&cf)
+		require.Empty(t, failures)
 		assert.Equal(t, timeoutDefault, cf.App.Timeout)
 		assert.Equal(t, oldestDefault, cf.App.Oldest)
 		assert.Equal(t, tickerDefault, cf.App.Ticker)

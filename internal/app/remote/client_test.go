@@ -1,6 +1,7 @@
 package remote_test
 
 import (
+	"io"
 	"net"
 	"net/rpc"
 	"path/filepath"
@@ -115,7 +116,7 @@ func TestClientSetTimeout(t *testing.T) {
 
 func TestClientReportsErrorWhenServiceNotRunning(t *testing.T) {
 	// given
-	l, err := net.Listen("tcp", "localhost:0")
+	l, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	port := l.Addr().(*net.TCPAddr).Port
 	require.NoError(t, l.Close())
@@ -129,22 +130,21 @@ func TestClientReportsErrorWhenServiceNotRunning(t *testing.T) {
 
 func TestClientReportsErrorWhenServiceDoesNotAnswer(t *testing.T) {
 	// given
-	l, err := net.Listen("tcp", "localhost:0")
+	l, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	conns := make(chan net.Conn, 1)
+	done := make(chan struct{})
 	go func() {
-		conn, err := l.Accept() // accepts, but never answers
-		if err == nil {
-			conns <- conn
+		defer close(done)
+		conn, err := l.Accept()
+		if err != nil {
+			return
 		}
+		defer conn.Close()
+		io.Copy(io.Discard, conn) // reads, but never answers
 	}()
 	t.Cleanup(func() {
 		l.Close()
-		select {
-		case conn := <-conns:
-			conn.Close()
-		default:
-		}
+		<-done
 	})
 	c := remote.NewClient()
 	require.NoError(t, c.SetPort(l.Addr().(*net.TCPAddr).Port))
@@ -166,7 +166,7 @@ func newClientWithServer(t *testing.T, cfg config.Config) *remote.Client {
 	d := dispatcher.New(st, cfg, fakeTime{now: time.Date(2024, 8, 22, 12, 0, 0, 0, time.UTC)})
 	srv := rpc.NewServer()
 	require.NoError(t, srv.Register(remote.NewRemoteService(d, st, cfg)))
-	l, err := net.Listen("tcp", "localhost:0")
+	l, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	t.Cleanup(func() { l.Close() })
 	go srv.Accept(l)
