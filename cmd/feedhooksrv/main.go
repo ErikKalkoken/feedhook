@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
-	"net/http"
 	"net/rpc"
 	"os"
 	"os/signal"
@@ -93,15 +92,14 @@ func main() {
 
 func startRPC(port int, d *dispatcher.Dispatcher, st *storage.Storage, cfg config.Config) error {
 	rpc.Register(remote.NewRemoteService(d, st, cfg))
-	rpc.HandleHTTP()
 	l, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", port))
 	if err != nil {
 		return err
 	}
 	go func() {
 		slog.Info("RPC service running", "port", port)
-		err := http.Serve(l, nil)
-		slog.Error("RPC service aborted", "error", err)
+		rpc.Accept(l)
+		slog.Error("RPC service aborted")
 	}()
 	return nil
 }

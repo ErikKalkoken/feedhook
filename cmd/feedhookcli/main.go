@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/ErikKalkoken/feedhook/internal/app/config"
 	"github.com/ErikKalkoken/feedhook/internal/app/remote"
@@ -52,12 +53,10 @@ func newApp(client *remote.Client) *cli.App {
 				},
 			},
 			{
-				Name:      "ping",
-				Usage:     "send a test message to a webhook",
-				ArgsUsage: "webhook-name",
-				Flags: []cli.Flag{
-					makePortFlag(client),
-				},
+				Name:            "ping",
+				Usage:           "send a test message to a webhook",
+				ArgsUsage:       "webhook-name",
+				Flags:           makeClientFlags(client),
 				HideHelpCommand: true,
 				Before:          requireOneArg,
 				Action: func(cCtx *cli.Context) error {
@@ -70,12 +69,10 @@ func newApp(client *remote.Client) *cli.App {
 				},
 			},
 			{
-				Name:      "post-latest",
-				Usage:     "posts the latest feed item to its configured webhook",
-				ArgsUsage: "feed-name",
-				Flags: []cli.Flag{
-					makePortFlag(client),
-				},
+				Name:            "post-latest",
+				Usage:           "posts the latest feed item to its configured webhook",
+				ArgsUsage:       "feed-name",
+				Flags:           makeClientFlags(client),
 				HideHelpCommand: true,
 				Before:          requireOneArg,
 				Action: func(cCtx *cli.Context) error {
@@ -88,11 +85,9 @@ func newApp(client *remote.Client) *cli.App {
 				},
 			},
 			{
-				Name:  "restart",
-				Usage: "restarts the service",
-				Flags: []cli.Flag{
-					makePortFlag(client),
-				},
+				Name:            "restart",
+				Usage:           "restarts the service",
+				Flags:           makeClientFlags(client),
 				HideHelpCommand: true,
 				Before:          requireNoArgs,
 				Action: func(cCtx *cli.Context) error {
@@ -104,11 +99,9 @@ func newApp(client *remote.Client) *cli.App {
 				},
 			},
 			{
-				Name:  "stats",
-				Usage: "show current statistics",
-				Flags: []cli.Flag{
-					makePortFlag(client),
-				},
+				Name:            "stats",
+				Usage:           "show current statistics",
+				Flags:           makeClientFlags(client),
 				HideHelpCommand: true,
 				Before:          requireNoArgs,
 				Action: func(cCtx *cli.Context) error {
@@ -124,14 +117,25 @@ func newApp(client *remote.Client) *cli.App {
 	}
 }
 
-func makePortFlag(client *remote.Client) cli.Flag {
-	return &cli.IntFlag{
-		Name:    "port",
-		Aliases: []string{"p"},
-		Usage:   "port where the RPC service of feedhooksrv is running",
-		Value:   remote.DefaultPort,
-		Action: func(cCtx *cli.Context, v int) error {
-			return client.SetPort(v)
+func makeClientFlags(client *remote.Client) []cli.Flag {
+	return []cli.Flag{
+		&cli.IntFlag{
+			Name:    "port",
+			Aliases: []string{"p"},
+			Usage:   "port where the RPC service of feedhooksrv is running",
+			Value:   remote.DefaultPort,
+			Action: func(cCtx *cli.Context, v int) error {
+				return client.SetPort(v)
+			},
+		},
+		&cli.DurationFlag{
+			Name:    "timeout",
+			Aliases: []string{"t"},
+			Usage:   "max time to wait for feedhooksrv to respond",
+			Value:   remote.DefaultTimeout,
+			Action: func(cCtx *cli.Context, v time.Duration) error {
+				return client.SetTimeout(v)
+			},
 		},
 	}
 }

@@ -51,6 +51,11 @@ func TestAppErrors(t *testing.T) {
 			want: "expected no arguments (options must come before arguments)",
 		},
 		{
+			name: "invalid timeout",
+			args: []string{"stats", "--timeout", "0"},
+			want: "invalid timeout: 0s",
+		},
+		{
 			name: "config path is a directory",
 			args: []string{"check-config", dir},
 			want: dir + " is a directory, expected path to config file",
