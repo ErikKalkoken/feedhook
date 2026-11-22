@@ -250,12 +250,12 @@ To see all commands please run the tool with the help flag: `feedhookcli -h`.
 
 You can also get help for a specific command with the help flag: `feedhookcli COMMAND -h`.
 
-Commands that talk to the service accept these options. Options must come before arguments, e.g. `feedhookcli ping --port 2234 Hook-1`.
+Commands that talk to the service accept these options, e.g. `feedhookcli ping -port 2234 Hook-1`. Use `--` to pass an argument that starts with `-`, e.g. `feedhookcli ping -- -Hook-1`.
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `--port`, `-p` | `2233` | Port of the RPC service of `feedhooksrv` |
-| `--timeout`, `-t` | `2m` | Max time to wait for `feedhooksrv` to respond, e.g. `90s` |
+| `-port` | `2233` | Port of the RPC service of `feedhooksrv` |
+| `-timeout` | `2m` | Max time to wait for `feedhooksrv` to respond, e.g. `90s` |
 
 ## Attributions
 
