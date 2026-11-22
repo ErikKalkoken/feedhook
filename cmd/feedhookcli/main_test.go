@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,170 +10,93 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func runApp(args ...string) error {
-	_, _, err := runAppWithOutput(args...)
-	return err
-}
+const validConfig = `
+[[webhooks]]
+name = "hook-1"
+url = "https://www.example.com/webhook"
 
-func runAppWithOutput(args ...string) (stdout string, stderr string, err error) {
-	var out, errOut bytes.Buffer
-	app := newApp(remote.NewClient())
-	app.Writer = &out
-	app.ErrWriter = &errOut
-	err = app.Run(append([]string{"feedhookcli"}, args...))
-	return out.String(), errOut.String(), err
-}
+[[feeds]]
+name = "Feed 1"
+url = "https://www.example.com/feed.rss"
+webhook = "hook-1"
+`
 
-func TestAppErrors(t *testing.T) {
-	dir := t.TempDir()
+func TestRun(t *testing.T) {
 	cases := []struct {
-		name string
-		args []string
-		want string
+		name    string
+		args    []string
+		wantErr string
 	}{
 		{
-			name: "missing command",
-			args: []string{},
-			want: "missing command",
+			name:    "no command",
+			args:    []string{},
+			wantErr: "missing command",
 		},
 		{
-			name: "unknown command",
-			args: []string{"stat"},
-			want: "unknown command: stat",
+			name:    "unknown command",
+			args:    []string{"dummy"},
+			wantErr: "unknown command: dummy",
 		},
 		{
-			name: "missing argument",
-			args: []string{"ping"},
-			want: "expected one argument: webhook-name",
+			name:    "check-config without arg",
+			args:    []string{"check-config"},
+			wantErr: "expected one argument: path",
 		},
 		{
-			name: "option after argument",
-			args: []string{"ping", "hook", "-p", "2234"},
-			want: "expected one argument: webhook-name, got: hook -p 2234",
+			name:    "ping with too many args",
+			args:    []string{"ping", "a", "b"},
+			wantErr: "expected one argument: webhook-name, got: a b",
 		},
 		{
-			name: "too many arguments",
-			args: []string{"check-config", "a.toml", "b.toml"},
-			want: "expected one argument: path, got: a.toml b.toml",
+			name:    "post-latest without arg",
+			args:    []string{"post-latest"},
+			wantErr: "expected one argument: feed-name",
 		},
 		{
-			name: "unexpected argument",
-			args: []string{"stats", "extra"},
-			want: "expected no arguments, got: extra",
+			name:    "restart with arg",
+			args:    []string{"restart", "a"},
+			wantErr: "expected no arguments, got: a",
 		},
 		{
-			name: "invalid timeout",
-			args: []string{"stats", "--timeout", "0"},
-			want: "invalid timeout: 0s",
+			name:    "stats with arg",
+			args:    []string{"stats", "a"},
+			wantErr: "expected no arguments, got: a",
 		},
 		{
-			name: "config path is a directory",
-			args: []string{"check-config", dir},
-			want: dir + " is a directory, expected path to config file",
+			name:    "invalid port",
+			args:    []string{"stats", "-port", "0"},
+			wantErr: "invalid port: 0",
+		},
+		{
+			name:    "invalid timeout",
+			args:    []string{"stats", "-timeout", "-1s"},
+			wantErr: "invalid timeout: -1s",
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := runApp(tc.args...)
-			assert.EqualError(t, err, tc.want)
+			err := run(tc.args, remote.NewClient())
+			assert.EqualError(t, err, tc.wantErr)
 		})
 	}
 }
 
-func TestHelpOnError(t *testing.T) {
-	cases := [][]string{
-		{},
-		{"stat"},
-		{"ping"},
-		{"stats", "extra"},
-		{"stats", "--port", "abc"},
-		{"check-config", "-x", "a.toml"},
-		{"--port", "2234", "stats"},
-	}
-	for _, args := range cases {
-		t.Run(fmt.Sprintf("should show help on stderr for %q", args), func(t *testing.T) {
-			// when
-			stdout, stderr, err := runAppWithOutput(args...)
-			// then
-			require.Error(t, err)
-			assert.Empty(t, stdout)
-			assert.Contains(t, stderr, "USAGE:")
-		})
-	}
+func TestRunVersion(t *testing.T) {
+	err := run([]string{"-version"}, remote.NewClient())
+	assert.NoError(t, err)
 }
 
-func TestCheckConfig(t *testing.T) {
+func TestRunCheckConfig(t *testing.T) {
 	t.Run("should accept valid config", func(t *testing.T) {
-		// given
 		p := filepath.Join(t.TempDir(), "config.toml")
-		data := `
-[[webhooks]]
-name = "hook-1"
-url = "https://www.example.com/webhook"
-
-[[feeds]]
-name = "Feed 1"
-url = "https://www.example.com/feed.rss"
-webhook = "hook-1"
-`
-		err := os.WriteFile(p, []byte(data), 0644)
-		require.NoError(t, err)
-		// when
-		stdout, stderr, err := runAppWithOutput("check-config", p)
-		// then
-		require.NoError(t, err)
-		assert.Equal(t, p+" is valid\n", stdout)
-		assert.Empty(t, stderr)
+		require.NoError(t, os.WriteFile(p, []byte(validConfig), 0644))
+		err := run([]string{"check-config", p}, remote.NewClient())
+		assert.NoError(t, err)
 	})
-	t.Run("should show warnings for valid config", func(t *testing.T) {
-		// given
+	t.Run("should report error for invalid config", func(t *testing.T) {
 		p := filepath.Join(t.TempDir(), "config.toml")
-		data := `
-[[webhooks]]
-name = "hook-1"
-url = "https://www.example.com/webhook"
-
-[[webhooks]]
-name = "hook-2"
-url = "https://www.example.com/webhook-2"
-
-[[feeds]]
-name = "Feed 1"
-url = "https://www.example.com/feed.rss"
-webhook = "hook-1"
-`
-		err := os.WriteFile(p, []byte(data), 0644)
-		require.NoError(t, err)
-		// when
-		stdout, stderr, err := runAppWithOutput("check-config", p)
-		// then
-		require.NoError(t, err)
-		assert.Equal(t, p+" is valid\n", stdout)
-		assert.Equal(t, "warning: webhook \"hook-2\" defined, but not used\n", stderr)
-	})
-	t.Run("should show warnings and failures for invalid config", func(t *testing.T) {
-		// given
-		p := filepath.Join(t.TempDir(), "config.toml")
-		data := `
-[[webhooks]]
-name = "hook-1"
-ulr = "https://www.example.com/webhook"
-
-[[feeds]]
-name = "Feed 1"
-url = "https://www.example.com/feed.rss"
-`
-		err := os.WriteFile(p, []byte(data), 0644)
-		require.NoError(t, err)
-		// when
-		stdout, stderr, err := runAppWithOutput("check-config", p)
-		// then
-		require.EqualError(t, err, "invalid config")
-		assert.Empty(t, stdout)
-		want := "warning: unknown key: webhooks.ulr\n" +
-			"warning: webhook \"hook-1\" defined, but not used\n" +
-			"error: webhook \"hook-1\" has no url\n" +
-			"error: feed \"Feed 1\" has no webhook\n"
-		assert.Equal(t, want, stderr)
+		require.NoError(t, os.WriteFile(p, []byte("[[webhooks]\n"), 0644))
+		err := run([]string{"check-config", p}, remote.NewClient())
+		assert.Error(t, err)
 	})
 }

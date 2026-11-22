@@ -3,191 +3,202 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/ErikKalkoken/feedhook/internal/app/config"
 	"github.com/ErikKalkoken/feedhook/internal/app/remote"
-	"github.com/urfave/cli/v2"
 )
 
 // Version is overwritten via build tag when released.
 var Version = "0.0.0"
 
+// command describes a CLI command.
+type command struct {
+	name        string
+	argsUsage   string // empty when the command takes no args
+	desc        string
+	nArgs       int  // number of positional args: 0 or 1
+	clientFlags bool // whether the command talks to feedhooksrv
+	run         func(client *remote.Client, args []string) error
+}
+
+var commands = []command{
+	{
+		name:      "check-config",
+		argsUsage: "path",
+		desc:      "checks whether a config file is valid",
+		nArgs:     1,
+		run: func(_ *remote.Client, args []string) error {
+			path := args[0]
+			_, warnings, failures, err := config.FromFile(path)
+			for _, w := range warnings {
+				fmt.Printf("warning: %s\n", w)
+			}
+			for _, f := range failures {
+				fmt.Printf("error: %s\n", f)
+			}
+			if err != nil {
+				return err
+			}
+			fmt.Printf("%s is valid\n", path)
+			return nil
+		},
+	},
+	{
+		name:        "ping",
+		argsUsage:   "webhook-name",
+		desc:        "send a test message to a webhook",
+		nArgs:       1,
+		clientFlags: true,
+		run: func(client *remote.Client, args []string) error {
+			hookName := args[0]
+			if err := client.SendPing(hookName); err != nil {
+				return err
+			}
+			fmt.Printf("Ping sent to %s\n", hookName)
+			return nil
+		},
+	},
+	{
+		name:        "post-latest",
+		argsUsage:   "feed-name",
+		desc:        "posts the latest feed item to its configured webhook",
+		nArgs:       1,
+		clientFlags: true,
+		run: func(client *remote.Client, args []string) error {
+			feedName := args[0]
+			if err := client.PostLatestFeedItem(feedName); err != nil {
+				return err
+			}
+			fmt.Printf("Posted latest item from \"%s\"\n", feedName)
+			return nil
+		},
+	},
+	{
+		name:        "restart",
+		desc:        "restarts the service",
+		clientFlags: true,
+		run: func(client *remote.Client, _ []string) error {
+			if err := client.Restart(); err != nil {
+				return err
+			}
+			fmt.Println("Restarted")
+			return nil
+		},
+	},
+	{
+		name:        "stats",
+		desc:        "show current statistics",
+		clientFlags: true,
+		run: func(client *remote.Client, _ []string) error {
+			text, err := client.Statistics()
+			if err != nil {
+				return err
+			}
+			fmt.Println(text)
+			return nil
+		},
+	},
+}
+
 func main() {
-	app := newApp(remote.NewClient())
-	if err := app.Run(os.Args); err != nil {
+	if err := run(os.Args[1:], remote.NewClient()); err != nil {
 		fmt.Fprintf(os.Stderr, "fatal: %s\n", err)
 		os.Exit(1)
 	}
 }
 
-func newApp(client *remote.Client) *cli.App {
-	return &cli.App{
-		Name:  "feedhookcli",
-		Usage: "CLI tool for feedhook",
-		Action: func(cCtx *cli.Context) error {
-			showHelpOnError(cCtx, cli.ShowAppHelp)
-			if cCtx.NArg() > 0 {
-				return fmt.Errorf("unknown command: %s", cCtx.Args().First())
-			}
-			return errors.New("missing command")
-		},
-		OnUsageError: onAppUsageError,
-		Version:      Version,
-		Commands: []*cli.Command{
-			{
-				Name:            "check-config",
-				Usage:           "checks whether a config file is valid",
-				ArgsUsage:       "path",
-				OnUsageError:    onUsageError,
-				HideHelpCommand: true,
-				Before:          requireOneArg,
-				Action: func(cCtx *cli.Context) error {
-					path := cCtx.Args().First()
-					_, warnings, failures, err := config.FromFile(path)
-					for _, w := range warnings {
-						fmt.Fprintf(cCtx.App.ErrWriter, "warning: %s\n", w)
-					}
-					for _, f := range failures {
-						fmt.Fprintf(cCtx.App.ErrWriter, "error: %s\n", f)
-					}
-					if err != nil {
-						return err
-					}
-					fmt.Fprintf(cCtx.App.Writer, "%s is valid\n", path)
-					return nil
-				},
-			},
-			{
-				Name:            "ping",
-				Usage:           "send a test message to a webhook",
-				ArgsUsage:       "webhook-name",
-				Flags:           makeClientFlags(client),
-				OnUsageError:    onUsageError,
-				HideHelpCommand: true,
-				Before:          requireOneArg,
-				Action: func(cCtx *cli.Context) error {
-					hookName := cCtx.Args().First()
-					if err := client.SendPing(hookName); err != nil {
-						return err
-					}
-					fmt.Fprintf(cCtx.App.Writer, "Ping sent to %s\n", hookName)
-					return nil
-				},
-			},
-			{
-				Name:            "post-latest",
-				Usage:           "posts the latest feed item to its configured webhook",
-				ArgsUsage:       "feed-name",
-				Flags:           makeClientFlags(client),
-				OnUsageError:    onUsageError,
-				HideHelpCommand: true,
-				Before:          requireOneArg,
-				Action: func(cCtx *cli.Context) error {
-					feedName := cCtx.Args().First()
-					if err := client.PostLatestFeedItem(feedName); err != nil {
-						return err
-					}
-					fmt.Fprintf(cCtx.App.Writer, "Posted latest item from \"%s\"\n", feedName)
-					return nil
-				},
-			},
-			{
-				Name:            "restart",
-				Usage:           "restarts the service",
-				Flags:           makeClientFlags(client),
-				OnUsageError:    onUsageError,
-				HideHelpCommand: true,
-				Before:          requireNoArgs,
-				Action: func(cCtx *cli.Context) error {
-					if err := client.Restart(); err != nil {
-						return err
-					}
-					fmt.Fprintln(cCtx.App.Writer, "Restarted")
-					return nil
-				},
-			},
-			{
-				Name:            "stats",
-				Usage:           "show current statistics",
-				Flags:           makeClientFlags(client),
-				OnUsageError:    onUsageError,
-				HideHelpCommand: true,
-				Before:          requireNoArgs,
-				Action: func(cCtx *cli.Context) error {
-					text, err := client.Statistics()
-					if err != nil {
-						return err
-					}
-					fmt.Fprintln(cCtx.App.Writer, text)
-					return nil
-				},
-			},
-		},
+func run(args []string, client *remote.Client) error {
+	root := flag.NewFlagSet("feedhookcli", flag.ExitOnError)
+	root.Usage = func() {
+		w := root.Output()
+		fmt.Fprint(w, "Usage: feedhookcli [-version] <command> [options] [args]\n\nCommands:\n")
+		for _, c := range commands {
+			fmt.Fprintf(w, "  %-14s%s\n", c.name, c.desc)
+		}
+		fmt.Fprint(w, "\nRun \"feedhookcli <command> -h\" for help on a command.\n\n")
 	}
-}
-
-func makeClientFlags(client *remote.Client) []cli.Flag {
-	return []cli.Flag{
-		&cli.IntFlag{
-			Name:    "port",
-			Aliases: []string{"p"},
-			Usage:   "port where the RPC service of feedhooksrv is running",
-			Value:   remote.DefaultPort,
-			Action: func(cCtx *cli.Context, v int) error {
-				return client.SetPort(v)
-			},
-		},
-		&cli.DurationFlag{
-			Name:    "timeout",
-			Aliases: []string{"t"},
-			Usage:   "max time to wait for feedhooksrv to respond",
-			Value:   remote.DefaultTimeout,
-			Action: func(cCtx *cli.Context, v time.Duration) error {
-				return client.SetTimeout(v)
-			},
-		},
-	}
-}
-
-func requireOneArg(cCtx *cli.Context) error {
-	if cCtx.NArg() == 1 {
+	version := root.Bool("version", false, "show version")
+	_ = root.Parse(args) // exits on error
+	if *version {
+		fmt.Println(Version)
 		return nil
 	}
-	showHelpOnError(cCtx, cli.ShowSubcommandHelp)
-	if cCtx.NArg() == 0 {
-		return fmt.Errorf("expected one argument: %s", cCtx.Command.ArgsUsage)
+	if root.NArg() == 0 {
+		root.Usage()
+		return errors.New("missing command")
 	}
-	return fmt.Errorf("expected one argument: %s, got: %s", cCtx.Command.ArgsUsage, strings.Join(cCtx.Args().Slice(), " "))
+	name, args := root.Arg(0), root.Args()[1:]
+
+	i := slices.IndexFunc(commands, func(c command) bool { return c.name == name })
+	if i == -1 {
+		root.Usage()
+		return fmt.Errorf("unknown command: %s", name)
+	}
+	cmd := commands[i]
+
+	fs := newFlagSet(cmd)
+	var port *int
+	var timeout *time.Duration
+	if cmd.clientFlags {
+		port = fs.Int("port", remote.DefaultPort, "port where the RPC service of feedhooksrv is running")
+		timeout = fs.Duration("timeout", remote.DefaultTimeout, "max time to wait for feedhooksrv to respond")
+	}
+	_ = fs.Parse(args) // exits on error
+	if err := checkArgs(fs, cmd); err != nil {
+		return err
+	}
+	if cmd.clientFlags {
+		if err := client.SetPort(*port); err != nil {
+			return err
+		}
+		if err := client.SetTimeout(*timeout); err != nil {
+			return err
+		}
+	}
+	return cmd.run(client, fs.Args())
 }
 
-func requireNoArgs(cCtx *cli.Context) error {
-	if cCtx.NArg() == 0 {
+// newFlagSet returns a flag set for a command with a usage message.
+func newFlagSet(cmd command) *flag.FlagSet {
+	fs := flag.NewFlagSet(cmd.name, flag.ExitOnError)
+	fs.Usage = func() {
+		w := fs.Output()
+		line := "feedhookcli " + cmd.name
+		if cmd.clientFlags {
+			line += " [options]"
+		}
+		if cmd.argsUsage != "" {
+			line += " " + cmd.argsUsage
+		}
+		fmt.Fprintf(w, "Usage: %s\n\n%s\n", line, cmd.desc)
+		if cmd.clientFlags {
+			fmt.Fprintln(w, "\nOptions:")
+			fs.PrintDefaults()
+		}
+		fmt.Fprintln(w)
+	}
+	return fs
+}
+
+// checkArgs reports an error when the number of positional args is wrong.
+func checkArgs(fs *flag.FlagSet, cmd command) error {
+	if fs.NArg() == cmd.nArgs {
 		return nil
 	}
-	showHelpOnError(cCtx, cli.ShowSubcommandHelp)
-	return fmt.Errorf("expected no arguments, got: %s", strings.Join(cCtx.Args().Slice(), " "))
-}
-
-// onUsageError shows help on the error output and returns the flag error.
-func onUsageError(cCtx *cli.Context, err error, _ bool) error {
-	showHelpOnError(cCtx, cli.ShowSubcommandHelp)
-	return err
-}
-
-func onAppUsageError(cCtx *cli.Context, err error, _ bool) error {
-	showHelpOnError(cCtx, cli.ShowAppHelp)
-	return err
-}
-
-// showHelpOnError shows help on the error output, followed by an empty line.
-func showHelpOnError(cCtx *cli.Context, show func(*cli.Context) error) {
-	w := cCtx.App.Writer
-	cCtx.App.Writer = cCtx.App.ErrWriter
-	defer func() { cCtx.App.Writer = w }()
-	_ = show(cCtx)
-	fmt.Fprintln(cCtx.App.ErrWriter)
+	fs.Usage()
+	got := strings.Join(fs.Args(), " ")
+	switch {
+	case cmd.nArgs == 0:
+		return fmt.Errorf("expected no arguments, got: %s", got)
+	case fs.NArg() == 0:
+		return fmt.Errorf("expected one argument: %s", cmd.argsUsage)
+	default:
+		return fmt.Errorf("expected one argument: %s, got: %s", cmd.argsUsage, got)
+	}
 }
